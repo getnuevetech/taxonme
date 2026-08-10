@@ -6,6 +6,7 @@ import { getCurrentUser, requireUser } from "@/lib/auth";
 import { getOrCreateGuestSession } from "@/lib/guest";
 import { saveUpload, deleteUpload } from "@/lib/uploads";
 import { explainNoticeContent } from "@/lib/ai/orchestrator";
+import { verifyCaseProgress, verifyUserCasesProgress } from "@/lib/case-progress";
 import type { ActionState } from "./auth";
 
 export async function uploadDocumentAction(_prev: ActionState, formData: FormData): Promise<ActionState> {
@@ -32,7 +33,13 @@ export async function uploadDocumentAction(_prev: ActionState, formData: FormDat
       },
     });
   }
+  // New evidence may complete path steps (e.g. "upload documents", "get transcript").
+  if (user) {
+    if (caseId) await verifyCaseProgress(caseId);
+    else await verifyUserCasesProgress(user.id);
+  }
   revalidatePath("/app/documents");
+  if (caseId) revalidatePath(`/app/cases/${caseId}`);
   return { ok: true };
 }
 
@@ -42,6 +49,9 @@ export async function deleteDocumentAction(documentId: string) {
   if (!doc || doc.userId !== user.id) return;
   await deleteUpload(doc.filePath);
   await db.document.delete({ where: { id: documentId } });
+  // Removing evidence can un-complete verified steps.
+  if (doc.caseId) await verifyCaseProgress(doc.caseId);
+  else await verifyUserCasesProgress(user.id);
   revalidatePath("/app/documents");
 }
 

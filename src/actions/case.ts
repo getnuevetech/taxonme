@@ -6,6 +6,7 @@ import { db } from "@/lib/db";
 import { getCurrentUser, requireUser } from "@/lib/auth";
 import { getOrCreateGuestSession } from "@/lib/guest";
 import { runCaseAnalysis } from "@/lib/ai/orchestrator";
+import { verifyCaseProgress, isVerifiable } from "@/lib/case-progress";
 import { saveUpload } from "@/lib/uploads";
 import type { ActionState } from "./auth";
 
@@ -77,11 +78,20 @@ export async function completePathStepAction(stepId: string) {
   const user = await requireUser();
   const step = await db.pathStep.findUnique({ where: { id: stepId }, include: { case: true } });
   if (!step || step.case.userId !== user.id) return;
-  await db.pathStep.update({ where: { id: stepId }, data: { status: "done" } });
-  const next = await db.pathStep.findFirst({
-    where: { caseId: step.caseId, status: "pending" },
-    orderBy: { sortOrder: "asc" },
-  });
-  if (next) await db.pathStep.update({ where: { id: next.id }, data: { status: "current" } });
+  // Verifiable steps can never be checked off blindly — they complete only
+  // when the evidence exists, which the verifier below re-checks.
+  if (!isVerifiable(step.actionKey)) {
+    await db.pathStep.update({ where: { id: stepId }, data: { status: "done" } });
+  }
+  await verifyCaseProgress(step.caseId);
   revalidatePath(`/app/cases/${step.caseId}`);
+}
+
+// "Check my progress" — re-evaluates every step against real evidence.
+export async function checkCaseProgressAction(caseId: string) {
+  const user = await requireUser();
+  const c = await db.case.findUnique({ where: { id: caseId } });
+  if (!c || c.userId !== user.id) return;
+  await verifyCaseProgress(caseId);
+  revalidatePath(`/app/cases/${caseId}`);
 }

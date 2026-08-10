@@ -6,6 +6,7 @@ import { logoutAction } from "@/actions/auth";
 
 const NAV: { area: string; href: string; label: string; section: string }[] = [
   { area: "admin.dashboard", href: "/admin", label: "Overview", section: "General" },
+  { area: "admin.cases", href: "/admin/cases", label: "Cases", section: "General" },
   { area: "admin.users", href: "/admin/users", label: "Users", section: "People" },
   { area: "admin.admins", href: "/admin/admins", label: "Admin roles", section: "People" },
   { area: "admin.consultants", href: "/admin/consultants", label: "Consultants", section: "People" },

@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db";
 import { requireUser } from "@/lib/auth";
 import { hasFeature } from "@/lib/access";
+import { verifyUserCasesProgress } from "@/lib/case-progress";
 import type { ActionState } from "./auth";
 
 export type WizardStep = {
@@ -81,6 +82,9 @@ export async function saveFormStepAction(_prev: ActionState, formData: FormData)
       generatedText,
     },
   });
+
+  // A completed form (e.g. 9465) may satisfy a case path step.
+  if (done) await verifyUserCasesProgress(user.id);
 
   if (done) redirect(`/app/forms/fill/${submissionId}?done=1`);
   redirect(`/app/forms/fill/${submissionId}?step=${nextIndex}`);

@@ -10,11 +10,11 @@ export const metadata = { title: "Plan & billing" };
 export default async function BillingPage({
   searchParams,
 }: {
-  searchParams: Promise<{ subscribed?: string; canceled?: string }>;
+  searchParams: Promise<{ subscribed?: string; canceled?: string; pending?: string }>;
 }) {
-  const { subscribed } = await searchParams;
+  const { subscribed, pending } = await searchParams;
   const user = await requireUser();
-  const [currentPlan, plans, subscription, transactions] = await Promise.all([
+  const [currentPlan, plans, subscription, transactions, activeGateway] = await Promise.all([
     getActivePlan(user.id),
     db.subscriptionPlan.findMany({
       where: { isActive: true },
@@ -26,7 +26,9 @@ export default async function BillingPage({
       orderBy: { createdAt: "desc" },
     }),
     db.paymentTransaction.findMany({ where: { userId: user.id }, orderBy: { createdAt: "desc" }, take: 10 }),
+    db.paymentGatewayConfig.findFirst({ where: { isActive: true }, orderBy: [{ isDefault: "desc" }] }),
   ]);
+  const isTestGateway = !activeGateway || activeGateway.kind === "manual" || activeGateway.mode === "test";
 
   return (
     <div>
@@ -34,6 +36,19 @@ export default async function BillingPage({
       {subscribed && (
         <div className="mb-6 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
           Your plan is active. Enjoy your new features!
+        </div>
+      )}
+      {pending && (
+        <div className="mb-6 rounded-xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-800">
+          Payment received — your plan activates as soon as the payment processor confirms it (usually within a
+          minute). Refresh this page shortly.
+        </div>
+      )}
+      {isTestGateway && (
+        <div className="mb-6 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+          <span className="font-semibold">Test mode.</span> Payments are currently simulated
+          {activeGateway ? ` (gateway: ${activeGateway.name})` : " (no payment gateway configured)"} — subscriptions
+          activate without charging a card. A live payment gateway can be connected in the admin backend.
         </div>
       )}
       <Card className="mb-8">

@@ -8,7 +8,7 @@ export const metadata = { title: "Admin overview" };
 
 export default async function AdminOverviewPage() {
   const admin = await guardAdminPage("admin.dashboard");
-  const [users, consultantsPending, cases, needConsultant, activeSubs, providers, notifications] = await Promise.all([
+  const [users, consultantsPending, cases, needConsultant, activeSubs, providers, notifications, liveGateway] = await Promise.all([
     db.user.count({ where: { role: "user" } }),
     db.consultantProfile.count({ where: { status: "pending" } }),
     db.case.count(),
@@ -16,6 +16,7 @@ export default async function AdminOverviewPage() {
     db.subscription.count({ where: { status: { in: ["active", "trialing"] } } }),
     db.aiProvider.count({ where: { isEnabled: true, apiKey: { not: "" } } }),
     db.notification.findMany({ where: { userId: admin.id, readAt: null }, orderBy: { createdAt: "desc" }, take: 10 }),
+    db.paymentGatewayConfig.findFirst({ where: { isActive: true, mode: "live", kind: { not: "manual" } } }),
   ]);
 
   return (
@@ -34,9 +35,26 @@ export default async function AdminOverviewPage() {
           <CardBody>
             <p className="font-semibold text-slate-900">AI is not connected yet</p>
             <p className="mt-1 text-sm text-slate-600">
-              The platform is running in deterministic fallback mode. Add 3–5 AI providers under{" "}
+              The platform is running in deterministic fallback mode (rule-based analysis, labeled &ldquo;preliminary&rdquo; to users).
+              Add 3–5 AI providers under{" "}
               <Link href="/admin/ai-providers" className="font-medium text-indigo-600 underline">AI providers</Link>, then assign them to
               analysis stages in <Link href="/admin/pipelines" className="font-medium text-indigo-600 underline">AI pipelines</Link>.
+            </p>
+          </CardBody>
+        </Card>
+      )}
+
+      {!liveGateway && (
+        <Card className="mt-6 border-amber-300">
+          <CardBody>
+            <p className="font-semibold text-slate-900">Payments are in test mode</p>
+            <p className="mt-1 text-sm text-slate-600">
+              No live payment gateway is active, so subscriptions activate without charging (the &ldquo;Manual / development&rdquo;
+              gateway simulates payment). To charge real payments: open{" "}
+              <Link href="/admin/payments" className="font-medium text-indigo-600 underline">Payment gateways</Link>, add your Stripe
+              live keys (including <code className="rounded bg-slate-100 px-1">webhookSecret</code>, with the webhook endpoint set to{" "}
+              <code className="rounded bg-slate-100 px-1">/api/webhooks/stripe</code> in the Stripe dashboard), set it to live and
+              default, and deactivate the manual gateway.
             </p>
           </CardBody>
         </Card>

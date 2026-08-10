@@ -12,6 +12,7 @@ export type Role = (typeof ROLES)[keyof typeof ROLES];
 // Granular admin areas. Super admin has all; sub-admins get a subset.
 export const ADMIN_AREAS = [
   { key: "admin.dashboard", name: "Dashboard" },
+  { key: "admin.cases", name: "Cases" },
   { key: "admin.users", name: "Users" },
   { key: "admin.admins", name: "Admin roles" },
   { key: "admin.consultants", name: "Consultants" },

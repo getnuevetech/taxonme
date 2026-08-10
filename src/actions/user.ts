@@ -7,6 +7,7 @@ import { getCurrentUser, requireUser } from "@/lib/auth";
 import { getOrCreateGuestSession } from "@/lib/guest";
 import { saveUpload } from "@/lib/uploads";
 import { runQaChat, generateLetterDraft } from "@/lib/ai/orchestrator";
+import { verifyUserCasesProgress } from "@/lib/case-progress";
 import { hasFeature } from "@/lib/access";
 import { FEATURE_KEYS } from "@/lib/constants";
 import type { ActionState } from "./auth";
@@ -125,6 +126,7 @@ export async function generateLetterAction(_prev: ActionState, formData: FormDat
   const letter = await db.responseLetter.create({
     data: { userId: user.id, noticeId, title: `Response letter — ${new Date().toLocaleDateString("en-US")}`, body },
   });
+  await verifyUserCasesProgress(user.id);
   redirect(`/app/letters/${letter.id}`);
 }
 

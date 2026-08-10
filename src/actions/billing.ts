@@ -60,10 +60,15 @@ export async function subscribeAction(_prev: ActionState, formData: FormData): P
       "line_items[0][price_data][unit_amount]": String(amountCents),
       "line_items[0][price_data][recurring][interval]": interval === "yearly" ? "year" : "month",
       "line_items[0][price_data][product_data][name]": plan.name,
-      success_url: `${cfg.appUrl || ""}/app/billing?subscribed=1&plan=${plan.id}`,
+      success_url: `${cfg.appUrl || ""}/app/billing?pending=1`,
       cancel_url: `${cfg.appUrl || ""}/app/billing?canceled=1`,
       client_reference_id: user.id,
       customer_email: user.email,
+      // The webhook uses this metadata to activate the right plan after payment.
+      "metadata[planId]": plan.id,
+      "metadata[interval]": interval,
+      "subscription_data[metadata][planId]": plan.id,
+      "subscription_data[metadata][interval]": interval,
     });
     const res = await fetch("https://api.stripe.com/v1/checkout/sessions", {
       method: "POST",

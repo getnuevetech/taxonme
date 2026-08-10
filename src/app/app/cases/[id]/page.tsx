@@ -5,7 +5,8 @@ import { requireUser } from "@/lib/auth";
 import { hasFeature } from "@/lib/access";
 import { FEATURE_KEYS } from "@/lib/constants";
 import { PageHeader, Card, CardBody, StateMark, ConfidenceBadge, ProgressBar, Money, Badge, ButtonLink } from "@/components/ui";
-import { reanalyzeCaseAction, completePathStepAction } from "@/actions/case";
+import { reanalyzeCaseAction, completePathStepAction, checkCaseProgressAction } from "@/actions/case";
+import { isVerifiable, VERIFIABLE_ACTIONS } from "@/lib/case-progress";
 import { CaseUpload } from "@/components/case-upload";
 
 export default async function CaseDetailPage({ params }: { params: Promise<{ id: string }> }) {
@@ -25,6 +26,11 @@ export default async function CaseDetailPage({ params }: { params: Promise<{ id:
   const fullAccess = await hasFeature(user.id, FEATURE_KEYS.CASE_FULL_RESULTS);
   const visibleIssues = fullAccess ? c.issues : c.issues.slice(0, 1);
   const verificationFlags = c.runs.filter((r) => r.consensus?.verificationRequired).length;
+  // If no AI provider produced output, this analysis came from the rule-based engine.
+  const aiStepCount = await db.analysisStepResult.count({
+    where: { run: { caseId: c.id }, status: "complete" },
+  });
+  const isPreliminary = c.runs.length > 0 && aiStepCount === 0;
 
   return (
     <div>
@@ -42,6 +48,13 @@ export default async function CaseDetailPage({ params }: { params: Promise<{ id:
 
       <div className="grid gap-6 lg:grid-cols-3">
         <div className="space-y-6 lg:col-span-2">
+          {isPreliminary && (
+            <div className="rounded-xl border border-slate-300 bg-slate-100 px-4 py-3 text-sm text-slate-700">
+              <span className="font-semibold">? Preliminary review.</span> These results come from our rule-based checks of your
+              answers and readable documents. Full multi-model AI verification runs automatically once the platform&apos;s AI
+              providers are connected.
+            </div>
+          )}
           {c.status === "consultant_recommended" && (
             <div className="rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900">
               <span className="font-semibold">▲ Professional review recommended.</span> Based on the analysis, this case would benefit
@@ -114,37 +127,56 @@ export default async function CaseDetailPage({ params }: { params: Promise<{ id:
           </section>
 
           <section>
-            <h2 className="mb-3 text-base font-semibold text-slate-900">Path forward</h2>
+            <div className="mb-3 flex items-center justify-between">
+              <h2 className="text-base font-semibold text-slate-900">Path forward</h2>
+              <form action={checkCaseProgressAction.bind(null, c.id)}>
+                <button className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50">
+                  ↻ Check my progress
+                </button>
+              </form>
+            </div>
             <Card>
               <CardBody className="space-y-1">
-                {c.pathSteps.map((step, i) => (
-                  <div key={step.id} className={`flex items-start gap-3 rounded-xl p-3 ${step.status === "current" ? "bg-indigo-50" : ""}`}>
-                    <span
-                      className={`mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-sm font-bold ${
-                        step.status === "done"
-                          ? "bg-emerald-100 text-emerald-700"
-                          : step.status === "current"
-                            ? "bg-indigo-600 text-white"
-                            : "bg-slate-100 text-slate-400"
-                      }`}
-                    >
-                      {step.status === "done" ? "✓" : i + 1}
-                    </span>
-                    <div className="flex-1">
-                      <p className={`font-medium ${step.status === "done" ? "text-slate-400 line-through" : "text-slate-900"}`}>
-                        {step.title}
-                      </p>
-                      <p className="text-sm text-slate-500">{step.description}</p>
+                {c.pathSteps.map((step, i) => {
+                  const verifiable = isVerifiable(step.actionKey);
+                  return (
+                    <div key={step.id} className={`flex items-start gap-3 rounded-xl p-3 ${step.status === "current" ? "bg-indigo-50" : ""}`}>
+                      <span
+                        className={`mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-sm font-bold ${
+                          step.status === "done"
+                            ? "bg-emerald-100 text-emerald-700"
+                            : step.status === "current"
+                              ? "bg-indigo-600 text-white"
+                              : "bg-slate-100 text-slate-400"
+                        }`}
+                      >
+                        {step.status === "done" ? "✓" : i + 1}
+                      </span>
+                      <div className="flex-1">
+                        <p className={`font-medium ${step.status === "done" ? "text-slate-400 line-through" : "text-slate-900"}`}>
+                          {step.title}
+                        </p>
+                        <p className="text-sm text-slate-500">{step.description}</p>
+                        {verifiable && step.status !== "done" && (
+                          <p className="mt-1 text-xs font-medium text-indigo-600">
+                            ◐ Verified automatically — {VERIFIABLE_ACTIONS[step.actionKey.toUpperCase()].toLowerCase()}
+                          </p>
+                        )}
+                        {verifiable && step.status === "done" && (
+                          <p className="mt-1 text-xs font-medium text-emerald-600">✓ Verified from your case evidence</p>
+                        )}
+                      </div>
+                      {/* Only steps we can't observe (e.g. "mail the letter") can be marked done by hand. */}
+                      {!verifiable && step.status === "current" && (
+                        <form action={completePathStepAction.bind(null, step.id)}>
+                          <button className="rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-indigo-700">
+                            I&apos;ve done this ✓
+                          </button>
+                        </form>
+                      )}
                     </div>
-                    {step.status === "current" && (
-                      <form action={completePathStepAction.bind(null, step.id)}>
-                        <button className="rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-indigo-700">
-                          Done ✓
-                        </button>
-                      </form>
-                    )}
-                  </div>
-                ))}
+                  );
+                })}
                 {c.pathSteps.length === 0 && <p className="p-3 text-sm text-slate-500">Steps appear after analysis completes.</p>}
               </CardBody>
             </Card>

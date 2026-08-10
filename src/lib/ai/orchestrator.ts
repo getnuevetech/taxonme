@@ -2,8 +2,11 @@ import "server-only";
 import { db } from "../db";
 import { callProvider, extractJson, type ChatMessage } from "./adapters";
 import { mergeStructured, computeReadiness, type Conflict } from "./consensus";
+import { fallbackAnalyze } from "./fallback";
 import { STAGE_KEYS } from "../constants";
 import { getNumberSetting } from "../settings";
+import { readUpload } from "../uploads";
+import { verifyCaseProgress } from "../case-progress";
 
 type Json = Record<string, unknown>;
 
@@ -126,39 +129,24 @@ export async function runStage(
   return { stepOutputs, merged, conflicts, usedAi: stepOutputs.length > 0 };
 }
 
-// ---------- Deterministic fallback (no AI keys configured yet) ----------
-// Keeps the product functional before the admin connects providers; every
-// result is labeled so the UI can show that AI verification is pending.
-
-function fallbackFacts(situation: string, goal: string): Json {
-  const text = `${situation}\n${goal}`;
-  const years = Array.from(new Set(text.match(/\b(19|20)\d{2}\b/g) ?? [])).map(Number).filter((y) => y > 1990 && y < 2100);
-  const amounts = (text.match(/\$\s?[\d,]+(?:\.\d{2})?/g) ?? []).map((a) => Number(a.replace(/[$,\s]/g, "")));
-  const notices = Array.from(new Set((text.toUpperCase().match(/\b(CP|LT|LTR)\s?-?\d{2,4}\b/g) ?? []).map((c) => c.replace(/\s|-/g, ""))));
-  return {
-    tax_years: years,
-    amounts_mentioned: amounts,
-    notices_received: notices,
-    user_goal: goal,
-    unknowns: ["AI providers not yet configured — automated extraction pending"],
-  };
-}
-
-function fallbackIssues(situation: string, goal: string): Json[] {
-  const text = `${situation} ${goal}`.toLowerCase();
-  const issues: Json[] = [];
-  const push = (issue_type: string, title: string, description: string) =>
-    issues.push({ issue_type, title, what_we_know: description, what_we_dont_know: "Detailed verification requires document analysis.", confidence: "low", priority: "medium", state: "info_needed", next_action: "UPLOAD_DOCUMENTS" });
-  if (/refund/.test(text)) push("refund_discrepancy", "Possible refund issue", "Your summary mentions a refund. We need your return and account transcript to verify amounts.");
-  if (/(owe|balance|debt|due)/.test(text)) push("balance_due", "Possible balance due", "Your summary mentions owing the IRS. We need notices or transcripts to confirm the balance.");
-  if (/(penalt|interest)/.test(text)) push("penalty", "Possible penalties or interest", "Penalty relief may be available depending on your history and circumstances.");
-  if (/(notice|letter|cp\d|lt\d)/.test(text)) push("notice_response", "IRS notice mentioned", "Upload the notice so we can identify its type, amount, and deadline.");
-  if (/(didn'?t file|not filed|unfiled|late filing|missed filing)/.test(text)) push("missing_return", "Possible unfiled return", "Unfiled returns usually need to be filed before other resolutions are available.");
-  if (issues.length === 0) push("other", "Tax situation review", "We recorded your summary and goal. Upload supporting documents so we can analyze the details.");
-  return issues;
-}
-
 // ---------- Full case analysis pipeline (Layers 1–5) ----------
+
+// Extract readable text from an uploaded document where possible (plain-text
+// formats). Binary formats (PDF scans, photos) require a vision-capable AI
+// provider; until one is configured we analyze filename + kind + user input.
+async function getDocumentText(doc: { filePath: string; fileName: string; mimeType: string }): Promise<string> {
+  const textLike =
+    doc.mimeType.startsWith("text/") ||
+    /\.(txt|csv|md|log)$/i.test(doc.fileName) ||
+    doc.mimeType === "application/json";
+  if (!textLike) return "";
+  try {
+    const buf = await readUpload(doc.filePath);
+    return buf.toString("utf-8").slice(0, 12000);
+  } catch {
+    return "";
+  }
+}
 
 export async function runCaseAnalysis(caseId: string): Promise<void> {
   const c = await db.case.findUnique({
@@ -172,9 +160,23 @@ export async function runCaseAnalysis(caseId: string): Promise<void> {
   await db.issue.deleteMany({ where: { caseId } });
   await db.pathStep.deleteMany({ where: { caseId } });
 
-  const docText = c.documents
-    .map((d) => `Document: ${d.fileName} (kind: ${d.docKind})${d.extractedJson ? `\nExtracted: ${d.extractedJson}` : ""}`)
-    .join("\n\n");
+  // Layer 2 input: include actual document content where it can be read.
+  const docParts: string[] = [];
+  let rawDocText = "";
+  for (const d of c.documents) {
+    const content = await getDocumentText(d);
+    if (content && !d.extractedJson) {
+      await db.document.update({
+        where: { id: d.id },
+        data: { extractedJson: JSON.stringify({ raw_text: content.slice(0, 4000) }), status: "extracted" },
+      });
+    }
+    rawDocText += content ? `\n${content}` : "";
+    docParts.push(
+      `Document: ${d.fileName} (kind: ${d.docKind})${content ? `\nContent:\n${content}` : d.extractedJson ? `\nExtracted: ${d.extractedJson}` : ""}`,
+    );
+  }
+  const docText = docParts.join("\n\n");
 
   async function stageRun(stageKey: string, vars: Record<string, string>, sequentialContext = false) {
     const run = await db.analysisRun.create({ data: { caseId, stageKey, status: "running" } });
@@ -202,7 +204,8 @@ export async function runCaseAnalysis(caseId: string): Promise<void> {
     : null;
 
   const usedAi = summaryOut.usedAi || goalOut.usedAi || (documentOut?.usedAi ?? false);
-  const facts = usedAi ? summaryOut.merged : fallbackFacts(c.situation, c.goal);
+  const fallback = usedAi ? null : await fallbackAnalyze(c.situation, c.goal, rawDocText);
+  const facts = usedAi ? summaryOut.merged : fallback!.facts;
   const goalFacts = usedAi ? goalOut.merged : { user_goal: c.goal };
 
   // Layer 4: situation analysis grounded in the IRS knowledge base.
@@ -232,7 +235,7 @@ export async function runCaseAnalysis(caseId: string): Promise<void> {
   }
   const issues: Json[] = presentation
     ? ((presentation.issues as Json[]) ?? [])
-    : fallbackIssues(c.situation, c.goal);
+    : (fallback ?? (await fallbackAnalyze(c.situation, c.goal, rawDocText))).issues;
 
   // Persist issues.
   for (const [i, issue] of issues.entries()) {
@@ -256,15 +259,10 @@ export async function runCaseAnalysis(caseId: string): Promise<void> {
     });
   }
 
-  // Path forward steps.
+  // Path forward steps (each carries an action key for evidence verification).
   const pathSteps: Json[] = presentation?.path_steps
     ? ((presentation.path_steps as Json[]) ?? [])
-    : [
-        { title: "Upload your supporting documents", description: "Add your return, notices, W-2/1099s, and any IRS letters to your vault." },
-        { title: "Get your IRS account transcript", description: "Your transcript shows exactly what the IRS has on file. We guide you through getting it." },
-        { title: "Review your verified analysis", description: "Once documents are in, we re-run the analysis and confirm every amount." },
-        { title: "Follow your resolution steps", description: "We break the fix into simple steps and track your deadlines." },
-      ];
+    : ((fallback ?? (await fallbackAnalyze(c.situation, c.goal, rawDocText))).pathSteps as unknown as Json[]);
   for (const [i, step] of pathSteps.entries()) {
     await db.pathStep.create({
       data: {
@@ -322,6 +320,9 @@ export async function runCaseAnalysis(caseId: string): Promise<void> {
       });
     }
   }
+
+  // Immediately verify path-step evidence (e.g. documents already uploaded at intake).
+  await verifyCaseProgress(caseId);
 }
 
 // ---------- Single-purpose AI helpers ----------
