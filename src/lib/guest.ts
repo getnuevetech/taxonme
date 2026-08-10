@@ -2,6 +2,7 @@ import "server-only";
 import { cookies } from "next/headers";
 import crypto from "crypto";
 import { db } from "./db";
+import { useSecureCookies } from "./auth";
 
 const GUEST_COOKIE = "taxonme_guest";
 
@@ -22,7 +23,7 @@ export async function getOrCreateGuestSession() {
   jar.set(GUEST_COOKIE, created.token, {
     httpOnly: true,
     sameSite: "lax",
-    secure: process.env.NODE_ENV === "production",
+    secure: await useSecureCookies(),
     maxAge: 60 * 60 * 24 * 14,
     path: "/",
   });
