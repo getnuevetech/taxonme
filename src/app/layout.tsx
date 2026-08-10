@@ -6,6 +6,10 @@ import { getSetting } from "@/lib/settings";
 const geistSans = Geist({ variable: "--font-geist-sans", subsets: ["latin"] });
 const geistMono = Geist_Mono({ variable: "--font-geist-mono", subsets: ["latin"] });
 
+// Every page is database-driven (settings, plans, content), so nothing is
+// prerendered at build time — builds must work without a reachable database.
+export const dynamic = "force-dynamic";
+
 export async function generateMetadata(): Promise<Metadata> {
   const [name, tagline] = await Promise.all([
     getSetting("app.name", "TaxOnMe"),

@@ -54,16 +54,23 @@ Every business variable is managed from the admin backend (`/admin`):
 
 ## Stack
 
-Next.js 15 (App Router, server actions) · TypeScript · Tailwind CSS 4 · Prisma + SQLite (dev; PostgreSQL-ready) · JWT sessions (jose) · bcryptjs.
+Next.js 15 (App Router, server actions) · TypeScript · Tailwind CSS 4 · Prisma + PostgreSQL · JWT sessions (jose) · bcryptjs.
 
-## Getting started
+## Getting started (development)
+
+Requires Node.js 20+ and a PostgreSQL database (`createdb taxonme`).
 
 ```bash
 npm install
-npx prisma db push     # create the database
-npm run db:seed        # seed settings, plans, pipelines, content, forms, knowledge
+cp .env.example .env        # point DATABASE_URL at your PostgreSQL instance
+npx prisma migrate deploy   # create the schema
+npm run db:seed             # seed settings, plans, pipelines, content, forms, knowledge
 npm run dev
 ```
+
+## Deploying to a local server
+
+See **[DEPLOYMENT.md](./DEPLOYMENT.md)** — one-command Docker Compose stack (app + PostgreSQL + persistent volumes), or a bare-metal script (`sudo bash scripts/deploy-local.sh`) that installs PostgreSQL, migrates, seeds, builds, and sets up a systemd service.
 
 - App: http://localhost:3000
 - Admin: http://localhost:3000/admin — seeded super admin: `admin@mytaxonme.com` / `ChangeMe!2026` (override with `SEED_ADMIN_EMAIL` / `SEED_ADMIN_PASSWORD`; change immediately).

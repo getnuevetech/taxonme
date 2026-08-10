@@ -1,0 +1,43 @@
+# TaxOnMe — local server deployment.
+#
+#   1. cp .env.deploy.example .env.deploy   (then edit passwords)
+#   2. docker compose --env-file .env.deploy up -d --build
+#   3. open http://<server-ip>:3000  (admin backend at /admin)
+#
+# Data persists in named volumes: database in `taxonme_pgdata`, uploaded files in `taxonme_uploads`.
+
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-taxonme}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env.deploy}
+      POSTGRES_DB: ${POSTGRES_DB:-taxonme}
+    volumes:
+      - taxonme_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-taxonme} -d ${POSTGRES_DB:-taxonme}"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+
+  app:
+    build: .
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-taxonme}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-taxonme}?schema=public
+      AUTH_SECRET: ${AUTH_SECRET:-}
+      SEED_ADMIN_EMAIL: ${SEED_ADMIN_EMAIL:-admin@mytaxonme.com}
+      SEED_ADMIN_PASSWORD: ${SEED_ADMIN_PASSWORD:?set SEED_ADMIN_PASSWORD in .env.deploy}
+    ports:
+      - "${APP_PORT:-3000}:3000"
+    volumes:
+      - taxonme_uploads:/app/var/uploads
+
+volumes:
+  taxonme_pgdata:
+  taxonme_uploads:

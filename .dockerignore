@@ -1,0 +1,9 @@
+node_modules
+.next
+.git
+var
+*.md
+.env*
+!.env.example
+prisma/dev.db*
+terminals
