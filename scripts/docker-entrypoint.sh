@@ -15,7 +15,7 @@ done
 cat /tmp/migrate.log
 
 echo "Seeding defaults (idempotent)..."
-npx prisma db seed
+node node_modules/tsx/dist/cli.mjs prisma/seed.ts
 
 echo "Starting TaxOnMe..."
 exec npm run start
