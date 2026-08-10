@@ -1,0 +1,113 @@
+"use server";
+
+import { revalidatePath } from "next/cache";
+import { db } from "@/lib/db";
+import { getCurrentUser, requireUser } from "@/lib/auth";
+import { getOrCreateGuestSession } from "@/lib/guest";
+import { saveUpload, deleteUpload } from "@/lib/uploads";
+import { explainNoticeContent } from "@/lib/ai/orchestrator";
+import type { ActionState } from "./auth";
+
+export async function uploadDocumentAction(_prev: ActionState, formData: FormData): Promise<ActionState> {
+  const user = await getCurrentUser();
+  const docKind = String(formData.get("docKind") ?? "other");
+  const caseId = String(formData.get("caseId") ?? "") || null;
+  const files = formData.getAll("files").filter((f): f is File => f instanceof File && f.size > 0);
+  if (files.length === 0) return { error: "Choose at least one file." };
+
+  const guest = user ? null : await getOrCreateGuestSession();
+  for (const file of files.slice(0, 10)) {
+    if (file.size > 20 * 1024 * 1024) return { error: `${file.name} is larger than 20 MB.` };
+    const { filePath, sizeBytes } = await saveUpload(file);
+    await db.document.create({
+      data: {
+        userId: user?.id ?? null,
+        guestSessionId: guest?.id ?? null,
+        caseId,
+        fileName: file.name,
+        filePath,
+        mimeType: file.type || "application/octet-stream",
+        sizeBytes,
+        docKind,
+      },
+    });
+  }
+  revalidatePath("/app/documents");
+  return { ok: true };
+}
+
+export async function deleteDocumentAction(documentId: string) {
+  const user = await requireUser();
+  const doc = await db.document.findUnique({ where: { id: documentId } });
+  if (!doc || doc.userId !== user.id) return;
+  await deleteUpload(doc.filePath);
+  await db.document.delete({ where: { id: documentId } });
+  revalidatePath("/app/documents");
+}
+
+// Upload an IRS notice (file or photo) and run identification + explanation.
+export async function uploadNoticeAction(_prev: ActionState, formData: FormData): Promise<ActionState> {
+  const user = await getCurrentUser();
+  const file = formData.get("file");
+  const pastedText = String(formData.get("pastedText") ?? "").trim();
+  if (!(file instanceof File && file.size > 0) && pastedText.length < 10) {
+    return { error: "Upload a file or photo of your notice, or paste its text." };
+  }
+
+  const guest = user ? null : await getOrCreateGuestSession();
+  let documentId: string | null = null;
+  let content = pastedText;
+
+  if (file instanceof File && file.size > 0) {
+    const { filePath, sizeBytes } = await saveUpload(file);
+    const doc = await db.document.create({
+      data: {
+        userId: user?.id ?? null,
+        guestSessionId: guest?.id ?? null,
+        fileName: file.name,
+        filePath,
+        mimeType: file.type || "application/octet-stream",
+        sizeBytes,
+        docKind: "notice",
+      },
+    });
+    documentId = doc.id;
+    if (file.type.startsWith("text/") && !content) {
+      content = Buffer.from(await file.arrayBuffer()).toString("utf-8").slice(0, 30000);
+    }
+    if (!content) content = `IRS notice file uploaded: ${file.name}. No machine-readable text available.`;
+  }
+
+  const notice = await db.notice.create({
+    data: { userId: user?.id ?? null, documentId, status: "analyzing" },
+  });
+
+  const result = await explainNoticeContent(content);
+  if (result) {
+    const deadlineStr = typeof result.deadline === "string" ? result.deadline : "";
+    const deadline = deadlineStr && !Number.isNaN(Date.parse(deadlineStr)) ? new Date(deadlineStr) : null;
+    await db.notice.update({
+      where: { id: notice.id },
+      data: {
+        noticeType: String(result.notice_type ?? "") || "",
+        taxYear: typeof result.tax_year === "number" ? result.tax_year : null,
+        amountCents: typeof result.amount === "number" ? Math.round(result.amount * 100) : null,
+        deadline,
+        explanation: String(result.plain_english_explanation ?? ""),
+        nextStepsJson: JSON.stringify(result.next_steps ?? []),
+        status: result.fallback ? "verification_required" : "explained",
+      },
+    });
+    if (deadline && user) {
+      await db.deadline.create({
+        data: {
+          userId: user.id,
+          title: `Respond to IRS notice ${String(result.notice_type ?? "")}`.trim(),
+          dueDate: deadline,
+          source: "notice",
+        },
+      });
+    }
+  }
+  return { ok: true, ...(user ? {} : {}), error: undefined };
+}

@@ -1,0 +1,122 @@
+"use client";
+
+import { useState } from "react";
+import Link from "next/link";
+import { ActionForm, SubmitButton } from "./action-form";
+import { consultantOnboardingAction } from "@/actions/consultant";
+import { Field, inputClass } from "./ui";
+import { CONSULTANT_SPECIALTIES } from "@/lib/constants";
+
+type Existing = {
+  credentialType: string;
+  credentialNumber: string;
+  ptin: string;
+  isBusiness: boolean;
+  businessName: string;
+  ein: string;
+  statesServed: string;
+  yearsExperience: number;
+  specialties: string[];
+} | null;
+
+export function ConsultantOnboardingForm({
+  existing,
+  agreementSlug,
+  agreementTitle,
+}: {
+  existing: Existing;
+  agreementSlug: string;
+  agreementTitle: string;
+}) {
+  const [credType, setCredType] = useState(existing?.credentialType ?? "tax_consultant");
+  const [isBusiness, setIsBusiness] = useState(existing?.isBusiness ?? false);
+  const needsLicense = credType === "cpa" || credType === "ea";
+
+  return (
+    <ActionForm action={consultantOnboardingAction}>
+      <div className="space-y-5 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+        <Field label="Are you a certified professional?" hint="CPA and EA credentials require a license/enrollment number and proof.">
+          <select name="credentialType" value={credType} onChange={(e) => setCredType(e.target.value)} className={inputClass}>
+            <option value="cpa">CPA — Certified Public Accountant</option>
+            <option value="ea">EA — Enrolled Agent</option>
+            <option value="tax_consultant">Certified Tax Consultant / Preparer</option>
+          </select>
+        </Field>
+
+        {needsLicense && (
+          <div className="grid gap-3 sm:grid-cols-2">
+            <Field label={credType === "cpa" ? "CPA license number" : "EA enrollment number"}>
+              <input name="credentialNumber" defaultValue={existing?.credentialNumber} required className={inputClass} />
+            </Field>
+            <Field label="PTIN" hint="IRS Preparer Tax Identification Number">
+              <input name="ptin" defaultValue={existing?.ptin} placeholder="P00000000" className={inputClass} />
+            </Field>
+          </div>
+        )}
+        {!needsLicense && (
+          <Field label="PTIN (if you have one)">
+            <input name="ptin" defaultValue={existing?.ptin} placeholder="P00000000" className={inputClass} />
+          </Field>
+        )}
+
+        <Field label={needsLicense ? "Proof of credential (required)" : "Proof of certification (recommended)"} hint="License certificate, IRS enrollment card, or equivalent. PDF or image.">
+          <input type="file" name="proof" accept=".pdf,image/*" className="text-sm text-slate-500 file:mr-3 file:rounded-lg file:border-0 file:bg-indigo-50 file:px-3 file:py-1.5 file:text-sm file:text-indigo-700" />
+        </Field>
+
+        <label className="flex items-center gap-2 text-sm font-medium text-slate-700">
+          <input type="checkbox" name="isBusiness" checked={isBusiness} onChange={(e) => setIsBusiness(e.target.checked)} className="h-4 w-4 rounded border-slate-300 text-indigo-600" />
+          I operate as a business (firm/practice) rather than an individual
+        </label>
+        {isBusiness && (
+          <div className="grid gap-3 sm:grid-cols-2">
+            <Field label="Business name"><input name="businessName" defaultValue={existing?.businessName} className={inputClass} /></Field>
+            <Field label="EIN"><input name="ein" defaultValue={existing?.ein} placeholder="00-0000000" className={inputClass} /></Field>
+          </div>
+        )}
+
+        <div className="grid gap-3 sm:grid-cols-2">
+          <Field label="Years of experience">
+            <input name="yearsExperience" type="number" min={0} defaultValue={existing?.yearsExperience ?? 0} className={inputClass} />
+          </Field>
+          <Field label="States served" hint="Comma-separated, e.g. CA, TX, NY — or 'All'">
+            <input name="statesServed" defaultValue={existing?.statesServed} className={inputClass} />
+          </Field>
+        </div>
+
+        <Field label="Areas of specialty" hint="Used to match you with clients whose situation fits your expertise.">
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+            {CONSULTANT_SPECIALTIES.map((s) => (
+              <label key={s.key} className="flex items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-sm has-checked:border-indigo-400 has-checked:bg-indigo-50">
+                <input
+                  type="checkbox"
+                  name="specialties"
+                  value={s.key}
+                  defaultChecked={existing?.specialties.includes(s.key)}
+                  className="h-4 w-4 rounded border-slate-300 text-indigo-600"
+                />
+                {s.name}
+              </label>
+            ))}
+          </div>
+        </Field>
+
+        <label className="flex items-start gap-2 text-sm text-slate-600">
+          <input type="checkbox" name="agree" required className="mt-1 h-4 w-4 rounded border-slate-300 text-indigo-600" />
+          <span>
+            I confirm the information above is accurate and agree to the{" "}
+            {agreementSlug ? (
+              <Link href={`/p/${agreementSlug}`} target="_blank" className="font-medium text-indigo-600 underline">{agreementTitle}</Link>
+            ) : (
+              agreementTitle
+            )}
+          </span>
+        </label>
+
+        <SubmitButton className="w-full py-3">Submit for review →</SubmitButton>
+        <p className="text-center text-xs text-slate-400">
+          Applications are reviewed manually by our team. Qualifying CPA/EA applications may be approved automatically when enabled.
+        </p>
+      </div>
+    </ActionForm>
+  );
+}

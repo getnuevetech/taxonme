@@ -1,0 +1,505 @@
+// TaxOnMe data model. SQLite for dev; swap provider to postgresql for production.
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// ---------- Platform configuration (everything admin-manageable) ----------
+
+model Setting {
+  key         String  @id
+  value       String
+  type        String  @default("text") // text | number | boolean | json | secret
+  group       String  @default("general")
+  label       String  @default("")
+  description String  @default("")
+  updatedAt   DateTime @updatedAt
+}
+
+model FeatureDef {
+  key         String        @id
+  name        String
+  description String        @default("")
+  category    String        @default("general")
+  sortOrder   Int           @default(0)
+  planFeatures PlanFeature[]
+}
+
+model SubscriptionPlan {
+  id                String         @id @default(cuid())
+  key               String         @unique
+  name              String
+  description       String         @default("")
+  priceMonthlyCents Int            @default(0)
+  priceYearlyCents  Int            @default(0)
+  badge             String         @default("")
+  sortOrder         Int            @default(0)
+  isActive          Boolean        @default(true)
+  features          PlanFeature[]
+  subscriptions     Subscription[]
+  transactions      PaymentTransaction[]
+}
+
+model PlanFeature {
+  id         String           @id @default(cuid())
+  planId     String
+  featureKey String
+  enabled    Boolean          @default(false)
+  limitValue Int? // null = unlimited when enabled
+  plan       SubscriptionPlan @relation(fields: [planId], references: [id], onDelete: Cascade)
+  feature    FeatureDef       @relation(fields: [featureKey], references: [key], onDelete: Cascade)
+
+  @@unique([planId, featureKey])
+}
+
+model PaymentGatewayConfig {
+  id        String   @id @default(cuid())
+  name      String
+  kind      String // stripe | paypal | manual | custom
+  mode      String   @default("test") // test | live
+  isActive  Boolean  @default(false)
+  isDefault Boolean  @default(false)
+  configJson String  @default("{}") // gateway-specific keys/secrets/urls
+  updatedAt DateTime @updatedAt
+}
+
+model AiProvider {
+  id            String         @id @default(cuid())
+  name          String
+  kind          String // openai_compatible | anthropic | google
+  baseUrl       String         @default("")
+  apiKey        String         @default("")
+  model         String
+  maxTokens     Int            @default(4096)
+  temperature   Float          @default(0.2)
+  supportsVision Boolean       @default(false)
+  isEnabled     Boolean        @default(true)
+  notes         String         @default("")
+  createdAt     DateTime       @default(now())
+  steps         PipelineStep[]
+  stepResults   AnalysisStepResult[]
+}
+
+model PipelineStage {
+  key           String         @id // summary | goal | document | situation | presenter | qa | notice | letter
+  name          String
+  description   String         @default("")
+  isEnabled     Boolean        @default(true)
+  mergeStrategy String         @default("consensus") // consensus | first | presenter
+  steps         PipelineStep[]
+}
+
+model PipelineStep {
+  id             String        @id @default(cuid())
+  stageKey       String
+  providerId     String
+  role           String // fact_extractor | interpreter | skeptic | extractor_a | extractor_b | analyst | reviewer | presenter | assistant
+  promptTemplate String
+  sortOrder      Int           @default(0)
+  isEnabled      Boolean       @default(true)
+  stage          PipelineStage @relation(fields: [stageKey], references: [key], onDelete: Cascade)
+  provider       AiProvider    @relation(fields: [providerId], references: [id], onDelete: Cascade)
+}
+
+model KnowledgeSource {
+  id         String   @id @default(cuid())
+  title      String
+  sourceType String   @default("publication") // publication | form_instruction | notice_guide | irm | rule | announcement
+  reference  String   @default("") // e.g. "Pub 594", "CP2000"
+  url        String   @default("")
+  content    String   @default("")
+  tags       String   @default("") // comma separated
+  taxYear    Int?
+  isActive   Boolean  @default(true)
+  updatedAt  DateTime @updatedAt
+}
+
+// ---------- Users, roles, agreements ----------
+
+model User {
+  id              String    @id @default(cuid())
+  email           String    @unique
+  phone           String    @default("")
+  passwordHash    String?
+  googleId        String?   @unique
+  role            String    @default("user") // super_admin | admin | user | consultant
+  status          String    @default("active") // active | suspended | deleted
+  firstName       String    @default("")
+  lastName        String    @default("")
+  address         String    @default("")
+  idNumber        String    @default("") // optional, user-provided
+  bio             String    @default("")
+  avatarPath      String    @default("")
+  emailVerifiedAt DateTime?
+  createdAt       DateTime  @default(now())
+  deletedAt       DateTime?
+
+  adminPermissions    AdminPermission[]
+  subscriptions       Subscription[]
+  transactions        PaymentTransaction[]
+  cases               Case[]
+  documents           Document[]
+  deadlines           Deadline[]
+  letters             ResponseLetter[]
+  qaThreads           QaThread[]
+  formSubmissions     FormSubmission[]
+  notifications       Notification[]
+  agreementAcceptances AgreementAcceptance[]
+  consultantProfile   ConsultantProfile?
+  clientAssignments   ConsultantAssignment[] @relation("assignmentClient")
+  consultantAssignments ConsultantAssignment[] @relation("assignmentConsultant")
+  notices             Notice[]
+}
+
+model AdminPermission {
+  id         String @id @default(cuid())
+  userId     String
+  featureKey String // admin area key, e.g. admin.users, admin.ai, admin.payments
+  user       User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, featureKey])
+}
+
+model ContentPage {
+  id          String   @id @default(cuid())
+  slug        String   @unique
+  title       String
+  body        String   @default("")
+  kind        String   @default("page") // page | blog | terms | privacy | policy | legal | agreement_user | agreement_consultant | agreement_connection
+  audience    String   @default("all") // all | user | consultant | admin
+  version     Int      @default(1)
+  isPublished Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  acceptances AgreementAcceptance[]
+}
+
+model AgreementAcceptance {
+  id         String      @id @default(cuid())
+  userId     String
+  pageId     String
+  version    Int
+  context    String      @default("registration") // registration | consultant_signup | assignment
+  acceptedAt DateTime    @default(now())
+  user       User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  page       ContentPage @relation(fields: [pageId], references: [id], onDelete: Cascade)
+}
+
+// ---------- Billing ----------
+
+model Subscription {
+  id               String           @id @default(cuid())
+  userId           String
+  planId           String
+  status           String           @default("active") // active | trialing | past_due | canceled
+  gateway          String           @default("manual")
+  gatewayRef       String           @default("")
+  currentPeriodEnd DateTime?
+  createdAt        DateTime         @default(now())
+  canceledAt       DateTime?
+  user             User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  plan             SubscriptionPlan @relation(fields: [planId], references: [id])
+}
+
+model PaymentTransaction {
+  id          String            @id @default(cuid())
+  userId      String
+  planId      String?
+  amountCents Int
+  currency    String            @default("USD")
+  status      String            @default("pending") // pending | succeeded | failed | refunded
+  gateway     String
+  gatewayRef  String            @default("")
+  createdAt   DateTime          @default(now())
+  user        User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  plan        SubscriptionPlan? @relation(fields: [planId], references: [id])
+}
+
+// ---------- Guest intake ----------
+
+model GuestSession {
+  id              String    @id @default(cuid())
+  token           String    @unique
+  situation       String    @default("")
+  goal            String    @default("")
+  email           String    @default("")
+  teaserJson      String    @default("") // limited pre-registration result
+  claimedByUserId String?
+  claimedAt       DateTime?
+  createdAt       DateTime  @default(now())
+  documents       Document[]
+  cases           Case[]
+  qaThreads       QaThread[]
+}
+
+// ---------- Cases & analysis ----------
+
+model Case {
+  id             String    @id @default(cuid())
+  userId         String?
+  guestSessionId String?
+  title          String
+  situation      String    @default("")
+  goal           String    @default("")
+  status         String    @default("intake") // intake | analyzing | analyzed | needs_info | consultant_recommended | resolved
+  readinessScore Int       @default(0)
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  user           User?     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  guestSession   GuestSession? @relation(fields: [guestSessionId], references: [id])
+  documents      Document[]
+  runs           AnalysisRun[]
+  issues         Issue[]
+  pathSteps      PathStep[]
+  deadlines      Deadline[]
+  letters        ResponseLetter[]
+  notices        Notice[]
+  assignments    ConsultantAssignment[]
+}
+
+model Document {
+  id             String    @id @default(cuid())
+  userId         String?
+  guestSessionId String?
+  caseId         String?
+  fileName       String
+  filePath       String
+  mimeType       String    @default("application/octet-stream")
+  sizeBytes      Int       @default(0)
+  docKind        String    @default("other") // w2 | 1099 | 1040 | notice | transcript | proof | avatar | other
+  status         String    @default("uploaded") // uploaded | analyzing | extracted | verification_required
+  extractedJson  String    @default("")
+  uploadedAt     DateTime  @default(now())
+  deletedAt      DateTime?
+  user           User?         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  guestSession   GuestSession? @relation(fields: [guestSessionId], references: [id])
+  case           Case?         @relation(fields: [caseId], references: [id])
+  notices        Notice[]
+}
+
+model AnalysisRun {
+  id         String    @id @default(cuid())
+  caseId     String
+  stageKey   String
+  status     String    @default("pending") // pending | running | complete | failed
+  error      String    @default("")
+  startedAt  DateTime  @default(now())
+  finishedAt DateTime?
+  case       Case      @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  stepResults AnalysisStepResult[]
+  consensus  ConsensusResult?
+}
+
+model AnalysisStepResult {
+  id         String      @id @default(cuid())
+  runId      String
+  providerId String?
+  roleKey    String
+  status     String      @default("pending") // pending | complete | failed
+  rawText    String      @default("")
+  parsedJson String      @default("")
+  latencyMs  Int         @default(0)
+  run        AnalysisRun @relation(fields: [runId], references: [id], onDelete: Cascade)
+  provider   AiProvider? @relation(fields: [providerId], references: [id], onDelete: SetNull)
+}
+
+model ConsensusResult {
+  id                   String      @id @default(cuid())
+  runId                String      @unique
+  mergedJson           String      @default("")
+  conflictsJson        String      @default("[]")
+  verificationRequired Boolean     @default(false)
+  run                  AnalysisRun @relation(fields: [runId], references: [id], onDelete: Cascade)
+}
+
+model Issue {
+  id             String  @id @default(cuid())
+  caseId         String
+  issueType      String  @default("general") // refund_discrepancy | balance_due | missing_return | notice_response | penalty | other
+  taxYear        Int?
+  title          String
+  description    String  @default("")
+  expectedCents  Int?
+  receivedCents  Int?
+  differenceCents Int?
+  confidence     String  @default("medium") // high | medium | low
+  priority       String  @default("medium") // urgent | high | medium | low
+  state          String  @default("review") // resolved | review | action_needed | urgent | info_needed
+  nextAction     String  @default("")
+  irsBasis       String  @default("")
+  evidenceJson   String  @default("[]")
+  createdAt      DateTime @default(now())
+  case           Case    @relation(fields: [caseId], references: [id], onDelete: Cascade)
+}
+
+model PathStep {
+  id          String @id @default(cuid())
+  caseId      String
+  sortOrder   Int    @default(0)
+  title       String
+  description String @default("")
+  actionKey   String @default("")
+  status      String @default("pending") // pending | current | done
+  case        Case   @relation(fields: [caseId], references: [id], onDelete: Cascade)
+}
+
+// ---------- Notices, deadlines, letters ----------
+
+model Notice {
+  id            String    @id @default(cuid())
+  userId        String?
+  caseId        String?
+  documentId    String?
+  noticeType    String    @default("") // CP2000, CP14, LT11 ...
+  taxYear       Int?
+  amountCents   Int?
+  deadline      DateTime?
+  explanation   String    @default("")
+  nextStepsJson String    @default("[]")
+  status        String    @default("uploaded") // uploaded | analyzing | explained | verification_required
+  createdAt     DateTime  @default(now())
+  user          User?     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  case          Case?     @relation(fields: [caseId], references: [id])
+  document      Document? @relation(fields: [documentId], references: [id])
+  letters       ResponseLetter[]
+}
+
+model Deadline {
+  id               String    @id @default(cuid())
+  userId           String
+  caseId           String?
+  title            String
+  dueDate          DateTime
+  source           String    @default("manual") // manual | notice | analysis
+  status           String    @default("open") // open | done | missed
+  remindDaysBefore Int       @default(7)
+  createdAt        DateTime  @default(now())
+  user             User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  case             Case?     @relation(fields: [caseId], references: [id])
+}
+
+model ResponseLetter {
+  id        String   @id @default(cuid())
+  userId    String
+  caseId    String?
+  noticeId  String?
+  title     String
+  body      String   @default("")
+  status    String   @default("draft") // draft | final
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  case      Case?    @relation(fields: [caseId], references: [id])
+  notice    Notice?  @relation(fields: [noticeId], references: [id])
+}
+
+// ---------- Q&A ----------
+
+model QaThread {
+  id             String       @id @default(cuid())
+  userId         String?
+  guestSessionId String?
+  title          String       @default("Tax question")
+  createdAt      DateTime     @default(now())
+  user           User?        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  guestSession   GuestSession? @relation(fields: [guestSessionId], references: [id])
+  messages       QaMessage[]
+}
+
+model QaMessage {
+  id        String   @id @default(cuid())
+  threadId  String
+  role      String // user | assistant
+  content   String
+  createdAt DateTime @default(now())
+  thread    QaThread @relation(fields: [threadId], references: [id], onDelete: Cascade)
+}
+
+// ---------- IRS forms (game-like wizard) ----------
+
+model IrsFormTemplate {
+  id             String           @id @default(cuid())
+  formNumber     String // "1040", "W-4", "9465"...
+  title          String
+  description    String           @default("")
+  category       String           @default("individual")
+  stepsJson      String           @default("[]") // wizard step/question definitions
+  outputTemplate String           @default("") // text template regenerated into standard form layout
+  isPublished    Boolean          @default(false)
+  requiredFeature String          @default("") // feature key gating access, empty = free
+  sortOrder      Int              @default(0)
+  updatedAt      DateTime         @updatedAt
+  submissions    FormSubmission[]
+}
+
+model FormSubmission {
+  id            String          @id @default(cuid())
+  userId        String
+  templateId    String
+  dataJson      String          @default("{}")
+  progressPct   Int             @default(0)
+  status        String          @default("in_progress") // in_progress | completed
+  generatedText String          @default("")
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+  user          User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  template      IrsFormTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+}
+
+// ---------- Consultants ----------
+
+model ConsultantProfile {
+  id                 String    @id @default(cuid())
+  userId             String    @unique
+  credentialType     String    @default("tax_consultant") // cpa | ea | tax_consultant
+  credentialNumber   String    @default("")
+  ptin               String    @default("")
+  proofDocumentPath  String    @default("")
+  isBusiness         Boolean   @default(false)
+  businessName       String    @default("")
+  ein                String    @default("")
+  specialties        String    @default("[]") // JSON array of specialty keys
+  statesServed       String    @default("")
+  yearsExperience    Int       @default(0)
+  status             String    @default("pending") // pending | approved | rejected | suspended
+  autoApproved       Boolean   @default(false)
+  approvedById       String?
+  approvedAt         DateTime?
+  rejectionReason    String    @default("")
+  createdAt          DateTime  @default(now())
+  user               User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model ConsultantAssignment {
+  id                 String    @id @default(cuid())
+  consultantId       String
+  userId             String
+  caseId             String?
+  status             String    @default("proposed") // proposed | user_accepted | active | declined | revoked
+  note               String    @default("")
+  assignedById       String    @default("")
+  userAgreedAt       DateTime?
+  consultantAgreedAt DateTime?
+  createdAt          DateTime  @default(now())
+  consultant         User      @relation("assignmentConsultant", fields: [consultantId], references: [id], onDelete: Cascade)
+  user               User      @relation("assignmentClient", fields: [userId], references: [id], onDelete: Cascade)
+  case               Case?     @relation(fields: [caseId], references: [id])
+}
+
+// ---------- Notifications ----------
+
+model Notification {
+  id        String    @id @default(cuid())
+  userId    String
+  kind      String    @default("info") // info | consultant_needed | assignment | deadline | billing
+  title     String
+  body      String    @default("")
+  link      String    @default("")
+  readAt    DateTime?
+  createdAt DateTime  @default(now())
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+}

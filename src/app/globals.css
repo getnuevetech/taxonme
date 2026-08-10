@@ -1,0 +1,22 @@
+@import "tailwindcss";
+
+@theme inline {
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+:root {
+  color-scheme: light;
+}
+
+body {
+  @apply bg-slate-50 text-slate-900 antialiased;
+}
+
+.prose-simple h1 { @apply text-2xl font-bold mt-6 mb-3; }
+.prose-simple h2 { @apply text-xl font-semibold mt-5 mb-2; }
+.prose-simple h3 { @apply text-lg font-semibold mt-4 mb-2; }
+.prose-simple p { @apply my-3 leading-relaxed; }
+.prose-simple ul { @apply list-disc pl-6 my-3 space-y-1; }
+.prose-simple ol { @apply list-decimal pl-6 my-3 space-y-1; }
+.prose-simple a { @apply text-indigo-600 underline; }
