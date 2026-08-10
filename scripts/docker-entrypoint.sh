@@ -1,6 +1,21 @@
 #!/bin/sh
 set -e
 
+# Build DATABASE_URL from parts unless one was provided explicitly.
+# Credentials are URL-encoded so passwords may contain any characters.
+if [ -z "$DATABASE_URL" ]; then
+  DATABASE_URL="$(node -e '
+    const e = encodeURIComponent;
+    const user = process.env.POSTGRES_USER || "taxonme";
+    const pass = process.env.POSTGRES_PASSWORD || "";
+    const host = process.env.DB_HOST || "db";
+    const port = process.env.DB_PORT || "5432";
+    const dbname = process.env.POSTGRES_DB || "taxonme";
+    console.log(`postgresql://${e(user)}:${e(pass)}@${host}:${port}/${e(dbname)}?schema=public`);
+  ')"
+  export DATABASE_URL
+fi
+
 echo "Waiting for the database..."
 i=0
 until npx prisma migrate deploy > /tmp/migrate.log 2>&1; do
