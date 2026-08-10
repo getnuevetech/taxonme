@@ -41,7 +41,7 @@ export async function verifyPassword(password: string, hash: string) {
 // Mark cookies Secure only when the app is actually served over HTTPS
 // (from the admin-managed App URL setting). Following NODE_ENV alone breaks
 // plain-HTTP local deployments: Safari drops Secure cookies on http://localhost.
-export async function useSecureCookies(): Promise<boolean> {
+export async function secureCookiesEnabled(): Promise<boolean> {
   const row = await db.setting.findUnique({ where: { key: "app.url" } });
   return (row?.value ?? "").trim().toLowerCase().startsWith("https://");
 }
@@ -57,7 +57,7 @@ export async function createSession(userId: string) {
   jar.set(SESSION_COOKIE, token, {
     httpOnly: true,
     sameSite: "lax",
-    secure: await useSecureCookies(),
+    secure: await secureCookiesEnabled(),
     maxAge: 60 * 60 * 24 * 30,
     path: "/",
   });
