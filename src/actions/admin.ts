@@ -273,6 +273,24 @@ export async function updateAdminAreasAction(_prev: ActionState, formData: FormD
 
 // ---------- Consultants ----------
 
+// Account management scoped to the consultant group (so a sub-admin with only
+// the Consultants area can manage consultant accounts without full user access).
+export async function setConsultantAccountStatusAction(userId: string, status: "active" | "suspended") {
+  await requireAdminArea("admin.consultants");
+  const target = await db.user.findUnique({ where: { id: userId } });
+  if (!target || target.role !== "consultant") return;
+  await db.user.update({ where: { id: userId }, data: { status } });
+  revalidatePath("/admin/consultants");
+}
+
+export async function deleteConsultantAccountAction(userId: string) {
+  await requireAdminArea("admin.consultants");
+  const target = await db.user.findUnique({ where: { id: userId } });
+  if (!target || target.role !== "consultant") return;
+  await db.user.delete({ where: { id: userId } });
+  revalidatePath("/admin/consultants");
+}
+
 export async function reviewConsultantAction(profileId: string, approve: boolean, reason = "") {
   const admin = await requireAdminArea("admin.consultants");
   const profile = await db.consultantProfile.update({

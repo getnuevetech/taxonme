@@ -13,9 +13,9 @@ export type Role = (typeof ROLES)[keyof typeof ROLES];
 export const ADMIN_AREAS = [
   { key: "admin.dashboard", name: "Dashboard" },
   { key: "admin.cases", name: "Cases" },
-  { key: "admin.users", name: "Users" },
-  { key: "admin.admins", name: "Admin roles" },
-  { key: "admin.consultants", name: "Consultants" },
+  { key: "admin.users", name: "Customers" },
+  { key: "admin.admins", name: "Admin users" },
+  { key: "admin.consultants", name: "CPA / Consultants" },
   { key: "admin.assignments", name: "Assignments" },
   { key: "admin.plans", name: "Plans & access control" },
   { key: "admin.payments", name: "Payment gateways" },

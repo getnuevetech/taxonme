@@ -1,10 +1,11 @@
 import { db } from "@/lib/db";
 import { guardAdminPage } from "@/lib/admin-guard";
 import { PageHeader, Card, CardBody, Badge } from "@/components/ui";
+import { PeopleTabs } from "@/components/admin/people-tabs";
 import { AdminRoleForms } from "@/components/admin/admin-role-forms";
 import { ADMIN_AREAS } from "@/lib/constants";
 
-export const metadata = { title: "Admin roles" };
+export const metadata = { title: "Admin users" };
 
 export default async function AdminRolesPage() {
   const actor = await guardAdminPage("admin.admins");
@@ -17,9 +18,10 @@ export default async function AdminRolesPage() {
   return (
     <div>
       <PageHeader
-        title="Admin roles"
+        title="Admin users"
         subtitle="The super admin sees everything. Create additional admins that manage only the areas you choose."
       />
+      <PeopleTabs active="admins" />
       <div className="space-y-4">
         {admins.map((a) => (
           <Card key={a.id}>

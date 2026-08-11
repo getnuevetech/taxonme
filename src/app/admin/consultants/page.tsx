@@ -2,96 +2,167 @@ import Link from "next/link";
 import { db } from "@/lib/db";
 import { guardAdminPage } from "@/lib/admin-guard";
 import { PageHeader, Card, CardBody, Badge } from "@/components/ui";
-import { reviewConsultantAction } from "@/actions/admin";
+import { PeopleTabs } from "@/components/admin/people-tabs";
+import { reviewConsultantAction, setConsultantAccountStatusAction, deleteConsultantAccountAction } from "@/actions/admin";
 import { CONSULTANT_SPECIALTIES } from "@/lib/constants";
 import { AutoApproveSettings } from "@/components/admin/auto-approve-settings";
 import { getSetting } from "@/lib/settings";
 
-export const metadata = { title: "Consultants" };
+export const metadata = { title: "CPA / Consultants" };
 
 export default async function AdminConsultantsPage() {
   await guardAdminPage("admin.consultants");
-  const profiles = await db.consultantProfile.findMany({
-    orderBy: [{ status: "asc" }, { createdAt: "desc" }],
-    include: { user: true },
-  });
-  const [autoEnabled, minYears] = await Promise.all([
+  const [accounts, autoEnabled, minYears] = await Promise.all([
+    db.user.findMany({
+      where: { role: "consultant" },
+      orderBy: { createdAt: "desc" },
+      include: {
+        consultantProfile: true,
+        _count: { select: { consultantAssignments: true } },
+      },
+    }),
     getSetting("consultants.auto_approve_enabled", "false"),
     getSetting("consultants.auto_approve_min_years", "3"),
   ]);
+  const pendingApplications = accounts.filter((a) => a.consultantProfile?.status === "pending");
   const specialtyName = (k: string) => CONSULTANT_SPECIALTIES.find((s) => s.key === k)?.name ?? k;
+
+  const credentialBadge = (p: (typeof accounts)[number]["consultantProfile"]) => {
+    if (!p) return <Badge color="slate">onboarding not submitted</Badge>;
+    const color = p.status === "approved" ? "green" : p.status === "rejected" ? "red" : p.status === "suspended" ? "red" : "amber";
+    return <Badge color={color}>{p.status}{p.autoApproved ? " (auto)" : ""}</Badge>;
+  };
 
   return (
     <div>
       <PageHeader
-        title="Consultants"
-        subtitle="Approve applications manually, or enable automated approval for fully-credentialed CPA/EA applicants."
+        title="CPA / Consultants"
+        subtitle="Partner professionals — their accounts, credentials, and approvals live here, separate from customers."
       />
+      <PeopleTabs active="consultants" />
 
-      <Card className="mb-6">
+      {/* Approval queue first: this is the section that needs admin action. */}
+      {pendingApplications.length > 0 && (
+        <div className="mb-8">
+          <h2 className="mb-3 text-base font-semibold text-slate-900">
+            Awaiting review ({pendingApplications.length})
+          </h2>
+          <div className="space-y-4">
+            {pendingApplications.map((a) => {
+              const p = a.consultantProfile!;
+              const specialties: string[] = JSON.parse(p.specialties || "[]");
+              return (
+                <Card key={p.id} className="border-amber-300">
+                  <CardBody>
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                      <div>
+                        <p className="font-semibold text-slate-900">
+                          {a.firstName} {a.lastName} <span className="font-normal text-slate-400">· {a.email}</span>
+                        </p>
+                        <p className="mt-0.5 text-sm text-slate-600">
+                          {p.credentialType.toUpperCase().replace("_", " ")}
+                          {p.credentialNumber && ` · #${p.credentialNumber}`}
+                          {p.ptin && ` · PTIN ${p.ptin}`}
+                          {` · ${p.yearsExperience} yrs`}
+                          {p.isBusiness && p.businessName && ` · ${p.businessName}${p.ein ? ` (EIN ${p.ein})` : ""}`}
+                        </p>
+                        <div className="mt-2 flex flex-wrap gap-1.5">
+                          {specialties.map((s) => <Badge key={s} color="indigo">{specialtyName(s)}</Badge>)}
+                          {p.statesServed && <Badge>States: {p.statesServed}</Badge>}
+                        </div>
+                        {p.proofDocumentPath ? (
+                          <p className="mt-2 text-xs text-emerald-600">Credential proof uploaded ✓</p>
+                        ) : (
+                          <p className="mt-2 text-xs text-amber-600">No credential proof uploaded</p>
+                        )}
+                      </div>
+                    </div>
+                    <div className="mt-4 flex gap-2">
+                      <form action={reviewConsultantAction.bind(null, p.id, true, "")}>
+                        <button className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700">
+                          Approve
+                        </button>
+                      </form>
+                      <form action={reviewConsultantAction.bind(null, p.id, false, "Application did not meet our requirements.")}>
+                        <button className="rounded-lg border border-red-200 px-4 py-2 text-sm font-medium text-red-600 hover:bg-red-50">
+                          Reject
+                        </button>
+                      </form>
+                    </div>
+                  </CardBody>
+                </Card>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      <h2 className="mb-3 text-base font-semibold text-slate-900">All consultant accounts</h2>
+      <div className="overflow-x-auto rounded-2xl border border-slate-200 bg-white shadow-sm">
+        <table className="w-full text-sm">
+          <thead className="bg-slate-50 text-left text-xs font-medium uppercase tracking-wide text-slate-500">
+            <tr>
+              <th className="px-4 py-3">Consultant</th>
+              <th className="px-4 py-3">Credential</th>
+              <th className="px-4 py-3">Business</th>
+              <th className="px-4 py-3">Credential status</th>
+              <th className="px-4 py-3">Clients</th>
+              <th className="px-4 py-3">Account</th>
+              <th className="px-4 py-3" />
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-slate-100">
+            {accounts.length === 0 && (
+              <tr><td colSpan={7} className="px-4 py-6 text-center text-slate-400">No consultant accounts yet.</td></tr>
+            )}
+            {accounts.map((a) => {
+              const p = a.consultantProfile;
+              return (
+                <tr key={a.id}>
+                  <td className="px-4 py-3">
+                    <p className="font-medium text-slate-900">{a.firstName} {a.lastName}</p>
+                    <p className="text-xs text-slate-500">{a.email}</p>
+                  </td>
+                  <td className="px-4 py-3 text-slate-600">
+                    {p ? `${p.credentialType.toUpperCase().replace("_", " ")}${p.credentialNumber ? ` #${p.credentialNumber}` : ""}` : "—"}
+                  </td>
+                  <td className="px-4 py-3 text-slate-600">{p?.isBusiness ? p.businessName || "Business" : "Individual"}</td>
+                  <td className="px-4 py-3">{credentialBadge(p)}</td>
+                  <td className="px-4 py-3 text-slate-600">{a._count.consultantAssignments}</td>
+                  <td className="px-4 py-3">
+                    <Badge color={a.status === "active" ? "green" : "red"}>{a.status}</Badge>
+                  </td>
+                  <td className="px-4 py-3 text-right">
+                    <div className="flex justify-end gap-3 text-xs font-medium">
+                      <form action={setConsultantAccountStatusAction.bind(null, a.id, a.status === "active" ? "suspended" : "active")}>
+                        <button className="text-amber-600 hover:text-amber-800">
+                          {a.status === "active" ? "Suspend" : "Reactivate"}
+                        </button>
+                      </form>
+                      <form action={deleteConsultantAccountAction.bind(null, a.id)}>
+                        <button className="text-red-500 hover:text-red-700">Delete</button>
+                      </form>
+                    </div>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+
+      <Card className="mt-8">
         <CardBody>
           <h2 className="mb-2 text-sm font-semibold text-slate-900">Automated approval</h2>
           <AutoApproveSettings enabled={autoEnabled === "true"} minYears={Number(minYears) || 3} />
         </CardBody>
       </Card>
 
-      <div className="space-y-4">
-        {profiles.length === 0 && <p className="text-sm text-slate-400">No consultant applications yet.</p>}
-        {profiles.map((p) => {
-          const specialties: string[] = JSON.parse(p.specialties || "[]");
-          return (
-            <Card key={p.id}>
-              <CardBody>
-                <div className="flex flex-wrap items-start justify-between gap-3">
-                  <div>
-                    <p className="font-semibold text-slate-900">
-                      {p.user.firstName} {p.user.lastName} <span className="font-normal text-slate-400">· {p.user.email}</span>
-                    </p>
-                    <p className="mt-0.5 text-sm text-slate-600">
-                      {p.credentialType.toUpperCase().replace("_", " ")}
-                      {p.credentialNumber && ` · #${p.credentialNumber}`}
-                      {p.ptin && ` · PTIN ${p.ptin}`}
-                      {` · ${p.yearsExperience} yrs`}
-                      {p.isBusiness && p.businessName && ` · ${p.businessName}${p.ein ? ` (EIN ${p.ein})` : ""}`}
-                    </p>
-                    <div className="mt-2 flex flex-wrap gap-1.5">
-                      {specialties.map((s) => <Badge key={s} color="indigo">{specialtyName(s)}</Badge>)}
-                      {p.statesServed && <Badge>States: {p.statesServed}</Badge>}
-                    </div>
-                    {p.proofDocumentPath ? (
-                      <p className="mt-2 text-xs text-emerald-600">Credential proof uploaded ✓</p>
-                    ) : (
-                      <p className="mt-2 text-xs text-amber-600">No credential proof uploaded</p>
-                    )}
-                  </div>
-                  <Badge color={p.status === "approved" ? "green" : p.status === "rejected" ? "red" : "amber"}>
-                    {p.status}{p.autoApproved ? " (auto)" : ""}
-                  </Badge>
-                </div>
-                {p.status === "pending" && (
-                  <div className="mt-4 flex gap-2">
-                    <form action={reviewConsultantAction.bind(null, p.id, true, "")}>
-                      <button className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700">
-                        Approve
-                      </button>
-                    </form>
-                    <form action={reviewConsultantAction.bind(null, p.id, false, "Application did not meet our requirements.")}>
-                      <button className="rounded-lg border border-red-200 px-4 py-2 text-sm font-medium text-red-600 hover:bg-red-50">
-                        Reject
-                      </button>
-                    </form>
-                  </div>
-                )}
-                {p.status === "approved" && (
-                  <p className="mt-3 text-sm text-slate-500">
-                    Assign clients from the <Link href="/admin/assignments" className="text-indigo-600 underline">Assignments</Link> page.
-                  </p>
-                )}
-              </CardBody>
-            </Card>
-          );
-        })}
-      </div>
+      <p className="mt-4 text-sm text-slate-500">
+        Assign approved consultants to customers from the{" "}
+        <Link href="/admin/assignments" className="text-indigo-600 underline">Assignments</Link> page — connections
+        require both parties&apos; consent.
+      </p>
     </div>
   );
 }
