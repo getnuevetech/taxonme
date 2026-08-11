@@ -90,15 +90,38 @@ export async function consultantOnboardingAction(_prev: ActionState, formData: F
     });
   }
 
+  const admins = await db.user.findMany({ where: { role: { in: ["super_admin", "admin"] }, status: "active" } });
   if (!qualifies) {
-    const admins = await db.user.findMany({ where: { role: { in: ["super_admin", "admin"] }, status: "active" } });
+    const failed = evaluation.results.filter((r) => r.required && !r.satisfied).map((r) => r.name);
     for (const admin of admins) {
       await db.notification.create({
         data: {
           userId: admin.id,
           kind: "info",
           title: "Consultant application pending review",
-          body: `${user.firstName} ${user.lastName} (${user.email}) submitted a consultant application.`,
+          body: `${user.firstName} ${user.lastName} (${user.email}) applied.${evaluation.enabled && failed.length ? ` Auto-approval missed: ${failed.slice(0, 3).join("; ")}.` : ""}`,
+          link: "/admin/consultants",
+        },
+      });
+    }
+  } else {
+    // Auto-approved: tell the consultant and log it for the admins.
+    await db.notification.create({
+      data: {
+        userId: user.id,
+        kind: "info",
+        title: "Your consultant account is approved",
+        body: "Your application met all automated approval criteria — you can now be assigned clients.",
+        link: "/consultant",
+      },
+    });
+    for (const admin of admins) {
+      await db.notification.create({
+        data: {
+          userId: admin.id,
+          kind: "info",
+          title: "Consultant auto-approved",
+          body: `${user.firstName} ${user.lastName} (${user.email}) met all automated approval criteria.`,
           link: "/admin/consultants",
         },
       });

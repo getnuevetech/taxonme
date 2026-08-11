@@ -21,6 +21,32 @@ export default async function AdminConsultantsPage() {
     },
   });
   const pendingApplications = accounts.filter((a) => a.consultantProfile?.status === "pending");
+
+  // Show admins exactly how each pending application scores against the
+  // automated-approval criteria.
+  const { evaluateAutoApproval } = await import("@/lib/consultant-criteria");
+  const evaluations = new Map<string, Awaited<ReturnType<typeof evaluateAutoApproval>>>();
+  for (const a of pendingApplications) {
+    const p = a.consultantProfile!;
+    evaluations.set(
+      p.id,
+      await evaluateAutoApproval({
+        credentialType: p.credentialType,
+        credentialNumber: p.credentialNumber,
+        licenseState: p.licenseState,
+        ptin: p.ptin,
+        efin: p.efin,
+        proofDocumentPath: p.proofDocumentPath,
+        photoIdPath: p.photoIdPath,
+        insurancePath: p.insurancePath,
+        isBusiness: p.isBusiness,
+        ein: p.ein,
+        statesServed: p.statesServed,
+        yearsExperience: p.yearsExperience,
+        attestedCompliance: p.attestedCompliance,
+      }),
+    );
+  }
   const specialtyName = (k: string) => CONSULTANT_SPECIALTIES.find((s) => s.key === k)?.name ?? k;
 
   const credentialBadge = (p: (typeof accounts)[number]["consultantProfile"]) => {
@@ -94,6 +120,26 @@ export default async function AdminConsultantsPage() {
                         </div>
                       </div>
                     </div>
+                    {(() => {
+                      const ev = evaluations.get(p.id);
+                      if (!ev) return null;
+                      const required = ev.results.filter((r) => r.required);
+                      return (
+                        <div className="mt-3 rounded-xl bg-slate-50 p-3">
+                          <p className="text-xs font-semibold text-slate-700">
+                            Auto-approval check {ev.enabled ? "" : "(system currently disabled)"} —{" "}
+                            {required.filter((r) => r.satisfied).length}/{required.length} required criteria met
+                          </p>
+                          <div className="mt-1.5 flex flex-wrap gap-1.5">
+                            {required.map((r) => (
+                              <Badge key={r.key} color={r.satisfied ? "green" : "red"}>
+                                {r.satisfied ? "✓" : "✗"} {r.name}
+                              </Badge>
+                            ))}
+                          </div>
+                        </div>
+                      );
+                    })()}
                     <div className="mt-4 flex gap-2">
                       <form action={reviewConsultantAction.bind(null, p.id, true, "")}>
                         <button className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700">
