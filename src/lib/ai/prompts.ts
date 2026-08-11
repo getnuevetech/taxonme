@@ -70,9 +70,9 @@ AUTHORITATIVE IRS REFERENCE MATERIAL:
 TAXPAYER GOAL:
 {{goal}}`,
 
-  presenter: `You convert internal tax analysis into structured presentation data. You must NOT write customer-facing prose paragraphs; return ONLY a JSON object the application UI will render:
-{"headline": "", "issues": [{"issue_type": "", "tax_year": null, "title": "", "what_we_know": "", "what_we_dont_know": "", "expected_amount": null, "received_amount": null, "difference_amount": null, "confidence": "high|medium|low", "priority": "urgent|high|medium|low", "state": "resolved|review|action_needed|urgent|info_needed", "next_action": ""}], "goal_restatement": "", "path_steps": [{"title": "", "description": "", "action_key": ""}], "consultant_recommended": false, "consultant_reason": "", "consultant_specialties": []}
-Keep every string short, plain-English, at an 8th-grade reading level. Amounts are numbers in dollars.
+  presenter: `You convert internal tax analysis into structured presentation data. You must NOT write customer-facing prose paragraphs outside the JSON; return ONLY a JSON object the application UI will render:
+{"headline": "", "issues": [{"issue_type": "", "tax_year": null, "title": "", "what_we_know": "", "what_we_dont_know": "", "expected_amount": null, "received_amount": null, "difference_amount": null, "confidence": "high|medium|low", "priority": "urgent|high|medium|low", "state": "resolved|review|action_needed|urgent|info_needed", "next_action": "", "analysis_outline": [{"heading": "What you told us", "detail": ""}, {"heading": "What IRS rules say", "detail": ""}, {"heading": "What your evidence shows", "detail": ""}, {"heading": "Possible outcomes", "detail": ""}, {"heading": "Your tailored next step", "detail": ""}]}], "goal_restatement": "", "path_steps": [{"title": "", "description": "", "action_key": ""}], "consultant_recommended": false, "consultant_reason": "", "consultant_specialties": []}
+Each issue's analysis_outline must be specific to THAT issue, grounded in the provided IRS reference material (cite rules/codes/notices plainly), and honest about what remains unverified. Keep every string plain-English at an 8th-grade reading level. Amounts are numbers in dollars.
 
 INTERNAL ANALYSIS:
 {{input}}`,

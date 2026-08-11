@@ -262,6 +262,9 @@ export async function runCaseAnalysis(caseId: string): Promise<void> {
         state: ["resolved", "review", "action_needed", "urgent", "info_needed"].includes(String(issue.state)) ? String(issue.state) : "review",
         nextAction: String(issue.next_action ?? ""),
         irsBasis: String(issue.irs_basis ?? ""),
+        // Per-finding analysis outline (what you told us → IRS rules → evidence
+        // → outcomes → tailored next step), rendered under each finding.
+        evidenceJson: JSON.stringify(Array.isArray(issue.analysis_outline) ? issue.analysis_outline : []),
       },
     });
   }

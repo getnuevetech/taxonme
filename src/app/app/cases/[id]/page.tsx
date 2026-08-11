@@ -10,6 +10,7 @@ import { startFormAction } from "@/actions/forms";
 import { isVerifiable, VERIFIABLE_ACTIONS } from "@/lib/case-progress";
 import { formatCaseNumber } from "@/lib/case-number";
 import { CaseUpload } from "@/components/case-upload";
+import { InlineUpload } from "@/components/inline-upload";
 
 export default async function CaseDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -168,6 +169,43 @@ export default async function CaseDetailPage({ params }: { params: Promise<{ id:
             </div>
           )}
 
+          {/* The analysis is never silent: a plain-English account of the
+              latest run comes FIRST, then each finding carries its own
+              detailed outline below. */}
+          {latestBatch.length > 0 && (
+            <section>
+              <h2 className="mb-3 text-base font-semibold text-slate-900">How we analyzed your case</h2>
+              <Card>
+                <CardBody>
+                  <p className="mb-3 text-xs text-slate-500">
+                    Last analyzed {c.runs[0].startedAt.toLocaleString("en-US")} · we examined your summary, your goal, and{" "}
+                    {c.documents.length} document{c.documents.length === 1 ? "" : "s"}. Anything you upload is checked against{" "}
+                    <span className="font-medium">every</span> finding, and each upload re-runs this automatically.
+                  </p>
+                  <ol className="space-y-3">
+                    {latestBatch.map((run, i) => (
+                      <li key={run.id} className="flex gap-3">
+                        <span className="mt-1 flex h-2.5 w-2.5 shrink-0 rounded-full bg-indigo-500" />
+                        <div>
+                          <p className="text-sm leading-relaxed text-slate-700">
+                            <span className="font-semibold text-slate-900">{i + 1}.</span> {describeRun(run)}
+                          </p>
+                          {run.consensus?.verificationRequired && (
+                            <p className="text-xs font-medium text-amber-600">◐ Some values disagreed — flagged for verification instead of guessing.</p>
+                          )}
+                        </div>
+                      </li>
+                    ))}
+                  </ol>
+                  <p className="mt-4 rounded-lg bg-slate-50 px-3 py-2 text-sm text-slate-700">
+                    <span className="font-semibold">Result:</span> {c.issues.length} finding{c.issues.length === 1 ? "" : "s"} below, each with
+                    its own detailed walkthrough, tailored outcome, and next step · case readiness {c.readinessScore}%.
+                  </p>
+                </CardBody>
+              </Card>
+            </section>
+          )}
+
           <section>
             <h2 className="mb-3 text-base font-semibold text-slate-900">What we found</h2>
             <div className="space-y-4">
@@ -206,28 +244,67 @@ export default async function CaseDetailPage({ params }: { params: Promise<{ id:
                     {issue.irsBasis && (
                       <p className="mt-2 text-xs text-slate-400">IRS basis: {issue.irsBasis}</p>
                     )}
+
+                    {/* Per-finding analysis walkthrough: how we reached this,
+                        which IRS rules apply, and the tailored outcome. */}
+                    {(() => {
+                      let outline: { heading: string; detail: string }[] = [];
+                      try {
+                        const parsed = JSON.parse(issue.evidenceJson || "[]");
+                        if (Array.isArray(parsed)) outline = parsed.filter((o) => o?.heading && o?.detail);
+                      } catch { /* legacy issues without outlines */ }
+                      if (outline.length === 0) return null;
+                      return (
+                        <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50/60 p-4">
+                          <p className="mb-3 text-xs font-bold uppercase tracking-wide text-slate-400">
+                            How we reached this finding
+                          </p>
+                          <ol className="space-y-3">
+                            {outline.map((o, oi) => (
+                              <li key={oi} className="grid gap-1 sm:grid-cols-[180px_1fr] sm:gap-4">
+                                <p className="text-sm font-semibold text-slate-800">
+                                  <span className="mr-1.5 font-mono text-xs text-indigo-500">{String(oi + 1).padStart(2, "0")}</span>
+                                  {o.heading}
+                                </p>
+                                <p className="text-sm leading-relaxed text-slate-600">{o.detail}</p>
+                              </li>
+                            ))}
+                          </ol>
+                        </div>
+                      );
+                    })()}
+
                     {issue.nextAction && issue.state !== "resolved" && (
                       <div className="mt-3 flex flex-wrap items-center gap-3 rounded-lg bg-indigo-50 px-3 py-2.5">
                         <p className="text-sm font-medium text-indigo-800">
                           Next step: {issue.nextAction.replace(/_/g, " ").toLowerCase()}
                         </p>
-                        {stepCta(issue.nextAction) && (
-                          <a
-                            href={stepCta(issue.nextAction)!.href}
-                            className="rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-indigo-700"
-                          >
-                            {stepCta(issue.nextAction)!.label} →
-                          </a>
-                        )}
-                        {["GET_TRANSCRIPT", "GET_ACCOUNT_TRANSCRIPT"].includes(issue.nextAction.toUpperCase()) && (
-                          <a
-                            href="https://www.irs.gov/your-account"
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="rounded-lg border border-indigo-200 bg-white px-3 py-1.5 text-xs font-medium text-indigo-700 hover:bg-indigo-50"
-                          >
-                            Open IRS sign-up ↗
-                          </a>
+                        {issue.nextAction.toUpperCase() === "UPLOAD_DOCUMENTS" ? (
+                          <InlineUpload caseId={c.id} label="Upload for this finding" />
+                        ) : (
+                          <>
+                            {stepCta(issue.nextAction) && (
+                              <a
+                                href={stepCta(issue.nextAction)!.href}
+                                className="rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-indigo-700"
+                              >
+                                {stepCta(issue.nextAction)!.label} →
+                              </a>
+                            )}
+                            {["GET_TRANSCRIPT", "GET_ACCOUNT_TRANSCRIPT"].includes(issue.nextAction.toUpperCase()) && (
+                              <>
+                                <a
+                                  href="https://www.irs.gov/your-account"
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="rounded-lg border border-indigo-200 bg-white px-3 py-1.5 text-xs font-medium text-indigo-700 hover:bg-indigo-50"
+                                >
+                                  Open IRS sign-up ↗
+                                </a>
+                                <InlineUpload caseId={c.id} docKind="transcript" label="Have it? Upload transcript" />
+                              </>
+                            )}
+                          </>
                         )}
                       </div>
                     )}
@@ -300,6 +377,8 @@ export default async function CaseDetailPage({ params }: { params: Promise<{ id:
                                   Start the payment plan form →
                                 </button>
                               </form>
+                            ) : step.actionKey.toUpperCase() === "UPLOAD_DOCUMENTS" ? (
+                              <InlineUpload caseId={c.id} label="Upload documents" />
                             ) : stepCta(step.actionKey) ? (
                               <a
                                 href={stepCta(step.actionKey)!.href}
@@ -337,41 +416,6 @@ export default async function CaseDetailPage({ params }: { params: Promise<{ id:
             </Card>
           </section>
 
-          {/* The analysis is never silent: a plain-English account of what was
-              examined in the latest run, so the user can see their case being
-              worked on. */}
-          {latestBatch.length > 0 && (
-            <section>
-              <h2 className="mb-3 text-base font-semibold text-slate-900">How we analyzed your case</h2>
-              <Card>
-                <CardBody>
-                  <p className="mb-3 text-xs text-slate-500">
-                    Last analyzed {c.runs[0].startedAt.toLocaleString("en-US")} · we examined your summary, your goal, and{" "}
-                    {c.documents.length} document{c.documents.length === 1 ? "" : "s"}. Every upload re-runs this automatically.
-                  </p>
-                  <ol className="space-y-3">
-                    {latestBatch.map((run, i) => (
-                      <li key={run.id} className="flex gap-3">
-                        <span className="mt-1 flex h-2.5 w-2.5 shrink-0 rounded-full bg-indigo-500" />
-                        <div>
-                          <p className="text-sm leading-relaxed text-slate-700">
-                            <span className="font-semibold text-slate-900">{i + 1}.</span> {describeRun(run)}
-                          </p>
-                          {run.consensus?.verificationRequired && (
-                            <p className="text-xs font-medium text-amber-600">◐ Some values disagreed — flagged for verification instead of guessing.</p>
-                          )}
-                        </div>
-                      </li>
-                    ))}
-                  </ol>
-                  <p className="mt-4 rounded-lg bg-slate-50 px-3 py-2 text-sm text-slate-700">
-                    <span className="font-semibold">Outcome:</span> {c.issues.length} issue{c.issues.length === 1 ? "" : "s"} identified ·{" "}
-                    {c.pathSteps.length}-step plan · case readiness {c.readinessScore}%.
-                  </p>
-                </CardBody>
-              </Card>
-            </section>
-          )}
         </div>
 
         <div className="space-y-6">
@@ -413,9 +457,7 @@ export default async function CaseDetailPage({ params }: { params: Promise<{ id:
                 </ul>
                 {neededDocs.some((d) => !haveKinds.has(d.kind)) && (
                   <div className="mt-3 flex flex-wrap gap-2">
-                    <a href="#case-documents" className="rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-indigo-700">
-                      Upload below ↓
-                    </a>
+                    <InlineUpload caseId={c.id} label="Upload now" />
                     {neededDocs.some((d) => d.kind === "transcript" && !haveKinds.has("transcript")) && (
                       <a href="/app/irs-account" className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50">
                         Transcript guide →
@@ -423,6 +465,9 @@ export default async function CaseDetailPage({ params }: { params: Promise<{ id:
                     )}
                   </div>
                 )}
+                <p className="mt-2 text-[10px] text-slate-400">
+                  Every document you add is checked against all findings automatically.
+                </p>
               </CardBody>
             </Card>
           )}
