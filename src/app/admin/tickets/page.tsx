@@ -4,6 +4,8 @@ import type { Prisma } from "@prisma/client";
 import { guardAdminPage } from "@/lib/admin-guard";
 import { PageHeader, Badge, Stat, Card, CardBody } from "@/components/ui";
 import { AdminCreateTicketForm } from "@/components/admin/ticket-admin-forms";
+import { CannedResponseForm } from "@/components/admin/canned-response-forms";
+import { deleteCannedResponseAction } from "@/actions/support";
 import { formatTicketNumber } from "@/lib/ticket-number";
 
 export const metadata = { title: "Support tickets" };
@@ -52,12 +54,17 @@ export default async function AdminTicketsPage({
       select: { id: true, email: true, firstName: true, lastName: true },
     }),
   ]);
-  const { getNumberSetting } = await import("@/lib/settings");
+  const { getNumberSetting, getSetting } = await import("@/lib/settings");
   const slaHours = await getNumberSetting("tickets.sla_first_response_hours", 24);
   const slaCutoff = new Date(Date.now() - slaHours * 3600000);
   const awaitingFirstResponse = await db.ticket.count({
     where: { status: { in: ["open", "in_progress"] }, firstResponseAt: null },
   });
+  const [csat, canned, inboundSecret] = await Promise.all([
+    db.ticket.aggregate({ where: { csatRating: { not: null } }, _avg: { csatRating: true }, _count: { csatRating: true } }),
+    db.cannedResponse.findMany({ orderBy: { title: "asc" } }),
+    getSetting("tickets.inbound_email_secret", ""),
+  ]);
   const isOverdue = (t: { status: string; firstResponseAt: Date | null; createdAt: Date }) =>
     ["open", "in_progress"].includes(t.status) && !t.firstResponseAt && t.createdAt < slaCutoff;
 
@@ -76,11 +83,16 @@ export default async function AdminTicketsPage({
         title="Support tickets"
         subtitle="The standalone ticketing operation: issues are routed to tech support or customer service and documented here."
       />
-      <div className="mb-6 grid gap-4 sm:grid-cols-4">
+      <div className="mb-6 grid gap-4 sm:grid-cols-5">
         <Stat label="Open tickets" value={openCount} />
         <Stat label="Awaiting first response" value={awaitingFirstResponse} sub={`SLA: ${slaHours}h`} />
         <Stat label="Tech support queue" value={techCount} />
         <Stat label="Customer service queue" value={serviceCount} />
+        <Stat
+          label="CSAT"
+          value={csat._count.csatRating ? `${Math.round((csat._avg.csatRating ?? 0) * 10) / 10}/5` : "—"}
+          sub={csat._count.csatRating ? `${csat._count.csatRating} rating(s)` : "no ratings yet"}
+        />
       </div>
 
       <Card className="mb-6">
@@ -93,6 +105,51 @@ export default async function AdminTicketsPage({
               <AdminCreateTicketForm
                 agents={agents.map((a) => ({ id: a.id, label: `${a.firstName} ${a.lastName}`.trim() || a.email }))}
               />
+            </div>
+          </details>
+        </CardBody>
+      </Card>
+
+      <Card className="mb-6">
+        <CardBody>
+          <details>
+            <summary className="cursor-pointer text-sm font-semibold text-indigo-600">
+              Canned responses ({canned.length}) & inbound email
+            </summary>
+            <div className="mt-4 space-y-4">
+              {canned.map((c) => (
+                <details key={c.id} className="rounded-xl border border-slate-200 p-3">
+                  <summary className="cursor-pointer text-sm font-medium text-slate-800">
+                    {c.title} <Badge>{c.category === "all" ? "both queues" : c.category.replace(/_/g, " ")}</Badge>
+                  </summary>
+                  <div className="mt-3">
+                    <CannedResponseForm canned={{ id: c.id, title: c.title, body: c.body, category: c.category }} />
+                    <form action={deleteCannedResponseAction.bind(null, c.id)} className="mt-1 text-right">
+                      <button className="text-xs font-medium text-red-500 hover:text-red-700">Delete</button>
+                    </form>
+                  </div>
+                </details>
+              ))}
+              <div className="rounded-xl border border-dashed border-slate-300 p-3">
+                <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">New canned response</p>
+                <CannedResponseForm canned={null} />
+              </div>
+              <div className="rounded-xl bg-slate-50 p-3 text-xs text-slate-600">
+                <p className="font-semibold text-slate-800">Inbound email-to-ticket</p>
+                {inboundSecret ? (
+                  <p className="mt-1">
+                    Enabled. Point your email provider&apos;s inbound webhook (SendGrid Inbound Parse, Mailgun Routes, Postmark) at{" "}
+                    <code className="rounded bg-white px-1">/api/inbound-email?secret=…</code>. Emails from registered users create
+                    tickets; replies containing a TKT number are appended to that ticket.
+                  </p>
+                ) : (
+                  <p className="mt-1">
+                    Disabled. Set <code className="rounded bg-white px-1">tickets.inbound_email_secret</code> in App settings to a
+                    long random value, then point your email provider&apos;s inbound webhook at{" "}
+                    <code className="rounded bg-white px-1">/api/inbound-email?secret=&lt;value&gt;</code>.
+                  </p>
+                )}
+              </div>
             </div>
           </details>
         </CardBody>

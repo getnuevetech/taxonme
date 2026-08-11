@@ -534,16 +534,20 @@ model Ticket {
   category     String   @default("customer_service") // customer_service | tech_support
   status       String   @default("open") // open | in_progress | resolved | closed
   priority     String   @default("normal") // low | normal | high | urgent
-  source       String   @default("manual") // manual | chatbot | admin
+  source       String   @default("manual") // manual | chatbot | admin | email
   assignedToId String? // staff agent handling this ticket
   firstResponseAt DateTime? // first public staff reply (SLA tracking)
   resolvedAt   DateTime?
   closedAt     DateTime?
+  csatRating   Int? // 1–5 customer satisfaction after resolution
+  csatComment  String   @default("")
+  csatAt       DateTime?
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
   user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   assignedTo   User?    @relation("ticketAssignee", fields: [assignedToId], references: [id], onDelete: SetNull)
   messages     TicketMessage[]
+  attachments  TicketAttachment[]
 }
 
 model TicketMessage {
@@ -556,6 +560,31 @@ model TicketMessage {
   body      String
   createdAt DateTime @default(now())
   ticket    Ticket   @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  attachments TicketAttachment[]
+}
+
+model TicketAttachment {
+  id        String   @id @default(cuid())
+  ticketId  String
+  messageId String?
+  fileName  String
+  filePath  String
+  mimeType  String   @default("application/octet-stream")
+  sizeBytes Int      @default(0)
+  fromStaff Boolean  @default(false)
+  createdAt DateTime @default(now())
+  ticket    Ticket         @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  message   TicketMessage? @relation(fields: [messageId], references: [id], onDelete: SetNull)
+}
+
+// Saved reply templates for support agents.
+model CannedResponse {
+  id        String   @id @default(cuid())
+  title     String
+  body      String
+  category  String   @default("all") // all | customer_service | tech_support
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 model ConsultantAssignment {

@@ -10,6 +10,33 @@ import { getSetting } from "@/lib/settings";
 import { formatTicketNumber } from "@/lib/ticket-number";
 import type { ActionState } from "./auth";
 
+// Store up to 5 uploaded files (10 MB each) as ticket attachments.
+async function saveTicketAttachments(
+  formData: FormData,
+  ticketId: string,
+  messageId: string | null,
+  fromStaff: boolean,
+): Promise<string | null> {
+  const files = formData.getAll("files").filter((f): f is File => f instanceof File && f.size > 0);
+  for (const file of files.slice(0, 5)) {
+    if (file.size > 10 * 1024 * 1024) return `${file.name} is larger than 10 MB.`;
+    const { saveUpload } = await import("@/lib/uploads");
+    const saved = await saveUpload(file);
+    await db.ticketAttachment.create({
+      data: {
+        ticketId,
+        messageId,
+        fileName: file.name,
+        filePath: saved.filePath,
+        mimeType: file.type || "application/octet-stream",
+        sizeBytes: saved.sizeBytes,
+        fromStaff,
+      },
+    });
+  }
+  return null;
+}
+
 // System audit entry on a ticket (visible to staff only).
 async function auditTicket(ticketId: string, body: string) {
   await db.ticketMessage.create({
@@ -63,7 +90,10 @@ export async function createTicketAction(_prev: ActionState, formData: FormData)
       source: source === "chatbot" ? "chatbot" : "manual",
       messages: { create: { authorId: user.id, fromStaff: false, body } },
     },
+    include: { messages: true },
   });
+  const attachError = await saveTicketAttachments(formData, ticket.id, ticket.messages[0]?.id ?? null, false);
+  if (attachError) return { error: attachError };
 
   const admins = await db.user.findMany({ where: { role: { in: ["super_admin", "admin"] }, status: "active" } });
   for (const admin of admins) {
@@ -93,7 +123,9 @@ export async function replyTicketAction(_prev: ActionState, formData: FormData):
   if (!body) return { error: "Type a message first." };
   const ticket = await db.ticket.findUnique({ where: { id: ticketId } });
   if (!ticket || ticket.userId !== user.id) return { error: "Ticket not found." };
-  await db.ticketMessage.create({ data: { ticketId, authorId: user.id, fromStaff: false, body } });
+  const message = await db.ticketMessage.create({ data: { ticketId, authorId: user.id, fromStaff: false, body } });
+  const attachError = await saveTicketAttachments(formData, ticketId, message.id, false);
+  if (attachError) return { error: attachError };
   const reopened = ticket.status === "resolved" || ticket.status === "closed";
   await db.ticket.update({
     where: { id: ticketId },
@@ -120,9 +152,31 @@ export async function replyTicketAction(_prev: ActionState, formData: FormData):
 
 export async function closeOwnTicketAction(ticketId: string) {
   const user = await requireUser();
-  await db.ticket.updateMany({ where: { id: ticketId, userId: user.id }, data: { status: "closed" } });
+  await db.ticket.updateMany({
+    where: { id: ticketId, userId: user.id },
+    data: { status: "closed", closedAt: new Date() },
+  });
   revalidatePath(`/app/support/${ticketId}`);
   revalidatePath("/app/support");
+}
+
+// CSAT: the customer rates a resolved/closed ticket once (1–5 + optional comment).
+export async function rateTicketAction(_prev: ActionState, formData: FormData): Promise<ActionState> {
+  const user = await requireUser();
+  const ticketId = String(formData.get("ticketId") ?? "");
+  const rating = Number(formData.get("rating") ?? 0);
+  const comment = String(formData.get("comment") ?? "").slice(0, 500);
+  if (!Number.isInteger(rating) || rating < 1 || rating > 5) return { error: "Pick a rating from 1 to 5." };
+  const ticket = await db.ticket.findUnique({ where: { id: ticketId } });
+  if (!ticket || ticket.userId !== user.id) return { error: "Ticket not found." };
+  if (!["resolved", "closed"].includes(ticket.status)) return { error: "You can rate a ticket once it's resolved." };
+  if (ticket.csatRating) return { error: "This ticket has already been rated." };
+  await db.ticket.update({
+    where: { id: ticketId },
+    data: { csatRating: rating, csatComment: comment, csatAt: new Date() },
+  });
+  revalidatePath(`/app/support/${ticketId}`);
+  return { ok: true };
 }
 
 // ---------- Tickets (admin side) ----------
@@ -169,7 +223,10 @@ export async function adminCreateTicketAction(_prev: ActionState, formData: Form
         },
       },
     },
+    include: { messages: true },
   });
+  const attachError = await saveTicketAttachments(formData, ticket.id, ticket.messages[0]?.id ?? null, true);
+  if (attachError) return { error: attachError };
 
   await db.notification.create({
     data: {
@@ -237,7 +294,9 @@ export async function adminReplyTicketAction(_prev: ActionState, formData: FormD
   const ticket = await db.ticket.findUnique({ where: { id: ticketId }, include: { user: true } });
   if (!ticket) return { error: "Ticket not found." };
 
-  await db.ticketMessage.create({ data: { ticketId, authorId: admin.id, fromStaff: true, internal, body } });
+  const message = await db.ticketMessage.create({ data: { ticketId, authorId: admin.id, fromStaff: true, internal, body } });
+  const attachError = await saveTicketAttachments(formData, ticketId, message.id, true);
+  if (attachError) return { error: attachError };
 
   if (!internal) {
     // Public reply: advance status, stamp first response, notify + email the user.
@@ -307,6 +366,28 @@ export async function setTicketCategoryAction(ticketId: string, category: string
   await db.ticket.update({ where: { id: ticketId }, data: { category } });
   await auditTicket(ticketId, `Routed to ${category === "tech_support" ? "tech support" : "customer service"} by ${admin.firstName || admin.email}.`);
   revalidatePath(`/admin/tickets/${ticketId}`);
+  revalidatePath("/admin/tickets");
+}
+
+// ---------- Canned responses ----------
+
+export async function saveCannedResponseAction(_prev: ActionState, formData: FormData): Promise<ActionState> {
+  await requireAdminArea("admin.tickets");
+  const id = String(formData.get("id") ?? "");
+  const title = String(formData.get("title") ?? "").trim();
+  const body = String(formData.get("body") ?? "").trim();
+  const category = String(formData.get("category") ?? "all");
+  if (!title || !body) return { error: "Title and body are required." };
+  const data = { title: title.slice(0, 100), body: body.slice(0, 4000), category };
+  if (id) await db.cannedResponse.update({ where: { id }, data });
+  else await db.cannedResponse.create({ data });
+  revalidatePath("/admin/tickets");
+  return { ok: true };
+}
+
+export async function deleteCannedResponseAction(id: string) {
+  await requireAdminArea("admin.tickets");
+  await db.cannedResponse.delete({ where: { id } });
   revalidatePath("/admin/tickets");
 }
 

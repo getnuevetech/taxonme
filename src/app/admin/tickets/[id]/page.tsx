@@ -2,7 +2,7 @@ import { notFound } from "next/navigation";
 import { db } from "@/lib/db";
 import { guardAdminPage } from "@/lib/admin-guard";
 import { PageHeader, Card, CardBody, Badge } from "@/components/ui";
-import { TicketReplyForm } from "@/components/ticket-forms";
+import { TicketReplyForm, AttachmentList } from "@/components/ticket-forms";
 import { AssignAgentForm } from "@/components/admin/ticket-admin-forms";
 import { formatTicketNumber } from "@/lib/ticket-number";
 import { setTicketStatusAction, setTicketCategoryAction, setTicketPriorityAction } from "@/actions/support";
@@ -17,13 +17,13 @@ export default async function AdminTicketDetailPage({
   const { id } = await params;
   const { created } = await searchParams;
   await guardAdminPage("admin.tickets");
-  const [ticket, agents] = await Promise.all([
+  const [ticket, agents, canned] = await Promise.all([
     db.ticket.findUnique({
       where: { id },
       include: {
         user: { select: { email: true, firstName: true, lastName: true, phone: true } },
         assignedTo: { select: { firstName: true, lastName: true, email: true } },
-        messages: { orderBy: { createdAt: "asc" } },
+        messages: { orderBy: { createdAt: "asc" }, include: { attachments: true } },
       },
     }),
     db.user.findMany({
@@ -31,6 +31,7 @@ export default async function AdminTicketDetailPage({
       orderBy: { createdAt: "asc" },
       select: { id: true, email: true, firstName: true, lastName: true },
     }),
+    db.cannedResponse.findMany({ orderBy: { title: "asc" } }),
   ]);
   if (!ticket) notFound();
 
@@ -60,6 +61,11 @@ export default async function AdminTicketDetailPage({
         <Badge color={ticket.priority === "urgent" ? "red" : ticket.priority === "high" ? "amber" : "slate"}>{ticket.priority}</Badge>
         {ticket.assignedTo && (
           <Badge color="blue">Agent: {`${ticket.assignedTo.firstName} ${ticket.assignedTo.lastName}`.trim() || ticket.assignedTo.email}</Badge>
+        )}
+        {ticket.csatRating && (
+          <Badge color={ticket.csatRating >= 4 ? "green" : ticket.csatRating >= 3 ? "amber" : "red"}>
+            CSAT {ticket.csatRating}/5{ticket.csatComment ? ` — “${ticket.csatComment.slice(0, 60)}”` : ""}
+          </Badge>
         )}
       </div>
 
@@ -125,6 +131,7 @@ export default async function AdminTicketDetailPage({
                 >
                   {m.internal && <p className="mb-1 text-[10px] font-bold uppercase tracking-wide text-amber-600">Internal note</p>}
                   <p className="whitespace-pre-wrap">{m.body}</p>
+                  <AttachmentList attachments={m.attachments} light={m.fromStaff && !m.internal} />
                   <p className={`mt-1 text-[10px] ${m.internal ? "text-amber-500" : m.fromStaff ? "text-indigo-200" : "text-slate-400"}`}>
                     {m.fromStaff ? "Support team" : "User"} · {m.createdAt.toLocaleString("en-US")}
                   </p>
@@ -135,7 +142,12 @@ export default async function AdminTicketDetailPage({
         </CardBody>
       </Card>
       <div className="mt-4">
-        <TicketReplyForm ticketId={ticket.id} staff />
+        <TicketReplyForm
+          ticketId={ticket.id}
+          staff
+          category={ticket.category}
+          canned={canned.map((c) => ({ id: c.id, title: c.title, body: c.body, category: c.category }))}
+        />
       </div>
     </div>
   );

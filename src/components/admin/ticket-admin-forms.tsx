@@ -45,6 +45,11 @@ export function AdminCreateTicketForm({ agents }: { agents: Option[] }) {
           <textarea name="body" rows={4} required className={inputClass} />
         </Field>
       </div>
+      <div className="mt-3">
+        <Field label="Attachments (optional)">
+          <input type="file" name="files" multiple className="text-xs text-slate-500 file:mr-2 file:rounded-lg file:border-0 file:bg-slate-100 file:px-3 file:py-1.5 file:text-xs file:font-medium file:text-slate-700" />
+        </Field>
+      </div>
       <div className="mt-4"><SubmitButton>Create ticket</SubmitButton></div>
     </ActionForm>
   );

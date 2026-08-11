@@ -27,6 +27,7 @@ async function seedSettings() {
     ["consultants.auto_assign_enabled", "false", "consultants", "AI auto-assign consultants", "Automatically match flagged cases to the best-fitting consultant (managed on the Assignments page)."],
     ["users.deleted_retention_days", "90", "users", "Deleted account retention (days)", "How long deleted accounts stay recoverable before being expunged permanently."],
     ["tickets.sla_first_response_hours", "24", "tickets", "Ticket first-response SLA (hours)", "Open tickets without a staff reply within this window are flagged SLA overdue."],
+    ["tickets.inbound_email_secret", "", "tickets", "Inbound email webhook secret", "Set to a long random value to enable email-to-ticket at /api/inbound-email?secret=<value>. Empty disables it."],
     ["mail.host", "", "mail", "SMTP host", "Leave empty to disable outbound email (reset links are then shown to admins for manual delivery)."],
     ["mail.port", "587", "mail", "SMTP port", ""],
     ["mail.username", "", "mail", "SMTP username", ""],
@@ -781,6 +782,30 @@ before submitting.`,
   }
 }
 
+async function seedCannedResponses() {
+  const count = await db.cannedResponse.count();
+  if (count > 0) return;
+  await db.cannedResponse.createMany({
+    data: [
+      {
+        title: "We're looking into it",
+        category: "all",
+        body: "Thanks for reaching out! We've received your ticket and our team is looking into it now. We'll get back to you here as soon as we know more.",
+      },
+      {
+        title: "Password reset steps",
+        category: "customer_service",
+        body: "You can reset your password anytime: go to the sign-in page, click \"Forgot your password?\", and we'll email you a secure link (valid for 1 hour). If the email doesn't arrive within a few minutes, check your spam folder and let us know.",
+      },
+      {
+        title: "Tech issue resolved — please confirm",
+        category: "tech_support",
+        body: "We've deployed a fix for the issue you reported. Could you try again and let us know if everything works on your end? If anything still looks off, reply here and we'll dig back in.",
+      },
+    ],
+  });
+}
+
 async function main() {
   await seedSettings();
   await seedAdmin();
@@ -791,6 +816,7 @@ async function main() {
   await seedContent();
   await seedKnowledge();
   await seedFormTemplates();
+  await seedCannedResponses();
   console.log("Seed complete.");
 }
 
