@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { db } from "@/lib/db";
 import { guardAdminPage } from "@/lib/admin-guard";
 import { PageHeader, Badge } from "@/components/ui";
@@ -47,7 +48,9 @@ export default async function AdminCustomersPage() {
             {users.map((u) => (
               <tr key={u.id}>
                 <td className="px-4 py-3">
-                  <p className="font-medium text-slate-900">{u.firstName} {u.lastName}</p>
+                  <Link href={`/admin/users/${u.id}`} className="font-medium text-indigo-600 underline">
+                    {`${u.firstName} ${u.lastName}`.trim() || u.email}
+                  </Link>
                   <p className="text-xs text-slate-500">{u.email}{u.phone ? ` · ${u.phone}` : ""}</p>
                 </td>
                 <td className="px-4 py-3">

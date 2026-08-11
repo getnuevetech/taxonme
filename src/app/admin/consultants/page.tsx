@@ -137,7 +137,9 @@ export default async function AdminConsultantsPage() {
               return (
                 <tr key={a.id}>
                   <td className="px-4 py-3">
-                    <p className="font-medium text-slate-900">{a.firstName} {a.lastName}</p>
+                    <Link href={`/admin/users/${a.id}`} className="font-medium text-indigo-600 underline">
+                      {`${a.firstName} ${a.lastName}`.trim() || a.email}
+                    </Link>
                     <p className="text-xs text-slate-500">{a.email}</p>
                   </td>
                   <td className="px-4 py-3 text-slate-600">

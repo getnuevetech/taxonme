@@ -48,26 +48,31 @@ export async function sendSystemMessage(
   extraVars: MessageVars = {},
   dedupeKey?: string,
 ): Promise<boolean> {
-  const template = await db.messageTemplate.findUnique({ where: { key: templateKey } });
-  if (!template || !template.enabled) return false;
-  if (dedupeKey) {
-    const already = await db.messageLog.findUnique({ where: { dedupeKey } });
-    if (already) return false;
+  // Messaging must never break the calling flow (registration, checkout, …).
+  try {
+    const template = await db.messageTemplate.findUnique({ where: { key: templateKey } });
+    if (!template || !template.enabled) return false;
+    if (dedupeKey) {
+      const already = await db.messageLog.findUnique({ where: { dedupeKey } });
+      if (already) return false;
+    }
+
+    const vars = { ...(await baseVars(user)), ...extraVars };
+    const subject = render(template.subject, vars);
+    const html = render(template.bodyHtml, vars);
+    const text = stripHtml(html);
+
+    const mail = await sendMail(user.email, subject, text, html);
+    await db.notification.create({
+      data: { userId: user.id, kind: "info", title: subject, body: text.slice(0, 300), link: extraVars.link ?? "" },
+    });
+    await db.messageLog.create({
+      data: { templateKey, userId: user.id, dedupeKey: dedupeKey ?? null, emailSent: mail.sent },
+    });
+    return true;
+  } catch {
+    return false;
   }
-
-  const vars = { ...(await baseVars(user)), ...extraVars };
-  const subject = render(template.subject, vars);
-  const html = render(template.bodyHtml, vars);
-  const text = stripHtml(html);
-
-  const mail = await sendMail(user.email, subject, text, html);
-  await db.notification.create({
-    data: { userId: user.id, kind: "info", title: subject, body: text.slice(0, 300), link: extraVars.link ?? "" },
-  });
-  await db.messageLog.create({
-    data: { templateKey, userId: user.id, dedupeKey: dedupeKey ?? null, emailSent: mail.sent },
-  });
-  return true;
 }
 
 /**
