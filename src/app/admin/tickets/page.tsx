@@ -2,7 +2,8 @@ import Link from "next/link";
 import { db } from "@/lib/db";
 import type { Prisma } from "@prisma/client";
 import { guardAdminPage } from "@/lib/admin-guard";
-import { PageHeader, Badge, Stat } from "@/components/ui";
+import { PageHeader, Badge, Stat, Card, CardBody } from "@/components/ui";
+import { AdminCreateTicketForm } from "@/components/admin/ticket-admin-forms";
 
 export const metadata = { title: "Support tickets" };
 
@@ -17,16 +18,30 @@ export default async function AdminTicketsPage({
   if (f.status) where.status = f.status;
   if (f.category) where.category = f.category;
 
-  const [tickets, openCount, techCount, serviceCount] = await Promise.all([
+  const [tickets, openCount, techCount, serviceCount, users, agents] = await Promise.all([
     db.ticket.findMany({
       where,
       orderBy: [{ status: "asc" }, { updatedAt: "desc" }],
       take: 100,
-      include: { user: { select: { email: true, firstName: true, lastName: true } }, _count: { select: { messages: true } } },
+      include: {
+        user: { select: { email: true, firstName: true, lastName: true } },
+        assignedTo: { select: { firstName: true, lastName: true, email: true } },
+        _count: { select: { messages: true } },
+      },
     }),
     db.ticket.count({ where: { status: { in: ["open", "in_progress"] } } }),
     db.ticket.count({ where: { category: "tech_support", status: { in: ["open", "in_progress"] } } }),
     db.ticket.count({ where: { category: "customer_service", status: { in: ["open", "in_progress"] } } }),
+    db.user.findMany({
+      where: { role: { in: ["user", "consultant"] }, status: "active" },
+      orderBy: { createdAt: "desc" },
+      select: { id: true, email: true, firstName: true, lastName: true, role: true },
+    }),
+    db.user.findMany({
+      where: { role: { in: ["admin", "super_admin"] }, status: "active" },
+      orderBy: { createdAt: "asc" },
+      select: { id: true, email: true, firstName: true, lastName: true },
+    }),
   ]);
 
   const filterLink = (label: string, params: string, active: boolean) => (
@@ -50,6 +65,25 @@ export default async function AdminTicketsPage({
         <Stat label="Customer service queue" value={serviceCount} />
       </div>
 
+      <Card className="mb-6">
+        <CardBody>
+          <details>
+            <summary className="cursor-pointer text-sm font-semibold text-indigo-600">
+              + Create a ticket on behalf of a customer or consultant
+            </summary>
+            <div className="mt-4">
+              <AdminCreateTicketForm
+                users={users.map((u) => ({
+                  id: u.id,
+                  label: `${`${u.firstName} ${u.lastName}`.trim() || u.email} · ${u.email} (${u.role === "consultant" ? "consultant" : "customer"})`,
+                }))}
+                agents={agents.map((a) => ({ id: a.id, label: `${a.firstName} ${a.lastName}`.trim() || a.email }))}
+              />
+            </div>
+          </details>
+        </CardBody>
+      </Card>
+
       <div className="mb-4 flex flex-wrap gap-2">
         {filterLink("All", "", !f.status && !f.category)}
         {filterLink("Open", "?status=open", f.status === "open")}
@@ -66,6 +100,7 @@ export default async function AdminTicketsPage({
               <th className="px-4 py-3">Ticket</th>
               <th className="px-4 py-3">User</th>
               <th className="px-4 py-3">Queue</th>
+              <th className="px-4 py-3">Agent</th>
               <th className="px-4 py-3">Priority</th>
               <th className="px-4 py-3">Source</th>
               <th className="px-4 py-3">Updated</th>
@@ -74,7 +109,7 @@ export default async function AdminTicketsPage({
           </thead>
           <tbody className="divide-y divide-slate-100">
             {tickets.length === 0 && (
-              <tr><td colSpan={7} className="px-4 py-8 text-center text-slate-400">No tickets match.</td></tr>
+              <tr><td colSpan={8} className="px-4 py-8 text-center text-slate-400">No tickets match.</td></tr>
             )}
             {tickets.map((t) => (
               <tr key={t.id} className="hover:bg-slate-50">
@@ -89,6 +124,9 @@ export default async function AdminTicketsPage({
                   <Badge color={t.category === "tech_support" ? "blue" : "indigo"}>
                     {t.category === "tech_support" ? "Tech support" : "Customer service"}
                   </Badge>
+                </td>
+                <td className="px-4 py-3 text-xs text-slate-600">
+                  {t.assignedTo ? `${t.assignedTo.firstName} ${t.assignedTo.lastName}`.trim() || t.assignedTo.email : <span className="text-slate-400">—</span>}
                 </td>
                 <td className="px-4 py-3">
                   <Badge color={t.priority === "urgent" ? "red" : t.priority === "high" ? "amber" : "slate"}>{t.priority}</Badge>

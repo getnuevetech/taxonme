@@ -90,6 +90,101 @@ export async function closeOwnTicketAction(ticketId: string) {
 
 // ---------- Tickets (admin side) ----------
 
+// Admin creates a ticket on behalf of a customer or consultant and can assign
+// it to an agent (any admin user) immediately.
+export async function adminCreateTicketAction(_prev: ActionState, formData: FormData): Promise<ActionState> {
+  const admin = await requireAdminArea("admin.tickets");
+  const userId = String(formData.get("userId") ?? "");
+  const subject = String(formData.get("subject") ?? "").trim();
+  const body = String(formData.get("body") ?? "").trim();
+  const category = String(formData.get("category") ?? "customer_service");
+  const priority = String(formData.get("priority") ?? "normal");
+  const assignedToId = String(formData.get("assignedToId") ?? "") || null;
+
+  if (!userId) return { error: "Choose the customer or consultant this ticket is for." };
+  if (!subject) return { error: "Subject is required." };
+  if (body.length < 5) return { error: "Describe the issue." };
+  const target = await db.user.findUnique({ where: { id: userId } });
+  if (!target || (target.role !== "user" && target.role !== "consultant")) {
+    return { error: "Tickets can only be created for customers and consultants." };
+  }
+  if (assignedToId) {
+    const agent = await db.user.findUnique({ where: { id: assignedToId } });
+    if (!agent || (agent.role !== "admin" && agent.role !== "super_admin")) {
+      return { error: "The assigned agent must be an admin user." };
+    }
+  }
+
+  const ticket = await db.ticket.create({
+    data: {
+      userId,
+      subject: subject.slice(0, 150),
+      category: category === "tech_support" ? "tech_support" : "customer_service",
+      priority: ["low", "normal", "high", "urgent"].includes(priority) ? priority : "normal",
+      source: "admin",
+      assignedToId,
+      status: assignedToId ? "in_progress" : "open",
+      messages: {
+        create: {
+          authorId: admin.id,
+          fromStaff: true,
+          body: `(Opened by ${admin.firstName || "our team"} on behalf of ${target.firstName || target.email})\n\n${body}`,
+        },
+      },
+    },
+  });
+
+  await db.notification.create({
+    data: {
+      userId,
+      kind: "info",
+      title: "A support ticket was opened for you",
+      body: subject.slice(0, 100),
+      link: `/app/support/${ticket.id}`,
+    },
+  });
+  if (assignedToId && assignedToId !== admin.id) {
+    await db.notification.create({
+      data: {
+        userId: assignedToId,
+        kind: "info",
+        title: "A ticket was assigned to you",
+        body: `${target.email}: ${subject.slice(0, 80)}`,
+        link: `/admin/tickets/${ticket.id}`,
+      },
+    });
+  }
+  redirect(`/admin/tickets/${ticket.id}?created=1`);
+}
+
+// Assign or reassign a ticket to an agent.
+export async function assignTicketAgentAction(_prev: ActionState, formData: FormData): Promise<ActionState> {
+  const admin = await requireAdminArea("admin.tickets");
+  const ticketId = String(formData.get("ticketId") ?? "");
+  const assignedToId = String(formData.get("assignedToId") ?? "") || null;
+  if (assignedToId) {
+    const agent = await db.user.findUnique({ where: { id: assignedToId } });
+    if (!agent || (agent.role !== "admin" && agent.role !== "super_admin")) {
+      return { error: "The assigned agent must be an admin user." };
+    }
+  }
+  const ticket = await db.ticket.update({ where: { id: ticketId }, data: { assignedToId } });
+  if (assignedToId && assignedToId !== admin.id) {
+    await db.notification.create({
+      data: {
+        userId: assignedToId,
+        kind: "info",
+        title: "A ticket was assigned to you",
+        body: ticket.subject.slice(0, 100),
+        link: `/admin/tickets/${ticketId}`,
+      },
+    });
+  }
+  revalidatePath(`/admin/tickets/${ticketId}`);
+  revalidatePath("/admin/tickets");
+  return { ok: true };
+}
+
 export async function adminReplyTicketAction(_prev: ActionState, formData: FormData): Promise<ActionState> {
   const admin = await requireAdminArea("admin.tickets");
   const ticketId = String(formData.get("ticketId") ?? "");

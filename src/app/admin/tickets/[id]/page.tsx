@@ -3,18 +3,34 @@ import { db } from "@/lib/db";
 import { guardAdminPage } from "@/lib/admin-guard";
 import { PageHeader, Card, CardBody, Badge } from "@/components/ui";
 import { TicketReplyForm } from "@/components/ticket-forms";
+import { AssignAgentForm } from "@/components/admin/ticket-admin-forms";
 import { setTicketStatusAction, setTicketCategoryAction, setTicketPriorityAction } from "@/actions/support";
 
-export default async function AdminTicketDetailPage({ params }: { params: Promise<{ id: string }> }) {
+export default async function AdminTicketDetailPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ id: string }>;
+  searchParams: Promise<{ created?: string }>;
+}) {
   const { id } = await params;
+  const { created } = await searchParams;
   await guardAdminPage("admin.tickets");
-  const ticket = await db.ticket.findUnique({
-    where: { id },
-    include: {
-      user: { select: { email: true, firstName: true, lastName: true, phone: true } },
-      messages: { orderBy: { createdAt: "asc" } },
-    },
-  });
+  const [ticket, agents] = await Promise.all([
+    db.ticket.findUnique({
+      where: { id },
+      include: {
+        user: { select: { email: true, firstName: true, lastName: true, phone: true } },
+        assignedTo: { select: { firstName: true, lastName: true, email: true } },
+        messages: { orderBy: { createdAt: "asc" } },
+      },
+    }),
+    db.user.findMany({
+      where: { role: { in: ["admin", "super_admin"] }, status: "active" },
+      orderBy: { createdAt: "asc" },
+      select: { id: true, email: true, firstName: true, lastName: true },
+    }),
+  ]);
   if (!ticket) notFound();
 
   const actionButton = (label: string, action: () => Promise<void>, color: string) => (
@@ -30,12 +46,28 @@ export default async function AdminTicketDetailPage({ params }: { params: Promis
         subtitle={`#${ticket.id.slice(-6).toUpperCase()} · ${ticket.user.firstName} ${ticket.user.lastName} (${ticket.user.email}${ticket.user.phone ? ` · ${ticket.user.phone}` : ""}) · opened ${ticket.createdAt.toLocaleString("en-US")} · source: ${ticket.source}`}
       />
 
+      {created && (
+        <div className="mb-4 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
+          Ticket created on behalf of the user — they&apos;ve been notified and can reply from their Support section.
+        </div>
+      )}
       <div className="mb-4 flex flex-wrap items-center gap-2">
         <Badge color={ticket.status === "resolved" ? "green" : ticket.status === "in_progress" ? "blue" : "amber"}>{ticket.status.replace(/_/g, " ")}</Badge>
         <Badge color={ticket.category === "tech_support" ? "blue" : "indigo"}>
           {ticket.category === "tech_support" ? "Tech support" : "Customer service"}
         </Badge>
         <Badge color={ticket.priority === "urgent" ? "red" : ticket.priority === "high" ? "amber" : "slate"}>{ticket.priority}</Badge>
+        {ticket.assignedTo && (
+          <Badge color="blue">Agent: {`${ticket.assignedTo.firstName} ${ticket.assignedTo.lastName}`.trim() || ticket.assignedTo.email}</Badge>
+        )}
+      </div>
+
+      <div className="mb-6">
+        <AssignAgentForm
+          ticketId={ticket.id}
+          currentAgentId={ticket.assignedToId ?? ""}
+          agents={agents.map((a) => ({ id: a.id, label: `${a.firstName} ${a.lastName}`.trim() || a.email }))}
+        />
       </div>
 
       <div className="mb-6 flex flex-wrap gap-2">
