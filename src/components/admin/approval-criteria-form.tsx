@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { ActionForm, SubmitButton } from "../action-form";
 import { saveApprovalCriteriaAction } from "@/actions/admin";
 import { inputClass } from "../ui";
@@ -19,6 +19,8 @@ export function ApprovalCriteriaForm({
   minYears: number;
 }) {
   const [isEnabled, setIsEnabled] = useState(enabled);
+  // Keep the checkbox in sync with the saved value after the server revalidates.
+  useEffect(() => setIsEnabled(enabled), [enabled]);
 
   return (
     <ActionForm action={saveApprovalCriteriaAction} successMessage="Automated approval settings saved.">

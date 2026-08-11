@@ -33,13 +33,53 @@ export type FallbackResult = {
   pathSteps: { title: string; description: string; action_key: string }[];
 };
 
+export type DocInfo = { docKind: string; readable: boolean };
+
 export async function fallbackAnalyze(
   situation: string,
   goal: string,
   documentsText: string,
+  docs: DocInfo[] = [],
 ): Promise<FallbackResult> {
   const text = `${situation}\n${goal}\n${documentsText}`;
   const lower = text.toLowerCase();
+  const haveKinds = new Set(docs.map((d) => d.docKind));
+  const hasDocs = docs.length > 0;
+  const hasTranscript = haveKinds.has("transcript");
+  const hasReturn = haveKinds.has("1040");
+  const unreadableCount = docs.filter((d) => !d.readable).length;
+  // What to tell the user when amounts can't be extracted, depending on what
+  // they've already provided — explicit about the exact documents that unlock
+  // verification, never a vague "upload documents".
+  const evidenceGuidance = (year: number | null) => {
+    const yr = year ?? "the year in question";
+    if (!hasDocs) {
+      return {
+        what: `To verify the numbers we need two specific documents: your IRS Account Transcript for ${yr} (downloads instantly from your IRS online account) and your tax return (Form 1040) for ${yr}.`,
+        action: "UPLOAD_DOCUMENTS",
+        state: "info_needed",
+      };
+    }
+    if (!hasTranscript) {
+      return {
+        what: `You've added ${docs.length} document${docs.length === 1 ? "" : "s"} — the missing key piece is your IRS Account Transcript for ${yr}. It lists code-by-code what the IRS actually did (refunds issued, credits transferred, holds), which settles the numbers.`,
+        action: "GET_TRANSCRIPT",
+        state: "action_needed",
+      };
+    }
+    if (unreadableCount > 0) {
+      return {
+        what: `Your documents are safely on file, including a transcript. ${unreadableCount} of them ${unreadableCount === 1 ? "is" : "are"} scanned/photographed, which our automated reader can verify once the platform's AI providers are connected — or a consultant can review them now.`,
+        action: "REVIEW",
+        state: "review",
+      };
+    }
+    return {
+      what: `Your documents are on file. Re-run the analysis after adding anything new, and we'll verify every amount against them.`,
+      action: "REVIEW",
+      state: "review",
+    };
+  };
 
   const years = Array.from(new Set(text.match(/\b(19|20)\d{2}\b/g) ?? []))
     .map(Number)
@@ -85,26 +125,29 @@ export async function fallbackAnalyze(
       tax_year: primaryYear,
       title: `${usd(diff)} refund difference identified`,
       what_we_know: `Your information indicates an expected refund of ${usd(expectedRefund.amount)}, but ${usd(receivedRefund.amount)} was received. That leaves ${usd(diff)} unaccounted for. Common causes: the refund was applied (offset) to another tax year or debt, or the IRS adjusted the return.`,
-      what_we_dont_know: `Where the remaining ${usd(diff)} was applied. Your IRS account transcript will show this as a transaction code (for example, TC 826 "credit transferred").`,
+      what_we_dont_know: hasTranscript
+        ? `Exactly where the ${usd(diff)} was applied. Good news: your transcript is on file — the answer is in its transaction codes (e.g. TC 826 "credit transferred"). Automated code-by-code reading activates when the platform's AI providers are connected, or a consultant can confirm it now.`
+        : `Where the remaining ${usd(diff)} was applied. Your IRS Account Transcript${primaryYear ? ` for ${primaryYear}` : ""} shows this as a transaction code (for example, TC 826 "credit transferred") — it downloads instantly from your IRS online account.`,
       expected_amount: expectedRefund.amount,
       received_amount: receivedRefund.amount,
       difference_amount: diff,
       confidence: "medium",
       priority: "high",
-      state: "action_needed",
-      next_action: "GET_TRANSCRIPT",
+      state: hasTranscript ? "review" : "action_needed",
+      next_action: hasTranscript ? "REVIEW" : "GET_TRANSCRIPT",
     });
   } else if (/refund/.test(lower)) {
+    const guidance = evidenceGuidance(primaryYear);
     issues.push({
       issue_type: "refund_discrepancy",
       tax_year: primaryYear,
       title: "Possible refund issue",
-      what_we_know: "Your summary mentions a refund concern, but we couldn't extract both the expected and received amounts.",
-      what_we_dont_know: "The exact expected and received refund amounts. Your tax return and account transcript will confirm them.",
+      what_we_know: `Your summary mentions a refund concern${hasDocs ? `, and you've provided ${docs.length} supporting document${docs.length === 1 ? "" : "s"}` : ""}. Refund shortfalls usually mean the refund was offset to another debt or the IRS adjusted the return — both show up plainly on your Account Transcript.`,
+      what_we_dont_know: guidance.what,
       confidence: "low",
       priority: "medium",
-      state: "info_needed",
-      next_action: "UPLOAD_DOCUMENTS",
+      state: guidance.state,
+      next_action: guidance.action,
     });
   }
 
@@ -114,24 +157,27 @@ export async function fallbackAnalyze(
       issue_type: "balance_due",
       tax_year: primaryYear,
       title: `Possible balance due of ${usd(balanceDue.amount)}`,
-      what_we_know: `Your information mentions ${usd(balanceDue.amount)} owed to the IRS${primaryYear ? ` for tax year ${primaryYear}` : ""}. If you can't pay in full, payment plans are usually available (short-term up to 180 days, or a monthly installment agreement).`,
-      what_we_dont_know: "Whether penalties and interest are included, and whether the assessment itself is correct — the notice and your account transcript will confirm.",
+      what_we_know: `Your information mentions ${usd(balanceDue.amount)} owed to the IRS${primaryYear ? ` for tax year ${primaryYear}` : ""}. If you can't pay in full, payment plans are usually available (short-term up to 180 days, or a monthly installment agreement), and penalties can often be reduced.`,
+      what_we_dont_know: hasTranscript
+        ? "How much of the balance is tax versus penalties and interest — your transcript on file lists it code by code. Automated reading activates once AI providers are connected, or a consultant can confirm it now."
+        : "Whether penalties and interest are included, and whether the assessment itself is correct — the notice and your Account Transcript will confirm.",
       confidence: "medium",
       priority: "high",
-      state: "action_needed",
-      next_action: "GET_TRANSCRIPT",
+      state: hasTranscript ? "review" : "action_needed",
+      next_action: hasTranscript ? "REVIEW" : "GET_TRANSCRIPT",
     });
   } else if (/(owe|balance|debt|amount due)/.test(lower)) {
+    const guidance = evidenceGuidance(primaryYear);
     issues.push({
       issue_type: "balance_due",
       tax_year: primaryYear,
       title: "Possible balance due",
-      what_we_know: "Your summary mentions owing the IRS, but we couldn't extract the exact amount.",
-      what_we_dont_know: "The confirmed balance, and how much of it is tax versus penalties and interest.",
+      what_we_know: `Your summary mentions owing the IRS${hasDocs ? `, and ${docs.length} document${docs.length === 1 ? " is" : "s are"} on file` : ""}. Balances are very manageable once confirmed: payment plans are usually available, and penalties can often be reduced.`,
+      what_we_dont_know: `The confirmed balance, and how much is tax versus penalties and interest. ${guidance.what}`,
       confidence: "low",
       priority: "medium",
-      state: "info_needed",
-      next_action: "UPLOAD_DOCUMENTS",
+      state: guidance.state,
+      next_action: guidance.action,
     });
   }
 
@@ -161,12 +207,12 @@ export async function fallbackAnalyze(
       issue_type: "penalty",
       tax_year: primaryYear,
       title: "Penalty relief may be available",
-      what_we_know: "Your situation mentions penalties or interest. If you have a clean compliance history for the prior 3 years, first-time penalty abatement often removes failure-to-file and failure-to-pay penalties.",
-      what_we_dont_know: "Your compliance history and which penalties were assessed — your account transcript lists them by transaction code.",
+      what_we_know: "Your situation mentions penalties or interest. If you have a clean compliance history for the prior 3 years, first-time penalty abatement often removes failure-to-file and failure-to-pay penalties. Relief is requested in writing (or by phone) — we can draft the abatement letter for you.",
+      what_we_dont_know: `Your compliance history and which penalties were assessed — the Account Transcript lists them by transaction code (TC 276 = failure-to-pay penalty).${hasTranscript ? " Your transcript is on file — a re-run after AI providers connect (or a consultant) can read the codes." : ""}`,
       confidence: "medium",
       priority: "medium",
       state: "review",
-      next_action: "GET_TRANSCRIPT",
+      next_action: hasTranscript ? "DRAFT_LETTER" : "GET_TRANSCRIPT",
     });
   }
 
@@ -185,15 +231,16 @@ export async function fallbackAnalyze(
   }
 
   if (issues.length === 0) {
+    const guidance = evidenceGuidance(primaryYear);
     issues.push({
       issue_type: "other",
       title: "Tax situation review",
-      what_we_know: "We recorded your summary and goal.",
-      what_we_dont_know: "The specifics — upload supporting documents (notices, returns, transcripts) so the analysis can verify amounts and dates.",
+      what_we_know: `We recorded your summary and goal${hasDocs ? ` and ${docs.length} document${docs.length === 1 ? "" : "s"}` : ""}.`,
+      what_we_dont_know: guidance.what,
       confidence: "low",
       priority: "medium",
-      state: "info_needed",
-      next_action: "UPLOAD_DOCUMENTS",
+      state: guidance.state,
+      next_action: guidance.action,
     });
   }
 
@@ -201,15 +248,19 @@ export async function fallbackAnalyze(
   // check against real evidence — steps are never just checked off.
   const pathSteps: FallbackResult["pathSteps"] = [];
   pathSteps.push({
-    title: "Add your supporting documents",
-    description: "Upload the IRS notice, your tax return, and any W-2/1099s. Completes automatically when your case has documents.",
+    title: hasDocs ? `Add any remaining documents (${docs.length} on file)` : "Add your supporting documents",
+    description: hasDocs
+      ? "You've started your evidence file — add anything still missing (see the 'Documents we still need' checklist)."
+      : "Upload the IRS notice, your tax return, and any W-2/1099s. Completes automatically when your case has documents.",
     action_key: "UPLOAD_DOCUMENTS",
   });
-  pathSteps.push({
-    title: "Get your IRS account transcript",
-    description: "Your transcript shows exactly what the IRS has on file — including where any missing refund went. Completes when a transcript is in your case documents.",
-    action_key: "GET_TRANSCRIPT",
-  });
+  if (!hasTranscript) {
+    pathSteps.push({
+      title: "Get your IRS account transcript",
+      description: "Your transcript shows exactly what the IRS has on file — including where any missing refund went. Completes when a transcript is in your case documents.",
+      action_key: "GET_TRANSCRIPT",
+    });
+  }
   pathSteps.push({
     title: "Re-run the analysis with your documents",
     description: "Once documents are in, re-run the analysis so every amount is verified against them.",
@@ -218,14 +269,21 @@ export async function fallbackAnalyze(
   if (noticeCodes.length > 0) {
     pathSteps.push({
       title: "Draft your response letter",
-      description: "Generate a professional reply, edit it, and mail it before the notice deadline. Completes when a letter exists.",
+      description: "If you disagree with a notice, the IRS expects a written response with your supporting documents. Generate a professional reply, edit it, and mail it before the deadline. Completes when a letter exists.",
+      action_key: "DRAFT_LETTER",
+    });
+  }
+  if (/(penalt|interest)/.test(lower)) {
+    pathSteps.push({
+      title: "Request penalty relief in writing",
+      description: "First-time abatement is requested with a short letter (we draft it) or by calling the IRS. Send it together with any response form from your notice.",
       action_key: "DRAFT_LETTER",
     });
   }
   if (/(payment plan|installment|can'?t pay|afford)/.test(lower) || balanceDue) {
     pathSteps.push({
       title: "Prepare a payment plan request (Form 9465)",
-      description: "Use the guided form wizard to prepare an installment agreement request. Completes when the form is finished.",
+      description: "Use the guided form wizard to prepare an installment agreement request. Mail it with your notice's response slip, or apply online for faster setup. Completes when the form is finished.",
       action_key: "COMPLETE_FORM_9465",
     });
   }

@@ -25,8 +25,9 @@ export function CaseUpload({ caseId }: { caseId: string }) {
             <option key={k.key} value={k.key}>{k.name}</option>
           ))}
         </select>
-        <SubmitButton className="!px-3 !py-1.5 text-xs">Add</SubmitButton>
+        <SubmitButton className="!px-3 !py-1.5 text-xs">Add & re-analyze</SubmitButton>
       </div>
+      <p className="text-[10px] text-slate-400">Adding documents re-runs your analysis automatically.</p>
     </form>
   );
 }

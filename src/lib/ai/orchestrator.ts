@@ -204,7 +204,14 @@ export async function runCaseAnalysis(caseId: string): Promise<void> {
     : null;
 
   const usedAi = summaryOut.usedAi || goalOut.usedAi || (documentOut?.usedAi ?? false);
-  const fallback = usedAi ? null : await fallbackAnalyze(c.situation, c.goal, rawDocText);
+  const docInfos = c.documents.map((d) => ({
+    docKind: d.docKind,
+    readable:
+      d.mimeType.startsWith("text/") ||
+      /\.(txt|csv|md|log)$/i.test(d.fileName) ||
+      d.extractedJson.length > 0,
+  }));
+  const fallback = usedAi ? null : await fallbackAnalyze(c.situation, c.goal, rawDocText, docInfos);
   const facts = usedAi ? summaryOut.merged : fallback!.facts;
   const goalFacts = usedAi ? goalOut.merged : { user_goal: c.goal };
 
@@ -235,7 +242,7 @@ export async function runCaseAnalysis(caseId: string): Promise<void> {
   }
   const issues: Json[] = presentation
     ? ((presentation.issues as Json[]) ?? [])
-    : (fallback ?? (await fallbackAnalyze(c.situation, c.goal, rawDocText))).issues;
+    : (fallback ?? (await fallbackAnalyze(c.situation, c.goal, rawDocText, docInfos))).issues;
 
   // Persist issues.
   for (const [i, issue] of issues.entries()) {
@@ -262,7 +269,7 @@ export async function runCaseAnalysis(caseId: string): Promise<void> {
   // Path forward steps (each carries an action key for evidence verification).
   const pathSteps: Json[] = presentation?.path_steps
     ? ((presentation.path_steps as Json[]) ?? [])
-    : ((fallback ?? (await fallbackAnalyze(c.situation, c.goal, rawDocText))).pathSteps as unknown as Json[]);
+    : ((fallback ?? (await fallbackAnalyze(c.situation, c.goal, rawDocText, docInfos))).pathSteps as unknown as Json[]);
   for (const [i, step] of pathSteps.entries()) {
     await db.pathStep.create({
       data: {

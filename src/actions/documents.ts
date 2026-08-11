@@ -33,10 +33,19 @@ export async function uploadDocumentAction(_prev: ActionState, formData: FormDat
       },
     });
   }
-  // New evidence may complete path steps (e.g. "upload documents", "get transcript").
+  // New evidence changes the picture: re-run the case analysis automatically
+  // so issues, amounts, and next steps reflect the uploaded documents. The
+  // analysis itself re-verifies path-step evidence when it finishes.
   if (user) {
-    if (caseId) await verifyCaseProgress(caseId);
-    else await verifyUserCasesProgress(user.id);
+    if (caseId) {
+      const c = await db.case.findFirst({ where: { id: caseId, userId: user.id }, select: { id: true } });
+      if (c) {
+        const { runCaseAnalysis } = await import("@/lib/ai/orchestrator");
+        await runCaseAnalysis(caseId);
+      }
+    } else {
+      await verifyUserCasesProgress(user.id);
+    }
   }
   revalidatePath("/app/documents");
   if (caseId) revalidatePath(`/app/cases/${caseId}`);

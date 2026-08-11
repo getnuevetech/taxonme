@@ -55,6 +55,67 @@ export default async function CaseDetailPage({ params }: { params: Promise<{ id:
   };
   const visibleIssues = fullAccess ? c.issues : c.issues.slice(0, 1);
   const verificationFlags = c.runs.filter((r) => r.consensus?.verificationRequired).length;
+
+  // Explicit evidence checklist: which documents this specific case needs,
+  // derived from its issues, marked off against what's already uploaded.
+  const haveKinds = new Set(c.documents.map((d) => d.docKind));
+  const yearHint = c.issues.find((i) => i.taxYear)?.taxYear;
+  const neededDocs: { kind: string; label: string; hint: string }[] = [];
+  const wantDoc = (kind: string, label: string, hint: string) => {
+    if (!neededDocs.some((d) => d.kind === kind)) neededDocs.push({ kind, label, hint });
+  };
+  for (const issue of c.issues) {
+    if (["refund_discrepancy", "balance_due", "penalty"].includes(issue.issueType)) {
+      wantDoc("transcript", `IRS Account Transcript${yearHint ? ` (${yearHint})` : ""}`, "Downloads instantly from your IRS online account — settles the exact amounts.");
+      wantDoc("1040", `Your tax return (Form 1040)${yearHint ? ` for ${yearHint}` : ""}`, "Shows what you claimed, so we can compare against IRS records.");
+    }
+    if (issue.issueType === "notice_response") {
+      wantDoc("notice", "The IRS notice or letter itself", "A phone photo is fine — we need the notice number, amount, and deadline printed on it.");
+    }
+    if (issue.issueType === "missing_return") {
+      wantDoc("w2", "Income documents (W-2s)", "Needed to prepare the unfiled return.");
+      wantDoc("1099", "Income documents (1099s)", "Include any freelance/interest/brokerage income forms.");
+      wantDoc("transcript", "IRS Wage & Income Transcript", "Lists every income form the IRS received — perfect for reconstructing income.");
+    }
+  }
+
+  // Friendly analysis discussion, derived from the latest analysis batch.
+  const chronological = [...c.runs].reverse();
+  const latestStart = c.runs[0]?.startedAt?.getTime() ?? 0;
+  const latestBatch = chronological.filter((r) => latestStart - r.startedAt.getTime() < 5 * 60 * 1000);
+  const money = (v: unknown) => (typeof v === "number" ? v.toLocaleString("en-US", { style: "currency", currency: "USD" }) : null);
+  const describeRun = (run: (typeof latestBatch)[number]): string => {
+    let merged: Record<string, unknown> = {};
+    try {
+      merged = JSON.parse(run.consensus?.mergedJson || "{}");
+    } catch { /* keep empty */ }
+    switch (run.stageKey) {
+      case "summary": {
+        const years = Array.isArray(merged.tax_years) ? (merged.tax_years as unknown[]).join(", ") : "";
+        const notices = Array.isArray(merged.notices_received) ? (merged.notices_received as unknown[]).join(", ") : "";
+        const parts = [
+          years && `tax year(s) ${years}`,
+          notices && `notice ${notices}`,
+          money(merged.expected_refund) && `expected refund ${money(merged.expected_refund)}`,
+          money(merged.received_refund) && `refund received ${money(merged.received_refund)}`,
+          money(merged.balance_due) && `balance mentioned ${money(merged.balance_due)}`,
+        ].filter(Boolean);
+        return parts.length
+          ? `Read your summary and pulled out the facts: ${parts.join(" · ")}.`
+          : "Read your summary and recorded the key facts.";
+      }
+      case "goal":
+        return "Interpreted your goal so every recommendation points at the outcome you asked for.";
+      case "document":
+        return `Cross-checked your ${c.documents.length} document${c.documents.length === 1 ? "" : "s"} against your story, comparing amounts and dates.`;
+      case "situation":
+        return "Weighed the verified facts against IRS rules and procedures (payment plans, penalty relief, transcript codes) from our knowledge base.";
+      case "presenter":
+        return "Assembled everything into the issues and step-by-step plan you see on this page.";
+      default:
+        return `Completed the ${run.stageKey.replace(/_/g, " ")} check.`;
+    }
+  };
   // If no AI provider produced output, this analysis came from the rule-based engine.
   const aiStepCount = await db.analysisStepResult.count({
     where: { run: { caseId: c.id }, status: "complete" },
@@ -145,10 +206,30 @@ export default async function CaseDetailPage({ params }: { params: Promise<{ id:
                     {issue.irsBasis && (
                       <p className="mt-2 text-xs text-slate-400">IRS basis: {issue.irsBasis}</p>
                     )}
-                    {issue.nextAction && (
-                      <p className="mt-3 rounded-lg bg-indigo-50 px-3 py-2 text-sm font-medium text-indigo-800">
-                        Next step: {issue.nextAction.replace(/_/g, " ").toLowerCase()}
-                      </p>
+                    {issue.nextAction && issue.state !== "resolved" && (
+                      <div className="mt-3 flex flex-wrap items-center gap-3 rounded-lg bg-indigo-50 px-3 py-2.5">
+                        <p className="text-sm font-medium text-indigo-800">
+                          Next step: {issue.nextAction.replace(/_/g, " ").toLowerCase()}
+                        </p>
+                        {stepCta(issue.nextAction) && (
+                          <a
+                            href={stepCta(issue.nextAction)!.href}
+                            className="rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-indigo-700"
+                          >
+                            {stepCta(issue.nextAction)!.label} →
+                          </a>
+                        )}
+                        {["GET_TRANSCRIPT", "GET_ACCOUNT_TRANSCRIPT"].includes(issue.nextAction.toUpperCase()) && (
+                          <a
+                            href="https://www.irs.gov/your-account"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="rounded-lg border border-indigo-200 bg-white px-3 py-1.5 text-xs font-medium text-indigo-700 hover:bg-indigo-50"
+                          >
+                            Open IRS sign-up ↗
+                          </a>
+                        )}
+                      </div>
                     )}
                   </CardBody>
                 </Card>
@@ -255,6 +336,42 @@ export default async function CaseDetailPage({ params }: { params: Promise<{ id:
               </CardBody>
             </Card>
           </section>
+
+          {/* The analysis is never silent: a plain-English account of what was
+              examined in the latest run, so the user can see their case being
+              worked on. */}
+          {latestBatch.length > 0 && (
+            <section>
+              <h2 className="mb-3 text-base font-semibold text-slate-900">How we analyzed your case</h2>
+              <Card>
+                <CardBody>
+                  <p className="mb-3 text-xs text-slate-500">
+                    Last analyzed {c.runs[0].startedAt.toLocaleString("en-US")} · we examined your summary, your goal, and{" "}
+                    {c.documents.length} document{c.documents.length === 1 ? "" : "s"}. Every upload re-runs this automatically.
+                  </p>
+                  <ol className="space-y-3">
+                    {latestBatch.map((run, i) => (
+                      <li key={run.id} className="flex gap-3">
+                        <span className="mt-1 flex h-2.5 w-2.5 shrink-0 rounded-full bg-indigo-500" />
+                        <div>
+                          <p className="text-sm leading-relaxed text-slate-700">
+                            <span className="font-semibold text-slate-900">{i + 1}.</span> {describeRun(run)}
+                          </p>
+                          {run.consensus?.verificationRequired && (
+                            <p className="text-xs font-medium text-amber-600">◐ Some values disagreed — flagged for verification instead of guessing.</p>
+                          )}
+                        </div>
+                      </li>
+                    ))}
+                  </ol>
+                  <p className="mt-4 rounded-lg bg-slate-50 px-3 py-2 text-sm text-slate-700">
+                    <span className="font-semibold">Outcome:</span> {c.issues.length} issue{c.issues.length === 1 ? "" : "s"} identified ·{" "}
+                    {c.pathSteps.length}-step plan · case readiness {c.readinessScore}%.
+                  </p>
+                </CardBody>
+              </Card>
+            </section>
+          )}
         </div>
 
         <div className="space-y-6">
@@ -273,6 +390,42 @@ export default async function CaseDetailPage({ params }: { params: Promise<{ id:
               <p className="mt-1 text-sm text-slate-600">{c.goal || "No goal recorded."}</p>
             </CardBody>
           </Card>
+
+          {neededDocs.length > 0 && (
+            <Card>
+              <CardBody>
+                <h3 className="mb-2 text-sm font-semibold text-slate-900">Documents we still need</h3>
+                <ul className="space-y-2.5">
+                  {neededDocs.map((d) => {
+                    const have = haveKinds.has(d.kind);
+                    return (
+                      <li key={d.kind} className="flex items-start gap-2.5">
+                        <span className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[11px] font-bold ${have ? "bg-emerald-100 text-emerald-700" : "border-2 border-dashed border-slate-300 text-transparent"}`}>
+                          ✓
+                        </span>
+                        <div>
+                          <p className={`text-sm font-medium ${have ? "text-slate-400 line-through" : "text-slate-800"}`}>{d.label}</p>
+                          {!have && <p className="text-xs text-slate-500">{d.hint}</p>}
+                        </div>
+                      </li>
+                    );
+                  })}
+                </ul>
+                {neededDocs.some((d) => !haveKinds.has(d.kind)) && (
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    <a href="#case-documents" className="rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-indigo-700">
+                      Upload below ↓
+                    </a>
+                    {neededDocs.some((d) => d.kind === "transcript" && !haveKinds.has("transcript")) && (
+                      <a href="/app/irs-account" className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50">
+                        Transcript guide →
+                      </a>
+                    )}
+                  </div>
+                )}
+              </CardBody>
+            </Card>
+          )}
 
           <Card id="case-documents">
             <CardBody>
@@ -293,19 +446,6 @@ export default async function CaseDetailPage({ params }: { params: Promise<{ id:
             </CardBody>
           </Card>
 
-          <Card>
-            <CardBody>
-              <h3 className="text-sm font-semibold text-slate-900">Analysis history</h3>
-              <ul className="mt-2 space-y-1 text-xs text-slate-500">
-                {c.runs.slice(0, 6).map((r) => (
-                  <li key={r.id} className="flex justify-between">
-                    <span>{r.stageKey} · {r.status}</span>
-                    <span>{r.startedAt.toLocaleTimeString("en-US")}</span>
-                  </li>
-                ))}
-              </ul>
-            </CardBody>
-          </Card>
         </div>
       </div>
     </div>
