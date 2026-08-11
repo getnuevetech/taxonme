@@ -435,15 +435,48 @@ export async function proposeAssignmentAction(_prev: ActionState, formData: Form
   const admin = await requireAdminArea("admin.assignments");
   const userId = String(formData.get("userId") ?? "");
   const consultantId = String(formData.get("consultantId") ?? "");
-  const caseId = String(formData.get("caseId") ?? "") || null;
+  let caseId = String(formData.get("caseId") ?? "") || null;
   const note = String(formData.get("note") ?? "");
   if (!userId || !consultantId) return { error: "Choose both a user and a consultant." };
 
   const consultant = await db.consultantProfile.findUnique({ where: { userId: consultantId } });
   if (!consultant || consultant.status !== "approved") return { error: "That consultant is not approved." };
 
+  // Attach the user's most recent case when none was specified — it anchors
+  // the AI-written recommendation reason.
+  if (!caseId) {
+    const latest = await db.case.findFirst({ where: { userId }, orderBy: { updatedAt: "desc" }, select: { id: true } });
+    caseId = latest?.id ?? null;
+  }
+
+  // Generate the two-model recommendation reason shown to both parties.
+  let reasonSummary = "";
+  let reasonDetail = "";
+  if (caseId) {
+    try {
+      const { rankConsultantsForCase, generateAssignmentReason } = await import("@/lib/matching");
+      const ranked = await rankConsultantsForCase(caseId);
+      const candidate = ranked.find((r) => r.userId === consultantId);
+      if (candidate) {
+        const reason = await generateAssignmentReason(caseId, candidate);
+        reasonSummary = reason.summary;
+        reasonDetail = reason.detail;
+      }
+    } catch {
+      // reason generation is best-effort
+    }
+  }
+
   const assignment = await db.consultantAssignment.create({
-    data: { userId, consultantId, caseId, note, assignedById: admin.id },
+    data: {
+      userId,
+      consultantId,
+      caseId,
+      note: note || reasonSummary,
+      reasonSummary,
+      reasonDetail,
+      assignedById: admin.id,
+    },
   });
   await db.notification.create({
     data: {

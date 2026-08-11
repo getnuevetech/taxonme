@@ -1,0 +1,73 @@
+import { notFound } from "next/navigation";
+import { db } from "@/lib/db";
+import { guardAdminPage } from "@/lib/admin-guard";
+import { PageHeader, Card, CardBody, Badge } from "@/components/ui";
+import { TicketReplyForm } from "@/components/ticket-forms";
+import { setTicketStatusAction, setTicketCategoryAction, setTicketPriorityAction } from "@/actions/support";
+
+export default async function AdminTicketDetailPage({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
+  await guardAdminPage("admin.tickets");
+  const ticket = await db.ticket.findUnique({
+    where: { id },
+    include: {
+      user: { select: { email: true, firstName: true, lastName: true, phone: true } },
+      messages: { orderBy: { createdAt: "asc" } },
+    },
+  });
+  if (!ticket) notFound();
+
+  const actionButton = (label: string, action: () => Promise<void>, color: string) => (
+    <form action={action}>
+      <button className={`rounded-lg border px-3 py-1.5 text-xs font-medium ${color}`}>{label}</button>
+    </form>
+  );
+
+  return (
+    <div className="max-w-3xl">
+      <PageHeader
+        title={ticket.subject}
+        subtitle={`#${ticket.id.slice(-6).toUpperCase()} · ${ticket.user.firstName} ${ticket.user.lastName} (${ticket.user.email}${ticket.user.phone ? ` · ${ticket.user.phone}` : ""}) · opened ${ticket.createdAt.toLocaleString("en-US")} · source: ${ticket.source}`}
+      />
+
+      <div className="mb-4 flex flex-wrap items-center gap-2">
+        <Badge color={ticket.status === "resolved" ? "green" : ticket.status === "in_progress" ? "blue" : "amber"}>{ticket.status.replace(/_/g, " ")}</Badge>
+        <Badge color={ticket.category === "tech_support" ? "blue" : "indigo"}>
+          {ticket.category === "tech_support" ? "Tech support" : "Customer service"}
+        </Badge>
+        <Badge color={ticket.priority === "urgent" ? "red" : ticket.priority === "high" ? "amber" : "slate"}>{ticket.priority}</Badge>
+      </div>
+
+      <div className="mb-6 flex flex-wrap gap-2">
+        {actionButton(
+          ticket.category === "tech_support" ? "Route to customer service" : "Route to tech support",
+          setTicketCategoryAction.bind(null, ticket.id, ticket.category === "tech_support" ? "customer_service" : "tech_support"),
+          "border-slate-300 bg-white text-slate-600 hover:bg-slate-50",
+        )}
+        {ticket.status !== "resolved" && actionButton("Mark resolved", setTicketStatusAction.bind(null, ticket.id, "resolved"), "border-emerald-300 bg-emerald-50 text-emerald-700 hover:bg-emerald-100")}
+        {ticket.status !== "closed" && actionButton("Close", setTicketStatusAction.bind(null, ticket.id, "closed"), "border-slate-300 bg-white text-slate-600 hover:bg-slate-50")}
+        {(ticket.status === "resolved" || ticket.status === "closed") && actionButton("Reopen", setTicketStatusAction.bind(null, ticket.id, "open"), "border-amber-300 bg-amber-50 text-amber-700 hover:bg-amber-100")}
+        {ticket.priority !== "urgent" && actionButton("Escalate to urgent", setTicketPriorityAction.bind(null, ticket.id, "urgent"), "border-red-200 bg-red-50 text-red-600 hover:bg-red-100")}
+        {ticket.priority === "urgent" && actionButton("De-escalate", setTicketPriorityAction.bind(null, ticket.id, "normal"), "border-slate-300 bg-white text-slate-600 hover:bg-slate-50")}
+      </div>
+
+      <Card>
+        <CardBody className="space-y-4">
+          {ticket.messages.map((m) => (
+            <div key={m.id} className={`flex ${m.fromStaff ? "justify-end" : "justify-start"}`}>
+              <div className={`max-w-[85%] rounded-2xl px-4 py-3 text-sm ${m.fromStaff ? "bg-indigo-600 text-white" : "bg-slate-100 text-slate-800"}`}>
+                <p className="whitespace-pre-wrap">{m.body}</p>
+                <p className={`mt-1 text-[10px] ${m.fromStaff ? "text-indigo-200" : "text-slate-400"}`}>
+                  {m.fromStaff ? "Support team" : "User"} · {m.createdAt.toLocaleString("en-US")}
+                </p>
+              </div>
+            </div>
+          ))}
+        </CardBody>
+      </Card>
+      <div className="mt-4">
+        <TicketReplyForm ticketId={ticket.id} staff />
+      </div>
+    </div>
+  );
+}

@@ -156,6 +156,7 @@ model User {
   clientAssignments   ConsultantAssignment[] @relation("assignmentClient")
   consultantAssignments ConsultantAssignment[] @relation("assignmentConsultant")
   notices             Notice[]
+  tickets             Ticket[]
 }
 
 model AdminPermission {
@@ -430,6 +431,7 @@ model QaThread {
   userId         String?
   guestSessionId String?
   title          String       @default("Tax question")
+  kind           String       @default("qa") // qa | guide
   createdAt      DateTime     @default(now())
   user           User?        @relation(fields: [userId], references: [id], onDelete: Cascade)
   guestSession   GuestSession? @relation(fields: [guestSessionId], references: [id])
@@ -501,8 +503,50 @@ model ConsultantProfile {
   approvedById       String?
   approvedAt         DateTime?
   rejectionReason    String    @default("")
+  experiences        String    @default("") // free-text list of experience areas, one per line
   createdAt          DateTime  @default(now())
   user               User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  pastCases          ConsultantPastCase[]
+}
+
+// Past cases a consultant has handled — used by the AI matching engine when
+// auto-assigning consultants to customers.
+model ConsultantPastCase {
+  id           String            @id @default(cuid())
+  profileId    String
+  title        String
+  category     String            @default("other") // matches issue types / specialties
+  description  String            @default("")
+  year         Int?
+  outcome      String            @default("")
+  createdAt    DateTime          @default(now())
+  profile      ConsultantProfile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+}
+
+// ---------- Support tickets (standalone) ----------
+
+model Ticket {
+  id         String   @id @default(cuid())
+  userId     String
+  subject    String
+  category   String   @default("customer_service") // customer_service | tech_support
+  status     String   @default("open") // open | in_progress | resolved | closed
+  priority   String   @default("normal") // low | normal | high | urgent
+  source     String   @default("manual") // manual | chatbot
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  messages   TicketMessage[]
+}
+
+model TicketMessage {
+  id        String   @id @default(cuid())
+  ticketId  String
+  authorId  String   @default("")
+  fromStaff Boolean  @default(false)
+  body      String
+  createdAt DateTime @default(now())
+  ticket    Ticket   @relation(fields: [ticketId], references: [id], onDelete: Cascade)
 }
 
 model ConsultantAssignment {
@@ -512,6 +556,9 @@ model ConsultantAssignment {
   caseId             String?
   status             String    @default("proposed") // proposed | user_accepted | active | declined | revoked
   note               String    @default("")
+  autoAssigned       Boolean   @default(false)
+  reasonSummary      String    @default("") // one-line AI recommendation reason
+  reasonDetail       String    @default("") // detailed outlined reason
   assignedById       String    @default("")
   userAgreedAt       DateTime?
   consultantAgreedAt DateTime?

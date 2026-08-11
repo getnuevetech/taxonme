@@ -5,6 +5,8 @@ import { getSetting } from "@/lib/settings";
 import { db } from "@/lib/db";
 import { logoutAction } from "@/actions/auth";
 
+import { GuideWidget } from "@/components/guide-widget";
+
 const NAV = [
   { href: "/app", label: "Overview" },
   { href: "/app/cases", label: "My cases" },
@@ -15,6 +17,7 @@ const NAV = [
   { href: "/app/deadlines", label: "Deadlines" },
   { href: "/app/qa", label: "Ask the assistant" },
   { href: "/app/consultants", label: "My consultant" },
+  { href: "/app/support", label: "Support tickets" },
   { href: "/app/irs-account", label: "IRS online account" },
   { href: "/app/billing", label: "Plan & billing" },
   { href: "/app/profile", label: "Profile" },
@@ -69,6 +72,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         </aside>
         <main className="min-w-0 flex-1">{children}</main>
       </div>
+      <GuideWidget />
     </div>
   );
 }

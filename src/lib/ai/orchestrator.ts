@@ -319,6 +319,9 @@ export async function runCaseAnalysis(caseId: string): Promise<void> {
         },
       });
     }
+    // AI auto-assignment (admin-controlled; both parties still consent).
+    const { autoAssignConsultant } = await import("../matching");
+    await autoAssignConsultant(caseId).catch(() => false);
   }
 
   // Immediately verify path-step evidence (e.g. documents already uploaded at intake).

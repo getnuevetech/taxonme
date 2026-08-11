@@ -28,6 +28,7 @@ export const ADMIN_AREAS = [
   { key: "admin.knowledge", name: "IRS knowledge base" },
   { key: "admin.settings", name: "App settings" },
   { key: "admin.notifications", name: "Notifications" },
+  { key: "admin.tickets", name: "Support tickets" },
 ] as const;
 
 // Feature keys gate what plans can access. The plan/feature matrix is edited in the admin backend.
@@ -44,6 +45,7 @@ export const FEATURE_KEYS = {
   VAULT: "vault.storage",
   FORMS: "forms.wizard",
   CONSULTANT_REFERRAL: "consultant.referral",
+  GUIDE_CHATBOT: "guide.chatbot",
 } as const;
 
 export const STAGE_KEYS = {
@@ -55,6 +57,9 @@ export const STAGE_KEYS = {
   QA: "qa",
   NOTICE: "notice",
   LETTER: "letter",
+  GUIDE: "guide",
+  MATCH: "match",
+  MATCH_REASON: "match_reason",
 } as const;
 export type StageKey = (typeof STAGE_KEYS)[keyof typeof STAGE_KEYS];
 

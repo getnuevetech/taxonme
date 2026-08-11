@@ -2,8 +2,9 @@ import { db } from "@/lib/db";
 import { guardAdminPage } from "@/lib/admin-guard";
 import { PageHeader, Card, CardBody, Badge } from "@/components/ui";
 import { revokeAssignmentAction } from "@/actions/admin";
-import { AssignmentForm } from "@/components/admin/assignment-form";
+import { AssignmentForm, AutoAssignToggle } from "@/components/admin/assignment-form";
 import { CONSULTANT_SPECIALTIES } from "@/lib/constants";
+import { getBoolSetting } from "@/lib/settings";
 
 export const metadata = { title: "Assignments" };
 
@@ -14,6 +15,7 @@ export default async function AdminAssignmentsPage({
 }) {
   const { case: highlightCase } = await searchParams;
   await guardAdminPage("admin.assignments");
+  const autoAssignEnabled = await getBoolSetting("consultants.auto_assign_enabled", false);
 
   const [assignments, users, consultants, flaggedCases] = await Promise.all([
     db.consultantAssignment.findMany({
@@ -44,6 +46,18 @@ export default async function AdminAssignmentsPage({
         title="Consultant assignments"
         subtitle="Propose a consultant to a user. The connection activates only after both parties agree."
       />
+
+      <Card className="mb-6">
+        <CardBody>
+          <h2 className="mb-2 text-sm font-semibold text-slate-900">AI auto-assignment</h2>
+          <p className="mb-3 text-xs text-slate-500">
+            When enabled, cases flagged for professional review are automatically matched to the best-fitting approved
+            consultant (specialties, experience, past cases, workload), with an AI-written recommendation shown to both
+            parties. Both still have to consent, and you can revoke or override any proposal below.
+          </p>
+          <AutoAssignToggle enabled={autoAssignEnabled} />
+        </CardBody>
+      </Card>
 
       {flaggedCases.length > 0 && (
         <Card className="mb-6 border-amber-300">
@@ -80,7 +94,7 @@ export default async function AdminAssignmentsPage({
         {assignments.map((a) => (
           <Card key={a.id}>
             <CardBody className="flex flex-wrap items-center justify-between gap-3">
-              <div>
+              <div className="min-w-0">
                 <p className="text-sm font-medium text-slate-900">
                   {a.user.firstName} {a.user.lastName} ↔ {a.consultant.firstName} {a.consultant.lastName}
                 </p>
@@ -88,8 +102,16 @@ export default async function AdminAssignmentsPage({
                   {a.case?.title ? `Case: ${a.case.title} · ` : ""}
                   user consent: {a.userAgreedAt ? "✓" : "pending"} · consultant consent: {a.consultantAgreedAt ? "✓" : "pending"}
                 </p>
+                {a.reasonSummary && <p className="mt-1 text-xs text-slate-600">{a.reasonSummary}</p>}
+                {a.reasonDetail && (
+                  <details className="mt-0.5">
+                    <summary className="cursor-pointer text-xs font-medium text-indigo-600">Detailed reasoning</summary>
+                    <p className="mt-1 whitespace-pre-line rounded-lg bg-slate-50 p-2 text-xs text-slate-600">{a.reasonDetail}</p>
+                  </details>
+                )}
               </div>
               <div className="flex items-center gap-3">
+                {a.autoAssigned && <Badge color="blue">AI auto-assigned</Badge>}
                 <Badge color={a.status === "active" ? "green" : a.status === "declined" || a.status === "revoked" ? "red" : "amber"}>
                   {a.status.replace(/_/g, " ")}
                 </Badge>

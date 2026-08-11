@@ -24,6 +24,7 @@ async function seedSettings() {
     ["consultants.auto_approve_enabled", "false", "consultants", "Auto-approve consultants", "Automatically approve CPA/EA applications meeting requirements."],
     ["consultants.auto_approve_min_years", "3", "consultants", "Auto-approve minimum years", "Minimum years of experience for automated approval."],
     ["consultants.auto_criteria", '["credential","ptin","proof","min_years","attestation"]', "consultants", "Auto-approval required criteria", "JSON array of criteria keys required for automated approval (managed on the CPA auto-approval page)."],
+    ["consultants.auto_assign_enabled", "false", "consultants", "AI auto-assign consultants", "Automatically match flagged cases to the best-fitting consultant (managed on the Assignments page)."],
     ["users.deleted_retention_days", "90", "users", "Deleted account retention (days)", "How long deleted accounts stay recoverable before being expunged permanently."],
     ["mail.host", "", "mail", "SMTP host", "Leave empty to disable outbound email (reset links are then shown to admins for manual delivery)."],
     ["mail.port", "587", "mail", "SMTP port", ""],
@@ -106,6 +107,7 @@ async function seedPlansAndFeatures() {
     ["vault.storage", "Secure document vault", "documents", 10],
     ["forms.wizard", "Simplified IRS form wizards", "forms", 11],
     ["consultant.referral", "CPA/EA referral service", "consultants", 12],
+    ["guide.chatbot", "Personal case guide chatbot", "assistant", 13],
   ];
   for (const [key, name, category, sortOrder] of features) {
     await db.featureDef.upsert({ where: { key }, update: {}, create: { key, name, category, sortOrder } });
@@ -150,6 +152,7 @@ async function seedPlansAndFeatures() {
         "deadlines.reminders": { enabled: true, limit: null },
         "vault.storage": { enabled: true, limit: null },
         "forms.wizard": { enabled: true, limit: null },
+        "guide.chatbot": { enabled: true, limit: null },
       },
     },
     {
@@ -173,6 +176,7 @@ async function seedPlansAndFeatures() {
         "vault.storage": { enabled: true, limit: null },
         "forms.wizard": { enabled: true, limit: null },
         "consultant.referral": { enabled: true, limit: null },
+        "guide.chatbot": { enabled: true, limit: null },
       },
     },
   ];
@@ -313,6 +317,36 @@ async function seedAiAndPipelines() {
         { provider: "OpenAI GPT-5.6 Sol", role: "assistant", prompt: DEFAULT_PROMPTS.letter_writer, order: 0 },
       ],
     },
+    {
+      key: "guide",
+      name: "In-account case guide",
+      description: "The floating chatbot that coaches users through their next step. Models are tried in order until one answers — all five providers are chained by default.",
+      steps: [
+        { provider: "OpenAI GPT-5.6 Sol", role: "assistant", prompt: DEFAULT_PROMPTS.guide, order: 0 },
+        { provider: "Anthropic Claude Sonnet 5", role: "assistant", prompt: DEFAULT_PROMPTS.guide, order: 1 },
+        { provider: "Google Gemini 3.1 Pro", role: "assistant", prompt: DEFAULT_PROMPTS.guide, order: 2 },
+        { provider: "Anthropic Claude Opus 5", role: "assistant", prompt: DEFAULT_PROMPTS.guide, order: 3 },
+        { provider: "OpenAI GPT-5.6 Terra", role: "assistant", prompt: DEFAULT_PROMPTS.guide, order: 4 },
+      ],
+    },
+    {
+      key: "match",
+      name: "Consultant matching",
+      description: "Ranks candidate consultants for a case (specialty fit, experience, past cases, workload) on top of the deterministic score.",
+      steps: [
+        { provider: "OpenAI GPT-5.6 Sol", role: "analyst", prompt: DEFAULT_PROMPTS.match_rank, order: 0 },
+        { provider: "Anthropic Claude Sonnet 5", role: "reviewer", prompt: DEFAULT_PROMPTS.match_rank, order: 1 },
+      ],
+    },
+    {
+      key: "match_reason",
+      name: "Assignment recommendation reason",
+      description: "Two models produce the recommendation shown to both parties: the first drafts a summary + detailed outline, the second reviews and refines it.",
+      steps: [
+        { provider: "OpenAI GPT-5.6 Sol", role: "analyst", prompt: DEFAULT_PROMPTS.match_reason, order: 0 },
+        { provider: "Anthropic Claude Sonnet 5", role: "reviewer", prompt: DEFAULT_PROMPTS.match_reason_review, order: 1 },
+      ],
+    },
   ];
 
   for (const s of stages) {
@@ -340,6 +374,33 @@ async function seedAiAndPipelines() {
 
 async function seedContent() {
   const pages = [
+    {
+      slug: "faq",
+      title: "Frequently asked questions",
+      kind: "page",
+      body: `Q: Is TaxOnMe the IRS or a CPA firm?
+No. TaxOnMe is a tax assistant that explains your situation and guides your next steps in plain English. For high-stakes decisions we connect you with licensed professionals.
+
+Q: How do I get my IRS transcript?
+Fastest: create an IRS online account at irs.gov/your-account — transcripts download instantly. By mail takes about 10 days. We also have a guided Form 4506-T under IRS forms.
+
+Q: What happens to documents I upload?
+They're stored in your private vault. Only you can see them — and a consultant only after you explicitly approve the connection. You can delete files or your whole account anytime.
+
+Q: How does the analysis work?
+We extract the facts from your answers and documents, verify amounts against IRS reference material, and turn everything into issues and a step-by-step plan. When something can't be verified, we say so — we never guess.
+
+Q: How do payment plans with the IRS work?
+If you owe $50,000 or less you can usually set up a monthly installment agreement online. Your balance divided by 72 is roughly the minimum monthly payment the IRS accepts. Our Form 9465 wizard prepares the paper request.
+
+Q: How do I cancel my subscription?
+Plan & billing → Cancel subscription. You keep access until the end of the paid period.
+
+Q: Something in the app isn't working.
+Open a tech support ticket under Support tickets (or ask the guide chatbot to create one) and our team will fix it.
+
+(Edit this FAQ in the admin backend under Content & agreements.)`,
+    },
     {
       slug: "how-it-works",
       title: "How it works",

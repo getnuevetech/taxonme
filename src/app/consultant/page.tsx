@@ -79,7 +79,18 @@ export default async function ConsultantDashboard({
                   <div>
                     <p className="font-semibold text-slate-900">{a.user.firstName} {a.user.lastName}</p>
                     <p className="text-sm text-slate-500">{a.status === "active" ? a.user.email : "Contact details unlock when the connection is active"}</p>
-                    {a.note && <p className="mt-1 text-sm text-slate-600">&ldquo;{a.note}&rdquo;</p>}
+                    {(a.reasonSummary || a.note) && (
+                      <p className="mt-1 text-sm text-slate-600">
+                        <span className="font-medium text-slate-700">Why you were matched: </span>
+                        {a.reasonSummary || a.note}
+                      </p>
+                    )}
+                    {a.reasonDetail && (
+                      <details className="mt-1">
+                        <summary className="cursor-pointer text-xs font-medium text-indigo-600">Detailed reasoning</summary>
+                        <p className="mt-1 whitespace-pre-line rounded-lg bg-slate-50 p-3 text-xs text-slate-600">{a.reasonDetail}</p>
+                      </details>
+                    )}
                   </div>
                   <Badge color={a.status === "active" ? "green" : "amber"}>{a.status.replace(/_/g, " ")}</Badge>
                 </div>

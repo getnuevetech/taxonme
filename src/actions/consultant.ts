@@ -107,6 +107,48 @@ export async function consultantOnboardingAction(_prev: ActionState, formData: F
   redirect("/consultant?submitted=1");
 }
 
+// ---------- Experience & past cases (feeds the AI matching engine) ----------
+
+export async function saveExperiencesAction(_prev: ActionState, formData: FormData): Promise<ActionState> {
+  const user = await requireUser();
+  if (user.role !== ROLES.CONSULTANT) return { error: "Consultant account required." };
+  const experiences = String(formData.get("experiences") ?? "").slice(0, 3000);
+  const profile = await db.consultantProfile.findUnique({ where: { userId: user.id } });
+  if (!profile) return { error: "Complete your onboarding first." };
+  await db.consultantProfile.update({ where: { id: profile.id }, data: { experiences } });
+  revalidatePath("/consultant/experience");
+  return { ok: true };
+}
+
+export async function addPastCaseAction(_prev: ActionState, formData: FormData): Promise<ActionState> {
+  const user = await requireUser();
+  if (user.role !== ROLES.CONSULTANT) return { error: "Consultant account required." };
+  const profile = await db.consultantProfile.findUnique({ where: { userId: user.id } });
+  if (!profile) return { error: "Complete your onboarding first." };
+  const title = String(formData.get("title") ?? "").trim();
+  if (!title) return { error: "Give the case a short title (no client names)." };
+  await db.consultantPastCase.create({
+    data: {
+      profileId: profile.id,
+      title: title.slice(0, 150),
+      category: String(formData.get("category") ?? "other"),
+      description: String(formData.get("description") ?? "").slice(0, 1500),
+      year: Number(formData.get("year") ?? 0) || null,
+      outcome: String(formData.get("outcome") ?? "").slice(0, 300),
+    },
+  });
+  revalidatePath("/consultant/experience");
+  return { ok: true };
+}
+
+export async function deletePastCaseAction(id: string) {
+  const user = await requireUser();
+  const pc = await db.consultantPastCase.findUnique({ where: { id }, include: { profile: true } });
+  if (!pc || pc.profile.userId !== user.id) return;
+  await db.consultantPastCase.delete({ where: { id } });
+  revalidatePath("/consultant/experience");
+}
+
 // Consultant accepts/declines a client connection (mutual consent).
 export async function consultantRespondAssignmentAction(assignmentId: string, accept: boolean) {
   const user = await requireUser();

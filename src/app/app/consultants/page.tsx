@@ -55,7 +55,18 @@ export default async function MyConsultantsPage() {
                           <Badge key={s} color="indigo">{specialtyName(s)}</Badge>
                         ))}
                       </div>
-                      {a.note && <p className="mt-2 text-sm text-slate-600">&ldquo;{a.note}&rdquo;</p>}
+                      {(a.reasonSummary || a.note) && (
+                        <p className="mt-2 text-sm text-slate-600">
+                          <span className="font-medium text-slate-700">Why this consultant: </span>
+                          {a.reasonSummary || a.note}
+                        </p>
+                      )}
+                      {a.reasonDetail && (
+                        <details className="mt-1">
+                          <summary className="cursor-pointer text-xs font-medium text-indigo-600">See the detailed reasoning</summary>
+                          <p className="mt-1 whitespace-pre-line rounded-lg bg-slate-50 p-3 text-xs text-slate-600">{a.reasonDetail}</p>
+                        </details>
+                      )}
                     </div>
                     <Badge color={a.status === "active" ? "green" : a.status === "declined" ? "red" : "amber"}>
                       {a.status.replace(/_/g, " ")}
