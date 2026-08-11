@@ -7,7 +7,7 @@ import { createSession, destroySession, hashPassword, verifyPassword, getCurrent
 import { claimGuestSession } from "@/lib/guest";
 import { ROLES } from "@/lib/constants";
 
-export type ActionState = { error?: string; ok?: boolean } | null;
+export type ActionState = { error?: string; ok?: boolean; info?: string; link?: string } | null;
 
 const registerSchema = z.object({
   firstName: z.string().min(1, "First name is required"),
@@ -79,8 +79,53 @@ export async function logoutAction() {
 export async function deleteAccountAction(): Promise<void> {
   const user = await getCurrentUser();
   if (!user) redirect("/login");
-  // Users can delete their profile at will. Cascade removes their data.
-  await db.user.delete({ where: { id: user.id } });
+  // Soft delete: the account moves to the admin "Deleted accounts" section and
+  // is expunged automatically after the configured retention period.
+  await db.user.update({
+    where: { id: user.id },
+    data: { status: "deleted", deletedAt: new Date() },
+  });
   await destroySession();
   redirect("/?deleted=1");
+}
+
+// ---------- Password reset (customers & consultants) ----------
+
+export async function requestPasswordResetAction(_prev: ActionState, formData: FormData): Promise<ActionState> {
+  const email = String(formData.get("email") ?? "").trim().toLowerCase();
+  if (!email) return { error: "Enter your email address." };
+  const user = await db.user.findUnique({ where: { email } });
+  // Same response whether or not the account exists (no user enumeration).
+  if (user && user.status === "active") {
+    const { createResetLink } = await import("@/lib/password-reset");
+    const { sendMail } = await import("@/lib/mail");
+    const link = await createResetLink(user.id);
+    await sendMail(
+      email,
+      "Reset your password",
+      `Hi ${user.firstName || ""},\n\nUse the link below to choose a new password. It expires in 1 hour.\n\n${link}\n\nIf you didn't request this, you can ignore this email.`,
+    );
+  }
+  return {
+    ok: true,
+  };
+}
+
+export async function resetPasswordAction(_prev: ActionState, formData: FormData): Promise<ActionState> {
+  const token = String(formData.get("token") ?? "");
+  const password = String(formData.get("password") ?? "");
+  const confirm = String(formData.get("confirm") ?? "");
+  if (password.length < 8) return { error: "Password must be at least 8 characters." };
+  if (password !== confirm) return { error: "Passwords don't match." };
+
+  const { validateResetToken, consumeResetToken } = await import("@/lib/password-reset");
+  const userId = await validateResetToken(token);
+  if (!userId) return { error: "This reset link is invalid or has expired. Request a new one." };
+
+  const user = await db.user.update({ where: { id: userId }, data: { passwordHash: await hashPassword(password) } });
+  await consumeResetToken(token);
+  await createSession(userId);
+  if (user.role === ROLES.SUPER_ADMIN || user.role === ROLES.ADMIN) redirect("/admin");
+  if (user.role === ROLES.CONSULTANT) redirect("/consultant");
+  redirect("/app?reset=1");
 }

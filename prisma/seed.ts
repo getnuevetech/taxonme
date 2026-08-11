@@ -23,6 +23,14 @@ async function seedSettings() {
     ["analysis.expected_documents", "3", "analysis", "Expected documents per case", "Used by the deterministic case-readiness formula."],
     ["consultants.auto_approve_enabled", "false", "consultants", "Auto-approve consultants", "Automatically approve CPA/EA applications meeting requirements."],
     ["consultants.auto_approve_min_years", "3", "consultants", "Auto-approve minimum years", "Minimum years of experience for automated approval."],
+    ["consultants.auto_criteria", '["credential","ptin","proof","min_years","attestation"]', "consultants", "Auto-approval required criteria", "JSON array of criteria keys required for automated approval (managed on the CPA auto-approval page)."],
+    ["users.deleted_retention_days", "90", "users", "Deleted account retention (days)", "How long deleted accounts stay recoverable before being expunged permanently."],
+    ["mail.host", "", "mail", "SMTP host", "Leave empty to disable outbound email (reset links are then shown to admins for manual delivery)."],
+    ["mail.port", "587", "mail", "SMTP port", ""],
+    ["mail.username", "", "mail", "SMTP username", ""],
+    ["mail.password", "", "mail", "SMTP password", ""],
+    ["mail.from", "", "mail", "From address", "e.g. TaxOnMe <no-reply@mytaxonme.com>"],
+    ["mail.secure", "false", "mail", "SMTP TLS (implicit)", "true for port 465, false for STARTTLS on 587."],
   ];
   for (const [key, value, group, label, description] of settings) {
     await db.setting.upsert({

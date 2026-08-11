@@ -3,27 +3,23 @@ import { db } from "@/lib/db";
 import { guardAdminPage } from "@/lib/admin-guard";
 import { PageHeader, Card, CardBody, Badge } from "@/components/ui";
 import { PeopleTabs } from "@/components/admin/people-tabs";
+import { ConfirmForm } from "@/components/confirm-form";
+import { ResetLinkButton } from "@/components/admin/reset-link-button";
 import { reviewConsultantAction, setConsultantAccountStatusAction, deleteConsultantAccountAction } from "@/actions/admin";
 import { CONSULTANT_SPECIALTIES } from "@/lib/constants";
-import { AutoApproveSettings } from "@/components/admin/auto-approve-settings";
-import { getSetting } from "@/lib/settings";
 
 export const metadata = { title: "CPA / Consultants" };
 
 export default async function AdminConsultantsPage() {
   await guardAdminPage("admin.consultants");
-  const [accounts, autoEnabled, minYears] = await Promise.all([
-    db.user.findMany({
-      where: { role: "consultant" },
-      orderBy: { createdAt: "desc" },
-      include: {
-        consultantProfile: true,
-        _count: { select: { consultantAssignments: true } },
-      },
-    }),
-    getSetting("consultants.auto_approve_enabled", "false"),
-    getSetting("consultants.auto_approve_min_years", "3"),
-  ]);
+  const accounts = await db.user.findMany({
+    where: { role: "consultant", status: { not: "deleted" } },
+    orderBy: { createdAt: "desc" },
+    include: {
+      consultantProfile: true,
+      _count: { select: { consultantAssignments: true } },
+    },
+  });
   const pendingApplications = accounts.filter((a) => a.consultantProfile?.status === "pending");
   const specialtyName = (k: string) => CONSULTANT_SPECIALTIES.find((s) => s.key === k)?.name ?? k;
 
@@ -70,11 +66,32 @@ export default async function AdminConsultantsPage() {
                           {specialties.map((s) => <Badge key={s} color="indigo">{specialtyName(s)}</Badge>)}
                           {p.statesServed && <Badge>States: {p.statesServed}</Badge>}
                         </div>
-                        {p.proofDocumentPath ? (
-                          <p className="mt-2 text-xs text-emerald-600">Credential proof uploaded ✓</p>
-                        ) : (
-                          <p className="mt-2 text-xs text-amber-600">No credential proof uploaded</p>
-                        )}
+                        <div className="mt-2 flex flex-wrap gap-3 text-xs">
+                          {p.proofDocumentPath ? (
+                            <a href={`/api/admin/files/${p.proofDocumentPath}`} target="_blank" className="font-medium text-indigo-600 underline">
+                              Credential proof ↗
+                            </a>
+                          ) : (
+                            <span className="text-amber-600">No credential proof</span>
+                          )}
+                          {p.photoIdPath ? (
+                            <a href={`/api/admin/files/${p.photoIdPath}`} target="_blank" className="font-medium text-indigo-600 underline">
+                              Photo ID ↗
+                            </a>
+                          ) : (
+                            <span className="text-slate-400">No photo ID</span>
+                          )}
+                          {p.insurancePath ? (
+                            <a href={`/api/admin/files/${p.insurancePath}`} target="_blank" className="font-medium text-indigo-600 underline">
+                              E&amp;O insurance ↗
+                            </a>
+                          ) : (
+                            <span className="text-slate-400">No insurance proof</span>
+                          )}
+                          <span className={p.attestedCompliance ? "text-emerald-600" : "text-amber-600"}>
+                            {p.attestedCompliance ? "Compliance attested ✓" : "No compliance attestation"}
+                          </span>
+                        </div>
                       </div>
                     </div>
                     <div className="mt-4 flex gap-2">
@@ -133,15 +150,19 @@ export default async function AdminConsultantsPage() {
                     <Badge color={a.status === "active" ? "green" : "red"}>{a.status}</Badge>
                   </td>
                   <td className="px-4 py-3 text-right">
-                    <div className="flex justify-end gap-3 text-xs font-medium">
+                    <div className="flex flex-wrap items-start justify-end gap-3 text-xs font-medium">
+                      <ResetLinkButton userId={a.id} />
                       <form action={setConsultantAccountStatusAction.bind(null, a.id, a.status === "active" ? "suspended" : "active")}>
                         <button className="text-amber-600 hover:text-amber-800">
                           {a.status === "active" ? "Suspend" : "Reactivate"}
                         </button>
                       </form>
-                      <form action={deleteConsultantAccountAction.bind(null, a.id)}>
+                      <ConfirmForm
+                        action={deleteConsultantAccountAction.bind(null, a.id)}
+                        message={`Delete consultant ${a.email}? The account moves to Deleted accounts and is expunged automatically after the retention period.`}
+                      >
                         <button className="text-red-500 hover:text-red-700">Delete</button>
-                      </form>
+                      </ConfirmForm>
                     </div>
                   </td>
                 </tr>
@@ -151,15 +172,10 @@ export default async function AdminConsultantsPage() {
         </table>
       </div>
 
-      <Card className="mt-8">
-        <CardBody>
-          <h2 className="mb-2 text-sm font-semibold text-slate-900">Automated approval</h2>
-          <AutoApproveSettings enabled={autoEnabled === "true"} minYears={Number(minYears) || 3} />
-        </CardBody>
-      </Card>
-
       <p className="mt-4 text-sm text-slate-500">
-        Assign approved consultants to customers from the{" "}
+        Automated approval rules live under{" "}
+        <Link href="/admin/consultant-approval" className="text-indigo-600 underline">CPA auto-approval</Link>. Assign
+        approved consultants to customers from the{" "}
         <Link href="/admin/assignments" className="text-indigo-600 underline">Assignments</Link> page — connections
         require both parties&apos; consent.
       </p>

@@ -10,13 +10,19 @@ import { CONSULTANT_SPECIALTIES } from "@/lib/constants";
 type Existing = {
   credentialType: string;
   credentialNumber: string;
+  licenseState: string;
   ptin: string;
+  efin: string;
   isBusiness: boolean;
   businessName: string;
   ein: string;
   statesServed: string;
   yearsExperience: number;
   specialties: string[];
+  hasProof: boolean;
+  hasPhotoId: boolean;
+  hasInsurance: boolean;
+  attestedCompliance: boolean;
 } | null;
 
 export function ConsultantOnboardingForm({
@@ -48,20 +54,36 @@ export function ConsultantOnboardingForm({
             <Field label={credType === "cpa" ? "CPA license number" : "EA enrollment number"}>
               <input name="credentialNumber" defaultValue={existing?.credentialNumber} required className={inputClass} />
             </Field>
-            <Field label="PTIN" hint="IRS Preparer Tax Identification Number">
-              <input name="ptin" defaultValue={existing?.ptin} placeholder="P00000000" className={inputClass} />
-            </Field>
+            {credType === "cpa" && (
+              <Field label="State of licensure" hint="The state board that issued your CPA license.">
+                <input name="licenseState" defaultValue={existing?.licenseState} required placeholder="e.g. CA" className={inputClass} />
+              </Field>
+            )}
           </div>
         )}
-        {!needsLicense && (
-          <Field label="PTIN (if you have one)">
+        <div className="grid gap-3 sm:grid-cols-2">
+          <Field label={needsLicense ? "PTIN" : "PTIN (if you have one)"} hint="IRS Preparer Tax Identification Number — required by the IRS for paid preparers.">
             <input name="ptin" defaultValue={existing?.ptin} placeholder="P00000000" className={inputClass} />
           </Field>
-        )}
+          <Field label="EFIN (if you e-file for clients)" hint="IRS Electronic Filing Identification Number.">
+            <input name="efin" defaultValue={existing?.efin} placeholder="000000" className={inputClass} />
+          </Field>
+        </div>
 
-        <Field label={needsLicense ? "Proof of credential (required)" : "Proof of certification (recommended)"} hint="License certificate, IRS enrollment card, or equivalent. PDF or image.">
-          <input type="file" name="proof" accept=".pdf,image/*" className="text-sm text-slate-500 file:mr-3 file:rounded-lg file:border-0 file:bg-indigo-50 file:px-3 file:py-1.5 file:text-sm file:text-indigo-700" />
-        </Field>
+        <div className="grid gap-3 sm:grid-cols-3">
+          <Field
+            label={needsLicense ? "Credential proof (required)" : "Certification proof"}
+            hint={existing?.hasProof ? "On file ✓ — upload to replace" : "License certificate or EA enrollment card."}
+          >
+            <input type="file" name="proof" accept=".pdf,image/*" className="text-sm text-slate-500 file:mr-3 file:rounded-lg file:border-0 file:bg-indigo-50 file:px-3 file:py-1.5 file:text-sm file:text-indigo-700" />
+          </Field>
+          <Field label="Government photo ID" hint={existing?.hasPhotoId ? "On file ✓ — upload to replace" : "Driver's license, passport, or state ID."}>
+            <input type="file" name="photoId" accept=".pdf,image/*" className="text-sm text-slate-500 file:mr-3 file:rounded-lg file:border-0 file:bg-indigo-50 file:px-3 file:py-1.5 file:text-sm file:text-indigo-700" />
+          </Field>
+          <Field label="E&O insurance proof" hint={existing?.hasInsurance ? "On file ✓ — upload to replace" : "Current professional liability coverage."}>
+            <input type="file" name="insurance" accept=".pdf,image/*" className="text-sm text-slate-500 file:mr-3 file:rounded-lg file:border-0 file:bg-indigo-50 file:px-3 file:py-1.5 file:text-sm file:text-indigo-700" />
+          </Field>
+        </div>
 
         <label className="flex items-center gap-2 text-sm font-medium text-slate-700">
           <input type="checkbox" name="isBusiness" checked={isBusiness} onChange={(e) => setIsBusiness(e.target.checked)} className="h-4 w-4 rounded border-slate-300 text-indigo-600" />
@@ -99,6 +121,15 @@ export function ConsultantOnboardingForm({
             ))}
           </div>
         </Field>
+
+        <label className="flex items-start gap-2 rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm text-slate-600">
+          <input type="checkbox" name="attestation" defaultChecked={existing?.attestedCompliance} className="mt-1 h-4 w-4 rounded border-slate-300 text-indigo-600" />
+          <span>
+            <span className="font-medium text-slate-800">Compliance attestation.</span> I attest that I am compliant with my
+            own federal tax filing and payment obligations, and that I have not been convicted of any offense or subjected to
+            any sanction that would disqualify me from practicing before the IRS.
+          </span>
+        </label>
 
         <label className="flex items-start gap-2 text-sm text-slate-600">
           <input type="checkbox" name="agree" required className="mt-1 h-4 w-4 rounded border-slate-300 text-indigo-600" />

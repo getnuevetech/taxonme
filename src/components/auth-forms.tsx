@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { ActionForm, SubmitButton } from "./action-form";
-import { loginAction, registerAction } from "@/actions/auth";
+import { loginAction, registerAction, requestPasswordResetAction, resetPasswordAction } from "@/actions/auth";
 import { inputClass } from "./ui";
 
 export function LoginForm() {
@@ -12,6 +12,38 @@ export function LoginForm() {
         <input name="email" type="email" required placeholder="Email address" className={inputClass} />
         <input name="password" type="password" required placeholder="Password" className={inputClass} />
         <SubmitButton className="w-full py-2.5">Sign in</SubmitButton>
+        <p className="text-center">
+          <Link href="/forgot-password" className="text-sm font-medium text-indigo-600 hover:underline">
+            Forgot your password?
+          </Link>
+        </p>
+      </div>
+    </ActionForm>
+  );
+}
+
+export function ForgotPasswordForm() {
+  return (
+    <ActionForm
+      action={requestPasswordResetAction}
+      successMessage="If an account exists for that email, a reset link is on its way. It expires in 1 hour."
+    >
+      <div className="space-y-4">
+        <input name="email" type="email" required placeholder="Your email address" className={inputClass} />
+        <SubmitButton className="w-full py-2.5">Send reset link</SubmitButton>
+      </div>
+    </ActionForm>
+  );
+}
+
+export function ResetPasswordForm({ token }: { token: string }) {
+  return (
+    <ActionForm action={resetPasswordAction}>
+      <input type="hidden" name="token" value={token} />
+      <div className="space-y-4">
+        <input name="password" type="password" required placeholder="New password (8+ characters)" className={inputClass} />
+        <input name="confirm" type="password" required placeholder="Repeat new password" className={inputClass} />
+        <SubmitButton className="w-full py-2.5">Set new password</SubmitButton>
       </div>
     </ActionForm>
   );

@@ -2,6 +2,8 @@ import { db } from "@/lib/db";
 import { guardAdminPage } from "@/lib/admin-guard";
 import { PageHeader, Badge } from "@/components/ui";
 import { PeopleTabs } from "@/components/admin/people-tabs";
+import { ConfirmForm } from "@/components/confirm-form";
+import { ResetLinkButton } from "@/components/admin/reset-link-button";
 import { setUserStatusAction, adminDeleteUserAction } from "@/actions/admin";
 
 export const metadata = { title: "Customers" };
@@ -10,7 +12,7 @@ export default async function AdminCustomersPage() {
   await guardAdminPage("admin.users");
   // This section manages customers only — consultants and admins have their own sections.
   const users = await db.user.findMany({
-    where: { role: "user" },
+    where: { role: "user", status: { not: "deleted" } },
     orderBy: { createdAt: "desc" },
     include: {
       subscriptions: { where: { status: { in: ["active", "trialing"] } }, include: { plan: true }, take: 1 },
@@ -62,15 +64,19 @@ export default async function AdminCustomersPage() {
                   <Badge color={u.status === "active" ? "green" : "red"}>{u.status}</Badge>
                 </td>
                 <td className="px-4 py-3 text-right">
-                  <div className="flex justify-end gap-3 text-xs font-medium">
+                  <div className="flex flex-wrap items-start justify-end gap-3 text-xs font-medium">
+                    <ResetLinkButton userId={u.id} />
                     <form action={setUserStatusAction.bind(null, u.id, u.status === "active" ? "suspended" : "active")}>
                       <button className="text-amber-600 hover:text-amber-800">
                         {u.status === "active" ? "Suspend" : "Reactivate"}
                       </button>
                     </form>
-                    <form action={adminDeleteUserAction.bind(null, u.id)}>
+                    <ConfirmForm
+                      action={adminDeleteUserAction.bind(null, u.id)}
+                      message={`Delete ${u.email}? The account moves to Deleted accounts and is expunged automatically after the retention period. You can restore it until then.`}
+                    >
                       <button className="text-red-500 hover:text-red-700">Delete</button>
-                    </form>
+                    </ConfirmForm>
                   </div>
                 </td>
               </tr>

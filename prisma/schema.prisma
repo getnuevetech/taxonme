@@ -141,6 +141,7 @@ model User {
   adminRole       AdminRole? @relation(fields: [adminRoleId], references: [id], onDelete: SetNull)
 
   adminPermissions    AdminPermission[]
+  passwordResetTokens PasswordResetToken[]
   subscriptions       Subscription[]
   transactions        PaymentTransaction[]
   cases               Case[]
@@ -176,6 +177,17 @@ model AdminRole {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
   users       User[]
+}
+
+model PasswordResetToken {
+  id             String    @id @default(cuid())
+  userId         String
+  tokenHash      String    @unique
+  expiresAt      DateTime
+  usedAt         DateTime?
+  createdByAdmin Boolean   @default(false)
+  createdAt      DateTime  @default(now())
+  user           User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
 model ContentPage {
@@ -471,8 +483,13 @@ model ConsultantProfile {
   userId             String    @unique
   credentialType     String    @default("tax_consultant") // cpa | ea | tax_consultant
   credentialNumber   String    @default("")
+  licenseState       String    @default("")
   ptin               String    @default("")
+  efin               String    @default("")
   proofDocumentPath  String    @default("")
+  photoIdPath        String    @default("")
+  insurancePath      String    @default("")
+  attestedCompliance Boolean   @default(false)
   isBusiness         Boolean   @default(false)
   businessName       String    @default("")
   ein                String    @default("")

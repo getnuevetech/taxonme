@@ -28,13 +28,19 @@ export default async function ConsultantOnboardingPage() {
             ? {
                 credentialType: profile.credentialType,
                 credentialNumber: profile.credentialNumber,
+                licenseState: profile.licenseState,
                 ptin: profile.ptin,
+                efin: profile.efin,
                 isBusiness: profile.isBusiness,
                 businessName: profile.businessName,
                 ein: profile.ein,
                 statesServed: profile.statesServed,
                 yearsExperience: profile.yearsExperience,
                 specialties: JSON.parse(profile.specialties || "[]"),
+                hasProof: !!profile.proofDocumentPath,
+                hasPhotoId: !!profile.photoIdPath,
+                hasInsurance: !!profile.insurancePath,
+                attestedCompliance: profile.attestedCompliance,
               }
             : null
         }

@@ -5,72 +5,79 @@ import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db";
 import { requireUser } from "@/lib/auth";
 import { saveUpload } from "@/lib/uploads";
-import { getBoolSetting, getNumberSetting } from "@/lib/settings";
 import { ROLES } from "@/lib/constants";
 import type { ActionState } from "./auth";
 
-// Full consultant onboarding: credentials, proof, business details, specialties.
+// Full consultant onboarding (IRS-standard): credentials, PTIN/EFIN, document
+// uploads (license proof, photo ID, E&O insurance), business details,
+// specialties, and compliance attestation.
 export async function consultantOnboardingAction(_prev: ActionState, formData: FormData): Promise<ActionState> {
   const user = await requireUser();
   if (user.role !== ROLES.CONSULTANT) return { error: "Only consultant accounts can complete this onboarding." };
+  const existing = await db.consultantProfile.findUnique({ where: { userId: user.id } });
 
   const credentialType = String(formData.get("credentialType") ?? "tax_consultant");
   const credentialNumber = String(formData.get("credentialNumber") ?? "").trim();
+  const licenseState = String(formData.get("licenseState") ?? "").trim();
   const ptin = String(formData.get("ptin") ?? "").trim();
+  const efin = String(formData.get("efin") ?? "").trim();
   const isBusiness = formData.get("isBusiness") === "on";
   const businessName = String(formData.get("businessName") ?? "").trim();
   const ein = String(formData.get("ein") ?? "").trim();
   const statesServed = String(formData.get("statesServed") ?? "").trim();
   const yearsExperience = Number(formData.get("yearsExperience") ?? 0) || 0;
   const specialties = formData.getAll("specialties").map(String);
+  const attestedCompliance = formData.get("attestation") === "on";
   const agree = formData.get("agree") === "on";
 
   if (!agree) return { error: "You must accept the consultant agreement." };
   if ((credentialType === "cpa" || credentialType === "ea") && !credentialNumber) {
     return { error: "License/enrollment number is required for CPA and EA credentials." };
   }
+  if (credentialType === "cpa" && !licenseState) {
+    return { error: "State of licensure is required for CPAs." };
+  }
   if (isBusiness && !businessName) return { error: "Business name is required for business accounts." };
   if (specialties.length === 0) return { error: "Select at least one area of specialty." };
 
-  const proof = formData.get("proof");
-  let proofDocumentPath = "";
-  if (proof instanceof File && proof.size > 0) {
-    const saved = await saveUpload(proof);
-    proofDocumentPath = saved.filePath;
+  async function pickUpload(field: string, previous: string): Promise<string> {
+    const file = formData.get(field);
+    if (file instanceof File && file.size > 0) {
+      const saved = await saveUpload(file);
+      return saved.filePath;
+    }
+    return previous;
   }
+  const proofDocumentPath = await pickUpload("proof", existing?.proofDocumentPath ?? "");
+  const photoIdPath = await pickUpload("photoId", existing?.photoIdPath ?? "");
+  const insurancePath = await pickUpload("insurance", existing?.insurancePath ?? "");
+
   if ((credentialType === "cpa" || credentialType === "ea") && !proofDocumentPath) {
     return { error: "Please upload proof of your CPA license or EA enrollment." };
   }
 
-  // Optional automated approval when the admin has enabled it and requirements are met.
-  const autoApproveEnabled = await getBoolSetting("consultants.auto_approve_enabled", false);
-  const minYears = await getNumberSetting("consultants.auto_approve_min_years", 3);
-  const qualifies =
-    autoApproveEnabled &&
-    (credentialType === "cpa" || credentialType === "ea") &&
-    !!credentialNumber &&
-    !!proofDocumentPath &&
-    yearsExperience >= minYears;
+  // Automated approval: every admin-required criterion must be satisfied.
+  const { evaluateAutoApproval } = await import("@/lib/consultant-criteria");
+  const evaluation = await evaluateAutoApproval({
+    credentialType, credentialNumber, licenseState, ptin, efin,
+    proofDocumentPath, photoIdPath, insurancePath,
+    isBusiness, ein, statesServed, yearsExperience, attestedCompliance,
+  });
+  const qualifies = evaluation.qualifies;
 
+  const data = {
+    credentialType, credentialNumber, licenseState, ptin, efin,
+    isBusiness, businessName, ein, statesServed, yearsExperience,
+    specialties: JSON.stringify(specialties),
+    proofDocumentPath, photoIdPath, insurancePath, attestedCompliance,
+    status: qualifies ? "approved" : "pending",
+    autoApproved: qualifies,
+    approvedAt: qualifies ? new Date() : null,
+  };
   await db.consultantProfile.upsert({
     where: { userId: user.id },
-    update: {
-      credentialType, credentialNumber, ptin, isBusiness, businessName, ein,
-      statesServed, yearsExperience, specialties: JSON.stringify(specialties),
-      proofDocumentPath: proofDocumentPath || undefined,
-      status: qualifies ? "approved" : "pending",
-      autoApproved: qualifies,
-      approvedAt: qualifies ? new Date() : null,
-    },
-    create: {
-      userId: user.id,
-      credentialType, credentialNumber, ptin, isBusiness, businessName, ein,
-      statesServed, yearsExperience, specialties: JSON.stringify(specialties),
-      proofDocumentPath,
-      status: qualifies ? "approved" : "pending",
-      autoApproved: qualifies,
-      approvedAt: qualifies ? new Date() : null,
-    },
+    update: data,
+    create: { userId: user.id, ...data },
   });
 
   const agreement = await db.contentPage.findFirst({

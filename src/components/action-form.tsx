@@ -40,6 +40,7 @@ export function ActionForm({
       {state?.ok && (
         <div className="mb-4 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
           {successMessage}
+          {state.info && <span className="mt-1 block break-all font-mono text-xs text-emerald-800">{state.info}</span>}
         </div>
       )}
       {children}

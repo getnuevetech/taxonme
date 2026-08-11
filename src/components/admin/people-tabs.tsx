@@ -5,9 +5,9 @@ import { db } from "@/lib/db";
 // own dedicated section — customers, consultants, and admins are never mixed.
 export async function PeopleTabs({ active }: { active: "customers" | "consultants" | "admins" }) {
   const [customers, consultants, admins] = await Promise.all([
-    db.user.count({ where: { role: "user" } }),
-    db.user.count({ where: { role: "consultant" } }),
-    db.user.count({ where: { role: { in: ["admin", "super_admin"] } } }),
+    db.user.count({ where: { role: "user", status: { not: "deleted" } } }),
+    db.user.count({ where: { role: "consultant", status: { not: "deleted" } } }),
+    db.user.count({ where: { role: { in: ["admin", "super_admin"] }, status: { not: "deleted" } } }),
   ]);
   const tabs = [
     { key: "customers", href: "/admin/users", label: "Customers", count: customers },

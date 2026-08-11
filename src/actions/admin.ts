@@ -225,13 +225,70 @@ export async function setUserStatusAction(userId: string, status: "active" | "su
   revalidatePath("/admin/users");
 }
 
+// Soft delete: the account moves to the Deleted accounts section and is
+// expunged automatically after the configured retention period.
 export async function adminDeleteUserAction(userId: string) {
   const admin = await requireAdminArea("admin.users");
   if (admin.id === userId) return;
   const target = await db.user.findUnique({ where: { id: userId } });
-  if (target?.role === "super_admin") return;
-  await db.user.delete({ where: { id: userId } });
+  if (!target || target.role === "super_admin") return;
+  await db.user.update({
+    where: { id: userId },
+    data: { status: "deleted", deletedAt: new Date() },
+  });
   revalidatePath("/admin/users");
+  revalidatePath("/admin/consultants");
+  revalidatePath("/admin/deleted");
+}
+
+export async function restoreUserAction(userId: string) {
+  await requireAdminArea("admin.users");
+  await db.user.updateMany({
+    where: { id: userId, status: "deleted" },
+    data: { status: "active", deletedAt: null },
+  });
+  revalidatePath("/admin/deleted");
+}
+
+// Permanent removal — only available from the Deleted accounts section.
+export async function expungeUserAction(userId: string) {
+  await requireAdminArea("admin.users");
+  const target = await db.user.findUnique({ where: { id: userId } });
+  if (!target || target.role === "super_admin" || target.status !== "deleted") return;
+  await db.user.delete({ where: { id: userId } });
+  revalidatePath("/admin/deleted");
+}
+
+// Push a password-reset link to any customer or consultant. The link is
+// emailed when SMTP is configured and always shown to the admin for manual delivery.
+export async function adminSendResetLinkAction(_prev: ActionState, formData: FormData): Promise<ActionState> {
+  try {
+    await requireAdminArea("admin.users");
+  } catch {
+    await requireAdminArea("admin.consultants");
+  }
+  const userId = String(formData.get("userId") ?? "");
+  const target = await db.user.findUnique({ where: { id: userId } });
+  if (!target || (target.role !== "user" && target.role !== "consultant")) {
+    return { error: "Reset links can only be sent to customers and consultants." };
+  }
+  if (target.status !== "active") return { error: "This account is not active." };
+
+  const { createResetLink } = await import("@/lib/password-reset");
+  const { sendMail } = await import("@/lib/mail");
+  const link = await createResetLink(target.id, true);
+  const mail = await sendMail(
+    target.email,
+    "Reset your password",
+    `Hi ${target.firstName || ""},\n\nAn administrator sent you this link to reset your password. It expires in 1 hour.\n\n${link}`,
+  );
+  return {
+    ok: true,
+    info: mail.sent
+      ? `Reset link emailed to ${target.email}. Valid for 1 hour.`
+      : `Email not sent (${mail.error ?? "SMTP not configured"}). Share the link below with the user (valid 1 hour).`,
+    link,
+  };
 }
 
 // ---------- Role management (standalone) ----------
@@ -326,8 +383,30 @@ export async function deleteConsultantAccountAction(userId: string) {
   await requireAdminArea("admin.consultants");
   const target = await db.user.findUnique({ where: { id: userId } });
   if (!target || target.role !== "consultant") return;
-  await db.user.delete({ where: { id: userId } });
+  // Soft delete — recoverable from the Deleted accounts section.
+  await db.user.update({
+    where: { id: userId },
+    data: { status: "deleted", deletedAt: new Date() },
+  });
   revalidatePath("/admin/consultants");
+  revalidatePath("/admin/deleted");
+}
+
+// ---------- Automated approval criteria (CPA/Consultants) ----------
+
+export async function saveApprovalCriteriaAction(_prev: ActionState, formData: FormData): Promise<ActionState> {
+  await requireAdminArea("admin.consultants");
+  const enabled = formData.get("enabled") === "on";
+  const criteria = formData.getAll("criteria").map(String);
+  const minYears = Number(formData.get("minYears") ?? 3) || 3;
+  if (enabled && criteria.length === 0) {
+    return { error: "Select at least one required criterion, or disable automated approval." };
+  }
+  await setSetting("consultants.auto_approve_enabled", enabled ? "true" : "false");
+  await setSetting("consultants.auto_criteria", JSON.stringify(criteria));
+  await setSetting("consultants.auto_approve_min_years", String(minYears));
+  revalidatePath("/admin/consultant-approval");
+  return { ok: true };
 }
 
 export async function reviewConsultantAction(profileId: string, approve: boolean, reason = "") {
