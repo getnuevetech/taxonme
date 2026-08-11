@@ -2,9 +2,9 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 import { ISSUE_STATES } from "@/lib/constants";
 
-export function Card({ children, className = "" }: { children: ReactNode; className?: string }) {
+export function Card({ children, className = "", id }: { children: ReactNode; className?: string; id?: string }) {
   return (
-    <div className={`rounded-2xl border border-slate-200 bg-white shadow-sm ${className}`}>
+    <div id={id} className={`rounded-2xl border border-slate-200 bg-white shadow-sm ${className}`}>
       {children}
     </div>
   );

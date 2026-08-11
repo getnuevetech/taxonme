@@ -6,6 +6,7 @@ import { hasFeature } from "@/lib/access";
 import { FEATURE_KEYS } from "@/lib/constants";
 import { PageHeader, Card, CardBody, StateMark, ConfidenceBadge, ProgressBar, Money, Badge, ButtonLink } from "@/components/ui";
 import { reanalyzeCaseAction, completePathStepAction, checkCaseProgressAction } from "@/actions/case";
+import { startFormAction } from "@/actions/forms";
 import { isVerifiable, VERIFIABLE_ACTIONS } from "@/lib/case-progress";
 import { formatCaseNumber } from "@/lib/case-number";
 import { CaseUpload } from "@/components/case-upload";
@@ -26,6 +27,32 @@ export default async function CaseDetailPage({ params }: { params: Promise<{ id:
 
   const fullAccess = await hasFeature(user.id, FEATURE_KEYS.CASE_FULL_RESULTS);
   const hasReportAccess = await hasFeature(user.id, FEATURE_KEYS.CASE_REPORT);
+
+  // Direct route to the Form 9465 wizard when a step calls for it.
+  const form9465 = await db.irsFormTemplate.findFirst({
+    where: { formNumber: "9465", isPublished: true },
+    select: { id: true },
+  });
+
+  // Every actionable step gets a CTA that takes the user straight to where
+  // the task is executed.
+  const stepCta = (actionKey: string): { label: string; href: string } | null => {
+    switch (actionKey.toUpperCase()) {
+      case "UPLOAD_DOCUMENTS":
+        return { label: "Upload documents", href: "#case-documents" };
+      case "GET_TRANSCRIPT":
+      case "GET_ACCOUNT_TRANSCRIPT":
+        return { label: "How to get my transcript", href: "/app/irs-account" };
+      case "DRAFT_LETTER":
+        return { label: "Draft my letter", href: "/app/letters/new" };
+      case "COMPLETE_FORM_9465":
+        return form9465 ? { label: "Open the payment plan form", href: `/app/forms` } : { label: "Open IRS forms", href: "/app/forms" };
+      case "ADD_DEADLINE":
+        return { label: "Add the deadline", href: "/app/deadlines" };
+      default:
+        return null;
+    }
+  };
   const visibleIssues = fullAccess ? c.issues : c.issues.slice(0, 1);
   const verificationFlags = c.runs.filter((r) => r.consensus?.verificationRequired).length;
   // If no AI provider produced output, this analysis came from the rule-based engine.
@@ -177,6 +204,41 @@ export default async function CaseDetailPage({ params }: { params: Promise<{ id:
                         {verifiable && step.status === "done" && (
                           <p className="mt-1 text-xs font-medium text-emerald-600">✓ Verified from your case evidence</p>
                         )}
+                        {/* CTA routing the user straight to where this task gets done. */}
+                        {step.status !== "done" && (
+                          <div className="mt-2 flex flex-wrap gap-2">
+                            {(step.actionKey.toUpperCase() === "REVIEW_ANALYSIS" || step.actionKey.toUpperCase() === "RERUN_ANALYSIS") ? (
+                              <form action={reanalyzeCaseAction.bind(null, c.id)}>
+                                <button className="rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-indigo-700">
+                                  Re-run the analysis now →
+                                </button>
+                              </form>
+                            ) : step.actionKey.toUpperCase() === "COMPLETE_FORM_9465" && form9465 ? (
+                              <form action={startFormAction.bind(null, form9465.id)}>
+                                <button className="rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-indigo-700">
+                                  Start the payment plan form →
+                                </button>
+                              </form>
+                            ) : stepCta(step.actionKey) ? (
+                              <a
+                                href={stepCta(step.actionKey)!.href}
+                                className="rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-indigo-700"
+                              >
+                                {stepCta(step.actionKey)!.label} →
+                              </a>
+                            ) : null}
+                            {(step.actionKey.toUpperCase() === "GET_TRANSCRIPT" || step.actionKey.toUpperCase() === "GET_ACCOUNT_TRANSCRIPT") && (
+                              <a
+                                href="https://www.irs.gov/your-account"
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50"
+                              >
+                                Open IRS sign-up ↗
+                              </a>
+                            )}
+                          </div>
+                        )}
                       </div>
                       {/* Only steps we can't observe (e.g. "mail the letter") can be marked done by hand. */}
                       {!verifiable && step.status === "current" && (
@@ -212,7 +274,7 @@ export default async function CaseDetailPage({ params }: { params: Promise<{ id:
             </CardBody>
           </Card>
 
-          <Card>
+          <Card id="case-documents">
             <CardBody>
               <h3 className="mb-2 text-sm font-semibold text-slate-900">Case documents ({c.documents.length})</h3>
               <ul className="space-y-1.5">
