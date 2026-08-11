@@ -1,17 +1,19 @@
 import { db } from "@/lib/db";
 import { guardAdminPage } from "@/lib/admin-guard";
 import { PageHeader, Card, CardBody, Badge } from "@/components/ui";
-import { PlanForm, FeatureMatrix, ConsultantSubsToggle } from "@/components/admin/plan-forms";
+import { PlanForm, FeatureMatrix, ConsultantSubsToggle, ProrationToggle } from "@/components/admin/plan-forms";
 import { getBoolSetting } from "@/lib/settings";
 
 export const metadata = { title: "Plans & access control" };
 
 export default async function AdminPlansPage() {
   await guardAdminPage("admin.plans");
-  const [plans, features, consultantSubsEnabled] = await Promise.all([
+  const [plans, features, consultantSubsEnabled, prorationEnabled, prorationDowngrade] = await Promise.all([
     db.subscriptionPlan.findMany({ orderBy: [{ audience: "asc" }, { sortOrder: "asc" }], include: { features: true } }),
     db.featureDef.findMany({ orderBy: [{ category: "asc" }, { sortOrder: "asc" }] }),
     getBoolSetting("consultants.subscriptions_enabled", false),
+    getBoolSetting("billing.proration_enabled", true),
+    getBoolSetting("billing.proration_downgrade_enabled", false),
   ]);
 
   return (
@@ -20,6 +22,18 @@ export default async function AdminPlansPage() {
         title="Plans & access control"
         subtitle="Every feature of the app is gated here by subscription level. Toggle what each plan can access."
       />
+
+      <Card className="mb-8">
+        <CardBody>
+          <h2 className="mb-2 text-sm font-semibold text-slate-900">Proration</h2>
+          <p className="mb-3 text-xs text-slate-500">
+            When a subscriber switches plans mid-period, the unused value of their current plan becomes a credit. On the
+            manual gateway the customer is charged only the difference; on Stripe the credit converts to free days of the
+            new plan before billing starts. Downgrades only receive credit when explicitly allowed below.
+          </p>
+          <ProrationToggle enabled={prorationEnabled} downgradeEnabled={prorationDowngrade} />
+        </CardBody>
+      </Card>
 
       <Card className="mb-8">
         <CardBody>

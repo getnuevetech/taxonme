@@ -507,6 +507,70 @@ export async function revokeAssignmentAction(id: string) {
   revalidatePath("/admin/assignments");
 }
 
+// ---------- System messages ----------
+
+export async function saveMessageTemplateAction(_prev: ActionState, formData: FormData): Promise<ActionState> {
+  await requireAdminArea("admin.messages");
+  const key = String(formData.get("key") ?? "").trim().toLowerCase().replace(/[^a-z0-9_]/g, "_");
+  const name = String(formData.get("name") ?? "").trim();
+  const subject = String(formData.get("subject") ?? "").trim();
+  const bodyHtml = String(formData.get("bodyHtml") ?? "");
+  const kind = String(formData.get("kind") ?? "custom");
+  const offsetRaw = String(formData.get("offsetDays") ?? "").trim();
+  const offsetDays = offsetRaw === "" ? null : Number(offsetRaw);
+  const enabled = formData.get("enabled") === "on";
+  if (!key || !name || !subject) return { error: "Key, name, and subject are required." };
+  if (kind === "scheduled" && (offsetDays === null || !Number.isInteger(offsetDays))) {
+    return { error: "Scheduled messages need a whole number of days (negative = before expiration)." };
+  }
+  await db.messageTemplate.upsert({
+    where: { key },
+    update: { name, subject, bodyHtml, kind, offsetDays: kind === "scheduled" ? offsetDays : null, enabled },
+    create: { key, name, subject, bodyHtml, kind, offsetDays: kind === "scheduled" ? offsetDays : null, enabled },
+  });
+  revalidatePath("/admin/messages");
+  return { ok: true };
+}
+
+export async function deleteMessageTemplateAction(key: string) {
+  await requireAdminArea("admin.messages");
+  await db.messageTemplate.delete({ where: { key } });
+  revalidatePath("/admin/messages");
+}
+
+// Push any template to a specific customer/consultant by email.
+export async function pushMessageAction(_prev: ActionState, formData: FormData): Promise<ActionState> {
+  await requireAdminArea("admin.messages");
+  const templateKey = String(formData.get("templateKey") ?? "");
+  const email = String(formData.get("email") ?? "").trim().toLowerCase();
+  if (!templateKey || !email) return { error: "Choose a message and enter the recipient's email." };
+  const user = await db.user.findUnique({ where: { email } });
+  if (!user || (user.role !== "user" && user.role !== "consultant")) {
+    return { error: "No customer or consultant account exists with that email." };
+  }
+  if (user.status !== "active") return { error: "That account is not active." };
+  const { sendSystemMessage } = await import("@/lib/messaging");
+  const sub = await db.subscription.findFirst({
+    where: { userId: user.id, status: { in: ["active", "trialing"] } },
+    orderBy: { createdAt: "desc" },
+    include: { plan: true },
+  });
+  const sent = await sendSystemMessage(templateKey, user, {
+    planName: sub?.plan.name ?? "Free",
+    expiresOn: sub?.currentPeriodEnd?.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" }) ?? "",
+    link: user.role === "consultant" ? "/consultant" : "/app",
+  });
+  if (!sent) return { error: "That message template is disabled or missing." };
+  return { ok: true, info: `Message sent to ${email} — in-app notification now, plus email when SMTP is configured.` };
+}
+
+export async function runScheduledMessagesAction(): Promise<void> {
+  await requireAdminArea("admin.messages");
+  const { processScheduledMessages } = await import("@/lib/messaging");
+  await processScheduledMessages();
+  revalidatePath("/admin/messages");
+}
+
 // ---------- Knowledge base ----------
 
 export async function saveKnowledgeAction(_prev: ActionState, formData: FormData): Promise<ActionState> {

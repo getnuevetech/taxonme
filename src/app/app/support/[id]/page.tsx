@@ -3,7 +3,6 @@ import { db } from "@/lib/db";
 import { requireUser } from "@/lib/auth";
 import { PageHeader, Card, CardBody, Badge } from "@/components/ui";
 import { TicketReplyForm, RateTicket, AttachmentList } from "@/components/ticket-forms";
-import { closeOwnTicketAction } from "@/actions/support";
 import { formatTicketNumber } from "@/lib/ticket-number";
 
 export default async function TicketPage({
@@ -30,15 +29,6 @@ export default async function TicketPage({
       <PageHeader
         title={ticket.subject}
         subtitle={`Ticket ${formatTicketNumber(ticket.number)} · ${ticket.category === "tech_support" ? "Tech support" : "Customer service"}`}
-        actions={
-          ticket.status !== "closed" ? (
-            <form action={closeOwnTicketAction.bind(null, ticket.id)}>
-              <button className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50">
-                Close ticket
-              </button>
-            </form>
-          ) : undefined
-        }
       />
       {created && (
         <div className="mb-4 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
@@ -75,11 +65,12 @@ export default async function TicketPage({
           You rated this ticket {"★".repeat(ticket.csatRating)}{"☆".repeat(5 - ticket.csatRating)} — thank you!
         </p>
       )}
-      {ticket.status !== "closed" && (
-        <div className="mt-4">
-          <TicketReplyForm ticketId={ticket.id} staff={false} />
-        </div>
-      )}
+      <div className="mt-4">
+        {ticket.status === "closed" && (
+          <p className="mb-2 text-xs text-slate-500">This ticket is closed — replying will reopen it.</p>
+        )}
+        <TicketReplyForm ticketId={ticket.id} staff={false} />
+      </div>
     </div>
   );
 }

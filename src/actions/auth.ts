@@ -50,6 +50,10 @@ export async function registerAction(_prev: ActionState, formData: FormData): Pr
     });
   }
 
+  // Welcome message (admin-editable template).
+  const { sendSystemMessage } = await import("@/lib/messaging");
+  await sendSystemMessage("account_created", user, { link: asConsultant ? "/consultant" : "/app" });
+
   // Attach any pre-registration guest data (cases, documents, Q&A) to the new account.
   await claimGuestSession(user.id);
   await createSession(user.id);
@@ -98,13 +102,17 @@ export async function requestPasswordResetAction(_prev: ActionState, formData: F
   // Same response whether or not the account exists (no user enumeration).
   if (user && user.status === "active") {
     const { createResetLink } = await import("@/lib/password-reset");
-    const { sendMail } = await import("@/lib/mail");
     const link = await createResetLink(user.id);
-    await sendMail(
-      email,
-      "Reset your password",
-      `Hi ${user.firstName || ""},\n\nUse the link below to choose a new password. It expires in 1 hour.\n\n${link}\n\nIf you didn't request this, you can ignore this email.`,
-    );
+    const { sendSystemMessage } = await import("@/lib/messaging");
+    const sent = await sendSystemMessage("password_reset", user, { link });
+    if (!sent) {
+      const { sendMail } = await import("@/lib/mail");
+      await sendMail(
+        email,
+        "Reset your password",
+        `Hi ${user.firstName || ""},\n\nUse the link below to choose a new password. It expires in 1 hour.\n\n${link}\n\nIf you didn't request this, you can ignore this email.`,
+      );
+    }
   }
   return {
     ok: true,

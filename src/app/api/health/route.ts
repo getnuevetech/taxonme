@@ -15,8 +15,27 @@ export async function GET() {
   } catch {
     dbOk = false;
   }
+  // Opportunistic maintenance (all dedupe-protected): pinging this endpoint
+  // from a daily cron keeps scheduled messages and ticket auto-close running.
+  let maintenance: Record<string, number> = {};
+  if (dbOk) {
+    try {
+      const { processScheduledMessages } = await import("@/lib/messaging");
+      const { autoCloseInactiveTickets } = await import("@/actions/support");
+      const { purgeExpiredDeletedAccounts } = await import("@/lib/deleted-accounts");
+      maintenance = {
+        scheduledMessagesSent: await processScheduledMessages(),
+        ticketsAutoClosed: await autoCloseInactiveTickets(),
+        accountsExpunged: await purgeExpiredDeletedAccounts(),
+      };
+    } catch {
+      // maintenance is best-effort
+    }
+  }
+
   const user = await getCurrentUser().catch(() => null);
   return NextResponse.json({
+    maintenance,
     ok: true,
     database: dbOk ? "connected" : "unreachable",
     appUrl,

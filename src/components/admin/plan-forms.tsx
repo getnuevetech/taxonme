@@ -51,6 +51,38 @@ export function PlanForm({ plan }: { plan: Plan }) {
   );
 }
 
+export function ProrationToggle({ enabled, downgradeEnabled }: { enabled: boolean; downgradeEnabled: boolean }) {
+  return (
+    <ActionForm action={saveSettingsAction} successMessage="Proration settings saved.">
+      <div className="flex flex-wrap items-center gap-6">
+        <label className="flex items-center gap-2 text-sm font-medium text-slate-700">
+          <input type="hidden" name="setting:billing.proration_enabled" value="false" />
+          <input
+            type="checkbox"
+            name="setting:billing.proration_enabled"
+            value="true"
+            defaultChecked={enabled}
+            className="h-5 w-5 rounded border-slate-300 text-indigo-600"
+          />
+          Enable proration (plan upgrades)
+        </label>
+        <label className="flex items-center gap-2 text-sm font-medium text-slate-700">
+          <input type="hidden" name="setting:billing.proration_downgrade_enabled" value="false" />
+          <input
+            type="checkbox"
+            name="setting:billing.proration_downgrade_enabled"
+            value="true"
+            defaultChecked={downgradeEnabled}
+            className="h-5 w-5 rounded border-slate-300 text-indigo-600"
+          />
+          Also apply credit on downgrades
+        </label>
+        <SubmitButton>Save</SubmitButton>
+      </div>
+    </ActionForm>
+  );
+}
+
 export function ConsultantSubsToggle({ enabled }: { enabled: boolean }) {
   return (
     <ActionForm action={saveSettingsAction} successMessage="Consultant subscription setting saved.">

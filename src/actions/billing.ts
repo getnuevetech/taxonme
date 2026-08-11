@@ -52,41 +52,59 @@ export async function subscribeAction(_prev: ActionState, formData: FormData): P
     orderBy: [{ isDefault: "desc" }],
   });
   const amountCents = interval === "yearly" ? plan.priceYearlyCents : plan.priceMonthlyCents;
-
   const billingPath = user.role === "consultant" ? "/consultant/billing" : "/app/billing";
+
+  // Proration: switching plans mid-period credits the unused value of the
+  // current plan (admin-controlled, incl. whether downgrades qualify).
+  const { computeProration, activateSubscription } = await import("@/lib/payments");
+  const proration = await computeProration(
+    user.id,
+    { id: plan.id, priceMonthlyCents: plan.priceMonthlyCents, priceYearlyCents: plan.priceYearlyCents },
+    interval === "yearly" ? "yearly" : "monthly",
+  );
+
   if (!gateway || gateway.kind === "manual" || amountCents === 0) {
-    // Manual/dev gateway or free plan: activate immediately.
-    await db.subscription.updateMany({
-      where: { userId: user.id, status: { in: ["active", "trialing"] } },
-      data: { status: "canceled", canceledAt: new Date() },
+    // Manual/dev gateway or free plan: activate immediately, charging only the
+    // prorated difference when a credit applies.
+    const charge = amountCents === 0 ? 0 : proration.applied ? proration.chargeCents : amountCents;
+    await activateSubscription({
+      userId: user.id,
+      planId: plan.id,
+      interval: interval === "yearly" ? "yearly" : "monthly",
+      gateway: gateway?.kind ?? "manual",
+      gatewayRef: "",
     });
-    const periodEnd = new Date();
-    periodEnd.setMonth(periodEnd.getMonth() + (interval === "yearly" ? 12 : 1));
-    await db.subscription.create({
-      data: {
-        userId: user.id,
-        planId: plan.id,
-        gateway: gateway?.kind ?? "manual",
-        currentPeriodEnd: periodEnd,
-      },
-    });
-    if (amountCents > 0) {
+    if (charge > 0) {
       await db.paymentTransaction.create({
         data: {
           userId: user.id,
           planId: plan.id,
-          amountCents,
+          amountCents: charge,
           gateway: gateway?.kind ?? "manual",
           status: "succeeded",
         },
       });
     }
-    redirect(`${billingPath}?subscribed=1`);
+    redirect(`${billingPath}?subscribed=1${proration.applied ? `&prorated=${proration.creditCents}` : ""}`);
   }
 
   if (gateway.kind === "stripe") {
     const cfg = JSON.parse(gateway.configJson || "{}");
     if (!cfg.secretKey) return { error: "Payment gateway is not fully configured. Contact support." };
+
+    // Supersede any other in-flight checkouts: expire them at Stripe and mark
+    // the local transactions abandoned, so they can't linger as "pending".
+    const stale = await db.paymentTransaction.findMany({
+      where: { userId: user.id, gateway: "stripe", status: "pending", gatewayRef: { not: "" } },
+    });
+    for (const tx of stale) {
+      await fetch(`https://api.stripe.com/v1/checkout/sessions/${tx.gatewayRef}/expire`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${cfg.secretKey}` },
+      }).catch(() => null);
+      await db.paymentTransaction.update({ where: { id: tx.id }, data: { status: "abandoned" } });
+    }
+
     const params = new URLSearchParams({
       mode: "subscription",
       "line_items[0][quantity]": "1",
@@ -104,6 +122,11 @@ export async function subscribeAction(_prev: ActionState, formData: FormData): P
       "subscription_data[metadata][planId]": plan.id,
       "subscription_data[metadata][interval]": interval,
     });
+    // Stripe proration: the unused value of the old plan becomes free days of
+    // the new plan (billing starts after the credit period).
+    if (proration.applied && proration.creditDays >= 1) {
+      params.set("subscription_data[trial_period_days]", String(proration.creditDays));
+    }
     const res = await fetch("https://api.stripe.com/v1/checkout/sessions", {
       method: "POST",
       headers: {
@@ -135,6 +158,10 @@ export async function cancelSubscriptionAction() {
   await db.subscription.updateMany({
     where: { userId: user.id, status: { in: ["active", "trialing"] } },
     data: { status: "canceled", canceledAt: new Date() },
+  });
+  const { sendSystemMessage } = await import("@/lib/messaging");
+  await sendSystemMessage("subscription_canceled", user, {
+    link: user.role === "consultant" ? "/consultant/billing" : "/app/billing",
   });
   redirect(user.role === "consultant" ? "/consultant/billing?canceled=1" : "/app/billing?canceled=1");
 }

@@ -225,6 +225,7 @@ model Subscription {
   userId           String
   planId           String
   status           String           @default("active") // active | trialing | past_due | canceled
+  interval         String           @default("monthly") // monthly | yearly
   gateway          String           @default("manual")
   gatewayRef       String           @default("")
   currentPeriodEnd DateTime?
@@ -577,6 +578,35 @@ model TicketAttachment {
   createdAt DateTime @default(now())
   ticket    Ticket         @relation(fields: [ticketId], references: [id], onDelete: Cascade)
   message   TicketMessage? @relation(fields: [messageId], references: [id], onDelete: SetNull)
+}
+
+// ---------- System messages (customer communication) ----------
+
+// Every message the platform sends to customers/consultants — editable HTML
+// templates. Event templates fire on activity (account created, password
+// reset, subscription confirmed); scheduled templates fire relative to
+// subscription expiration (offsetDays: -7, -3, 0, +7); custom templates are
+// pushed manually by admins.
+model MessageTemplate {
+  key        String   @id
+  name       String
+  subject    String
+  bodyHtml   String   @default("")
+  kind       String   @default("event") // event | scheduled | custom
+  offsetDays Int? // for scheduled: days relative to subscription expiration (negative = before)
+  enabled    Boolean  @default(true)
+  updatedAt  DateTime @updatedAt
+  logs       MessageLog[]
+}
+
+model MessageLog {
+  id          String          @id @default(cuid())
+  templateKey String
+  userId      String
+  dedupeKey   String?         @unique // prevents duplicate scheduled sends
+  emailSent   Boolean         @default(false)
+  sentAt      DateTime        @default(now())
+  template    MessageTemplate @relation(fields: [templateKey], references: [key], onDelete: Cascade)
 }
 
 // Saved reply templates for support agents.

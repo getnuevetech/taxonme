@@ -16,6 +16,9 @@ export default async function AdminTicketsPage({
   searchParams: Promise<{ status?: string; category?: string; q?: string; agent?: string }>;
 }) {
   const admin = await guardAdminPage("admin.tickets");
+  // Opportunistic sweep: close tickets the customer stopped responding to.
+  const { autoCloseInactiveTickets } = await import("@/actions/support");
+  await autoCloseInactiveTickets();
   const f = await searchParams;
   const where: Prisma.TicketWhereInput = {};
   if (f.status) where.status = f.status;

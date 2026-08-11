@@ -6,7 +6,7 @@ import { inputClass } from "@/components/ui";
 
 export const metadata = { title: "Transactions" };
 
-const STATUSES = ["pending", "succeeded", "failed", "refunded"] as const;
+const STATUSES = ["pending", "succeeded", "failed", "abandoned", "refunded"] as const;
 
 type Filters = {
   q?: string;

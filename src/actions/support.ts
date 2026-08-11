@@ -150,14 +150,36 @@ export async function replyTicketAction(_prev: ActionState, formData: FormData):
   return { ok: true };
 }
 
-export async function closeOwnTicketAction(ticketId: string) {
-  const user = await requireUser();
-  await db.ticket.updateMany({
-    where: { id: ticketId, userId: user.id },
-    data: { status: "closed", closedAt: new Date() },
+// Closing tickets is a staff-only action. Tickets the customer stops responding
+// to are closed automatically after the admin-configured number of days.
+export async function autoCloseInactiveTickets(): Promise<number> {
+  const { getNumberSetting } = await import("@/lib/settings");
+  const days = await getNumberSetting("tickets.auto_close_days", 7);
+  if (days <= 0) return 0;
+  const cutoff = new Date(Date.now() - days * 24 * 3600000);
+  const candidates = await db.ticket.findMany({
+    where: { status: { in: ["open", "in_progress", "resolved"] }, updatedAt: { lt: cutoff } },
+    include: { messages: { where: { internal: false }, orderBy: { createdAt: "desc" }, take: 1 } },
   });
-  revalidatePath(`/app/support/${ticketId}`);
-  revalidatePath("/app/support");
+  let closed = 0;
+  for (const t of candidates) {
+    const last = t.messages[0];
+    // Only close when the ball is in the customer's court (staff spoke last).
+    if (!last || !last.fromStaff || last.createdAt > cutoff) continue;
+    await db.ticket.update({ where: { id: t.id }, data: { status: "closed", closedAt: new Date() } });
+    await auditTicket(t.id, `Auto-closed after ${days} days without a customer response.`);
+    await db.notification.create({
+      data: {
+        userId: t.userId,
+        kind: "info",
+        title: "Your support ticket was closed",
+        body: `${t.subject} — closed automatically after ${days} days of inactivity. Reply on the ticket to reopen it.`,
+        link: `/app/support/${t.id}`,
+      },
+    });
+    closed++;
+  }
+  return closed;
 }
 
 // CSAT: the customer rates a resolved/closed ticket once (1–5 + optional comment).

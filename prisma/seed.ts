@@ -29,6 +29,9 @@ async function seedSettings() {
     ["users.deleted_retention_days", "90", "users", "Deleted account retention (days)", "How long deleted accounts stay recoverable before being expunged permanently."],
     ["tickets.sla_first_response_hours", "24", "tickets", "Ticket first-response SLA (hours)", "Open tickets without a staff reply within this window are flagged SLA overdue."],
     ["tickets.inbound_email_secret", "", "tickets", "Inbound email webhook secret", "Set to a long random value to enable email-to-ticket at /api/inbound-email?secret=<value>. Empty disables it."],
+    ["tickets.auto_close_days", "7", "tickets", "Ticket auto-close (days)", "Tickets are closed automatically when the customer doesn't respond for this many days after a staff reply. 0 disables."],
+    ["billing.proration_enabled", "true", "billing", "Proration on plan changes", "Credit the unused value of the current plan when a subscriber upgrades (toggle on the Plans page)."],
+    ["billing.proration_downgrade_enabled", "false", "billing", "Proration on downgrades", "Also apply the credit when subscribers downgrade (toggle on the Plans page)."],
     ["mail.host", "", "mail", "SMTP host", "Leave empty to disable outbound email (reset links are then shown to admins for manual delivery)."],
     ["mail.port", "587", "mail", "SMTP port", ""],
     ["mail.username", "", "mail", "SMTP username", ""],
@@ -822,6 +825,110 @@ async function seedCannedResponses() {
   });
 }
 
+async function seedMessageTemplates() {
+  const wrap = (title: string, inner: string) => `<div style="font-family:Arial,Helvetica,sans-serif;max-width:560px;margin:0 auto;padding:24px;color:#1e293b;">
+  <h2 style="color:#4338ca;margin:0 0 16px;">${title}</h2>
+  ${inner}
+  <p style="margin-top:24px;">— The {{appName}} team</p>
+  <hr style="border:none;border-top:1px solid #e2e8f0;margin:24px 0;" />
+  <p style="font-size:12px;color:#94a3b8;">{{appName}} is a tax assistant, not the IRS, a CPA firm, or a law firm.</p>
+</div>`;
+
+  const templates: { key: string; name: string; kind: string; offsetDays?: number; subject: string; bodyHtml: string }[] = [
+    {
+      key: "account_created",
+      name: "Welcome — account created",
+      kind: "event",
+      subject: "Welcome to {{appName}}, {{firstName}}!",
+      bodyHtml: wrap("Welcome aboard 🎉".replace("🎉", ""), `<p>Hi {{firstName}},</p>
+<p>Your {{appName}} account is ready. Here's how to get the most out of it:</p>
+<ul>
+  <li><strong>Start a case</strong> — tell us what happened and we'll build your step-by-step plan.</li>
+  <li><strong>Upload your documents</strong> — notices, W-2s, 1099s, transcripts. Everything stays private.</li>
+  <li><strong>Ask the guide</strong> — the assistant in the corner of your dashboard knows your next step.</li>
+</ul>
+<p><a href="{{appUrl}}{{link}}" style="background:#4f46e5;color:#fff;padding:10px 18px;border-radius:8px;text-decoration:none;display:inline-block;">Open my dashboard</a></p>`),
+    },
+    {
+      key: "password_reset",
+      name: "Password reset link",
+      kind: "event",
+      subject: "Reset your {{appName}} password",
+      bodyHtml: wrap("Reset your password", `<p>Hi {{firstName}},</p>
+<p>Use the button below to choose a new password. The link expires in <strong>1 hour</strong>.</p>
+<p><a href="{{link}}" style="background:#4f46e5;color:#fff;padding:10px 18px;border-radius:8px;text-decoration:none;display:inline-block;">Choose a new password</a></p>
+<p style="font-size:13px;color:#64748b;">If you didn't request this, you can safely ignore this message.</p>`),
+    },
+    {
+      key: "subscription_confirmed",
+      name: "Subscription confirmed",
+      kind: "event",
+      subject: "Your {{planName}} plan is active",
+      bodyHtml: wrap("You're all set", `<p>Hi {{firstName}},</p>
+<p>Your payment is confirmed and your <strong>{{planName}}</strong> plan is now active. Your current period runs until <strong>{{expiresOn}}</strong>.</p>
+<p><a href="{{appUrl}}{{link}}" style="background:#4f46e5;color:#fff;padding:10px 18px;border-radius:8px;text-decoration:none;display:inline-block;">View my plan</a></p>`),
+    },
+    {
+      key: "subscription_canceled",
+      name: "Subscription canceled",
+      kind: "event",
+      subject: "Your {{appName}} subscription was canceled",
+      bodyHtml: wrap("Subscription canceled", `<p>Hi {{firstName}},</p>
+<p>Your subscription has been canceled. You can resubscribe anytime — your cases and documents stay safe in your account.</p>
+<p><a href="{{appUrl}}{{link}}" style="background:#4f46e5;color:#fff;padding:10px 18px;border-radius:8px;text-decoration:none;display:inline-block;">See plans</a></p>`),
+    },
+    {
+      key: "renewal_7_days",
+      name: "Renewal reminder — 7 days before",
+      kind: "scheduled",
+      offsetDays: -7,
+      subject: "Your {{planName}} plan renews in 7 days",
+      bodyHtml: wrap("Renewal coming up", `<p>Hi {{firstName}},</p>
+<p>A heads-up: your <strong>{{planName}}</strong> plan is due to renew on <strong>{{expiresOn}}</strong> — 7 days from now.</p>
+<p>No action is needed if you'd like to continue. To change or cancel your plan, visit your billing page.</p>
+<p><a href="{{appUrl}}{{link}}" style="background:#4f46e5;color:#fff;padding:10px 18px;border-radius:8px;text-decoration:none;display:inline-block;">Manage my plan</a></p>`),
+    },
+    {
+      key: "renewal_3_days",
+      name: "Renewal reminder — 3 days before",
+      kind: "scheduled",
+      offsetDays: -3,
+      subject: "3 days until your {{planName}} plan renews",
+      bodyHtml: wrap("Renewing soon", `<p>Hi {{firstName}},</p>
+<p>Your <strong>{{planName}}</strong> plan renews on <strong>{{expiresOn}}</strong> — just 3 days away. Make sure your payment details are up to date so you don't lose access to your case tools.</p>
+<p><a href="{{appUrl}}{{link}}" style="background:#4f46e5;color:#fff;padding:10px 18px;border-radius:8px;text-decoration:none;display:inline-block;">Review billing</a></p>`),
+    },
+    {
+      key: "subscription_expired",
+      name: "Subscription expired (unrenewed)",
+      kind: "scheduled",
+      offsetDays: 0,
+      subject: "Your {{planName}} plan has expired",
+      bodyHtml: wrap("Your plan expired", `<p>Hi {{firstName}},</p>
+<p>Your <strong>{{planName}}</strong> plan expired on <strong>{{expiresOn}}</strong> and hasn't been renewed. Your cases and documents are safe, but plan features are paused until you renew.</p>
+<p><a href="{{appUrl}}{{link}}" style="background:#4f46e5;color:#fff;padding:10px 18px;border-radius:8px;text-decoration:none;display:inline-block;">Renew now</a></p>`),
+    },
+    {
+      key: "expired_7_days",
+      name: "Still expired — 7 days after",
+      kind: "scheduled",
+      offsetDays: 7,
+      subject: "We saved your spot, {{firstName}}",
+      bodyHtml: wrap("Pick up where you left off", `<p>Hi {{firstName}},</p>
+<p>It's been a week since your <strong>{{planName}}</strong> plan expired. Your cases, documents, and progress are exactly where you left them — renew to keep moving toward resolution.</p>
+<p><a href="{{appUrl}}{{link}}" style="background:#4f46e5;color:#fff;padding:10px 18px;border-radius:8px;text-decoration:none;display:inline-block;">Reactivate my plan</a></p>`),
+    },
+  ];
+
+  for (const t of templates) {
+    await db.messageTemplate.upsert({
+      where: { key: t.key },
+      update: {},
+      create: { key: t.key, name: t.name, kind: t.kind, offsetDays: t.offsetDays ?? null, subject: t.subject, bodyHtml: t.bodyHtml },
+    });
+  }
+}
+
 async function main() {
   await seedSettings();
   await seedAdmin();
@@ -833,6 +940,7 @@ async function main() {
   await seedKnowledge();
   await seedFormTemplates();
   await seedCannedResponses();
+  await seedMessageTemplates();
   console.log("Seed complete.");
 }
 

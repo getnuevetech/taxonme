@@ -58,6 +58,8 @@ export async function GET(request: Request) {
         data: { userId: user.id, pageId: agreement.id, version: agreement.version, context: "registration" },
       });
     }
+    const { sendSystemMessage } = await import("@/lib/messaging");
+    await sendSystemMessage("account_created", user, { link: "/app" });
   } else if (!user.googleId) {
     await db.user.update({ where: { id: user.id }, data: { googleId: info.id } });
   }
