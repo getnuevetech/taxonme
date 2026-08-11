@@ -5,7 +5,22 @@ import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db";
 import { requireUser, requireAdminArea } from "@/lib/auth";
 import { guideRespond, type GuideReply } from "@/lib/guide";
+import { sendMail } from "@/lib/mail";
+import { getSetting } from "@/lib/settings";
+import { formatTicketNumber } from "@/lib/ticket-number";
 import type { ActionState } from "./auth";
+
+// System audit entry on a ticket (visible to staff only).
+async function auditTicket(ticketId: string, body: string) {
+  await db.ticketMessage.create({
+    data: { ticketId, fromStaff: true, internal: true, system: true, body },
+  });
+}
+
+async function ticketUrl(path: string): Promise<string> {
+  const appUrl = (await getSetting("app.url", "http://localhost:3000")).replace(/\/$/, "");
+  return `${appUrl}${path}`;
+}
 
 // ---------- Guide chatbot ----------
 
@@ -62,6 +77,12 @@ export async function createTicketAction(_prev: ActionState, formData: FormData)
       },
     });
   }
+  // Email confirmation with the ticket number (best-effort; no-op without SMTP).
+  await sendMail(
+    user.email,
+    `[${formatTicketNumber(ticket.number)}] We received your ticket: ${ticket.subject}`,
+    `Hi ${user.firstName || ""},\n\nYour ${ticket.category === "tech_support" ? "tech support" : "customer service"} ticket ${formatTicketNumber(ticket.number)} has been created:\n\n"${body.slice(0, 500)}"\n\nWe'll reply as soon as possible. Track it here: ${await ticketUrl(`/app/support/${ticket.id}`)}`,
+  );
   redirect(`/app/support/${ticket.id}?created=1`);
 }
 
@@ -73,10 +94,26 @@ export async function replyTicketAction(_prev: ActionState, formData: FormData):
   const ticket = await db.ticket.findUnique({ where: { id: ticketId } });
   if (!ticket || ticket.userId !== user.id) return { error: "Ticket not found." };
   await db.ticketMessage.create({ data: { ticketId, authorId: user.id, fromStaff: false, body } });
+  const reopened = ticket.status === "resolved" || ticket.status === "closed";
   await db.ticket.update({
     where: { id: ticketId },
-    data: { status: ticket.status === "resolved" || ticket.status === "closed" ? "open" : ticket.status },
+    data: reopened ? { status: "open", resolvedAt: null, closedAt: null } : { status: ticket.status },
   });
+  // Alert the assigned agent (or all admins when unassigned).
+  const recipients = ticket.assignedToId
+    ? [{ id: ticket.assignedToId }]
+    : await db.user.findMany({ where: { role: { in: ["super_admin", "admin"] }, status: "active" }, select: { id: true } });
+  for (const r of recipients) {
+    await db.notification.create({
+      data: {
+        userId: r.id,
+        kind: "info",
+        title: reopened ? "Ticket reopened by user reply" : "User replied to a ticket",
+        body: ticket.subject.slice(0, 100),
+        link: `/admin/tickets/${ticketId}`,
+      },
+    });
+  }
   revalidatePath(`/app/support/${ticketId}`);
   return { ok: true };
 }
@@ -169,6 +206,12 @@ export async function assignTicketAgentAction(_prev: ActionState, formData: Form
     }
   }
   const ticket = await db.ticket.update({ where: { id: ticketId }, data: { assignedToId } });
+  const agentName = assignedToId
+    ? (await db.user.findUnique({ where: { id: assignedToId }, select: { firstName: true, email: true } }))
+    : null;
+  await auditTicket(ticketId, assignedToId
+    ? `Assigned to ${agentName?.firstName || agentName?.email} by ${admin.firstName || admin.email}.`
+    : `Unassigned by ${admin.firstName || admin.email}.`);
   if (assignedToId && assignedToId !== admin.id) {
     await db.notification.create({
       data: {
@@ -189,28 +232,54 @@ export async function adminReplyTicketAction(_prev: ActionState, formData: FormD
   const admin = await requireAdminArea("admin.tickets");
   const ticketId = String(formData.get("ticketId") ?? "");
   const body = String(formData.get("body") ?? "").trim();
+  const internal = formData.get("internal") === "on";
   if (!body) return { error: "Type a reply first." };
-  const ticket = await db.ticket.findUnique({ where: { id: ticketId } });
+  const ticket = await db.ticket.findUnique({ where: { id: ticketId }, include: { user: true } });
   if (!ticket) return { error: "Ticket not found." };
-  await db.ticketMessage.create({ data: { ticketId, authorId: admin.id, fromStaff: true, body } });
-  await db.ticket.update({ where: { id: ticketId }, data: { status: "in_progress" } });
-  await db.notification.create({
-    data: {
-      userId: ticket.userId,
-      kind: "info",
-      title: "Support replied to your ticket",
-      body: ticket.subject,
-      link: `/app/support/${ticketId}`,
-    },
-  });
+
+  await db.ticketMessage.create({ data: { ticketId, authorId: admin.id, fromStaff: true, internal, body } });
+
+  if (!internal) {
+    // Public reply: advance status, stamp first response, notify + email the user.
+    await db.ticket.update({
+      where: { id: ticketId },
+      data: {
+        status: ticket.status === "open" ? "in_progress" : ticket.status,
+        firstResponseAt: ticket.firstResponseAt ?? new Date(),
+      },
+    });
+    await db.notification.create({
+      data: {
+        userId: ticket.userId,
+        kind: "info",
+        title: "Support replied to your ticket",
+        body: ticket.subject,
+        link: `/app/support/${ticketId}`,
+      },
+    });
+    await sendMail(
+      ticket.user.email,
+      `[${formatTicketNumber(ticket.number)}] New reply: ${ticket.subject}`,
+      `Hi ${ticket.user.firstName || ""},\n\nOur team replied to your ticket ${formatTicketNumber(ticket.number)}:\n\n"${body.slice(0, 800)}"\n\nReply here: ${await ticketUrl(`/app/support/${ticketId}`)}`,
+    );
+  }
   revalidatePath(`/admin/tickets/${ticketId}`);
   return { ok: true };
 }
 
 export async function setTicketStatusAction(ticketId: string, status: string) {
-  await requireAdminArea("admin.tickets");
+  const admin = await requireAdminArea("admin.tickets");
   if (!["open", "in_progress", "resolved", "closed"].includes(status)) return;
-  const ticket = await db.ticket.update({ where: { id: ticketId }, data: { status } });
+  const ticket = await db.ticket.update({
+    where: { id: ticketId },
+    data: {
+      status,
+      resolvedAt: status === "resolved" ? new Date() : status === "open" ? null : undefined,
+      closedAt: status === "closed" ? new Date() : status === "open" ? null : undefined,
+    },
+    include: { user: true },
+  });
+  await auditTicket(ticketId, `Status changed to "${status.replace(/_/g, " ")}" by ${admin.firstName || admin.email}.`);
   if (status === "resolved") {
     await db.notification.create({
       data: {
@@ -221,6 +290,11 @@ export async function setTicketStatusAction(ticketId: string, status: string) {
         link: `/app/support/${ticketId}`,
       },
     });
+    await sendMail(
+      ticket.user.email,
+      `[${formatTicketNumber(ticket.number)}] Resolved: ${ticket.subject}`,
+      `Hi ${ticket.user.firstName || ""},\n\nYour ticket ${formatTicketNumber(ticket.number)} has been marked resolved. If anything is still wrong, just reply on the ticket and it will reopen automatically:\n${await ticketUrl(`/app/support/${ticketId}`)}`,
+    );
   }
   revalidatePath(`/admin/tickets/${ticketId}`);
   revalidatePath("/admin/tickets");
@@ -228,17 +302,19 @@ export async function setTicketStatusAction(ticketId: string, status: string) {
 
 // Route a ticket between tech support and customer service.
 export async function setTicketCategoryAction(ticketId: string, category: string) {
-  await requireAdminArea("admin.tickets");
+  const admin = await requireAdminArea("admin.tickets");
   if (!["customer_service", "tech_support"].includes(category)) return;
   await db.ticket.update({ where: { id: ticketId }, data: { category } });
+  await auditTicket(ticketId, `Routed to ${category === "tech_support" ? "tech support" : "customer service"} by ${admin.firstName || admin.email}.`);
   revalidatePath(`/admin/tickets/${ticketId}`);
   revalidatePath("/admin/tickets");
 }
 
 export async function setTicketPriorityAction(ticketId: string, priority: string) {
-  await requireAdminArea("admin.tickets");
+  const admin = await requireAdminArea("admin.tickets");
   if (!["low", "normal", "high", "urgent"].includes(priority)) return;
   await db.ticket.update({ where: { id: ticketId }, data: { priority } });
+  await auditTicket(ticketId, `Priority set to ${priority} by ${admin.firstName || admin.email}.`);
   revalidatePath(`/admin/tickets/${ticketId}`);
   revalidatePath("/admin/tickets");
 }

@@ -84,18 +84,54 @@ export default async function AdminTicketDetailPage({
         {ticket.priority === "urgent" && actionButton("De-escalate", setTicketPriorityAction.bind(null, ticket.id, "normal"), "border-slate-300 bg-white text-slate-600 hover:bg-slate-50")}
       </div>
 
+      <div className="mb-4 grid gap-3 sm:grid-cols-3">
+        <div className="rounded-xl border border-slate-200 bg-white px-4 py-3">
+          <p className="text-xs font-medium uppercase tracking-wide text-slate-400">First response</p>
+          <p className="text-sm font-semibold text-slate-800">
+            {ticket.firstResponseAt
+              ? `${Math.round((ticket.firstResponseAt.getTime() - ticket.createdAt.getTime()) / 3600000 * 10) / 10}h after opening`
+              : "Awaiting first response"}
+          </p>
+        </div>
+        <div className="rounded-xl border border-slate-200 bg-white px-4 py-3">
+          <p className="text-xs font-medium uppercase tracking-wide text-slate-400">Resolved</p>
+          <p className="text-sm font-semibold text-slate-800">{ticket.resolvedAt ? ticket.resolvedAt.toLocaleString("en-US") : "—"}</p>
+        </div>
+        <div className="rounded-xl border border-slate-200 bg-white px-4 py-3">
+          <p className="text-xs font-medium uppercase tracking-wide text-slate-400">Age</p>
+          <p className="text-sm font-semibold text-slate-800">
+            {Math.max(1, Math.round((Date.now() - ticket.createdAt.getTime()) / 3600000))}h
+          </p>
+        </div>
+      </div>
+
       <Card>
         <CardBody className="space-y-4">
-          {ticket.messages.map((m) => (
-            <div key={m.id} className={`flex ${m.fromStaff ? "justify-end" : "justify-start"}`}>
-              <div className={`max-w-[85%] rounded-2xl px-4 py-3 text-sm ${m.fromStaff ? "bg-indigo-600 text-white" : "bg-slate-100 text-slate-800"}`}>
-                <p className="whitespace-pre-wrap">{m.body}</p>
-                <p className={`mt-1 text-[10px] ${m.fromStaff ? "text-indigo-200" : "text-slate-400"}`}>
-                  {m.fromStaff ? "Support team" : "User"} · {m.createdAt.toLocaleString("en-US")}
-                </p>
+          {ticket.messages.map((m) =>
+            m.system ? (
+              <p key={m.id} className="text-center text-[11px] text-slate-400">
+                ⚙ {m.body} · {m.createdAt.toLocaleString("en-US")}
+              </p>
+            ) : (
+              <div key={m.id} className={`flex ${m.fromStaff ? "justify-end" : "justify-start"}`}>
+                <div
+                  className={`max-w-[85%] rounded-2xl px-4 py-3 text-sm ${
+                    m.internal
+                      ? "border border-amber-300 bg-amber-50 text-amber-900"
+                      : m.fromStaff
+                        ? "bg-indigo-600 text-white"
+                        : "bg-slate-100 text-slate-800"
+                  }`}
+                >
+                  {m.internal && <p className="mb-1 text-[10px] font-bold uppercase tracking-wide text-amber-600">Internal note</p>}
+                  <p className="whitespace-pre-wrap">{m.body}</p>
+                  <p className={`mt-1 text-[10px] ${m.internal ? "text-amber-500" : m.fromStaff ? "text-indigo-200" : "text-slate-400"}`}>
+                    {m.fromStaff ? "Support team" : "User"} · {m.createdAt.toLocaleString("en-US")}
+                  </p>
+                </div>
               </div>
-            </div>
-          ))}
+            ),
+          )}
         </CardBody>
       </Card>
       <div className="mt-4">

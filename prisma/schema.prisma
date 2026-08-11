@@ -536,6 +536,9 @@ model Ticket {
   priority     String   @default("normal") // low | normal | high | urgent
   source       String   @default("manual") // manual | chatbot | admin
   assignedToId String? // staff agent handling this ticket
+  firstResponseAt DateTime? // first public staff reply (SLA tracking)
+  resolvedAt   DateTime?
+  closedAt     DateTime?
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
   user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -548,6 +551,8 @@ model TicketMessage {
   ticketId  String
   authorId  String   @default("")
   fromStaff Boolean  @default(false)
+  internal  Boolean  @default(false) // staff-only note or system audit entry — never shown to the user
+  system    Boolean  @default(false) // automated audit entry (status/routing/assignment changes)
   body      String
   createdAt DateTime @default(now())
   ticket    Ticket   @relation(fields: [ticketId], references: [id], onDelete: Cascade)

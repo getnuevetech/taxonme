@@ -37,12 +37,18 @@ export function NewTicketForm({
 
 export function TicketReplyForm({ ticketId, staff }: { ticketId: string; staff: boolean }) {
   return (
-    <ActionForm action={staff ? adminReplyTicketAction : replyTicketAction} successMessage="Reply sent.">
+    <ActionForm action={staff ? adminReplyTicketAction : replyTicketAction} successMessage="Sent.">
       <input type="hidden" name="ticketId" value={ticketId} />
       <div className="flex gap-2">
-        <input name="body" placeholder="Type your reply…" autoComplete="off" className={inputClass} />
-        <SubmitButton>Reply</SubmitButton>
+        <input name="body" placeholder={staff ? "Reply to the user, or add an internal note…" : "Type your reply…"} autoComplete="off" className={inputClass} />
+        <SubmitButton>Send</SubmitButton>
       </div>
+      {staff && (
+        <label className="mt-2 flex items-center gap-2 text-xs text-slate-600">
+          <input type="checkbox" name="internal" className="h-4 w-4 rounded border-slate-300 text-amber-600" />
+          Internal note — visible to staff only, the user is not notified
+        </label>
+      )}
     </ActionForm>
   );
 }

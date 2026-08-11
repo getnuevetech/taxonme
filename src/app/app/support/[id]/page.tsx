@@ -18,7 +18,8 @@ export default async function TicketPage({
   const user = await requireUser();
   const ticket = await db.ticket.findFirst({
     where: { id, userId: user.id },
-    include: { messages: { orderBy: { createdAt: "asc" } } },
+    // Internal staff notes and audit entries are never shown to the user.
+    include: { messages: { where: { internal: false }, orderBy: { createdAt: "asc" } } },
   });
   if (!ticket) notFound();
 
