@@ -16,6 +16,7 @@ async function seedSettings() {
     ["home.hero_subtitle", "TaxOnMe turns confusing IRS notices, refunds, and tax debt into a simple step-by-step plan. Start free — no account needed.", "branding", "Homepage hero subtitle", ""],
     ["home.cta_primary", "Explain my tax situation", "branding", "Primary call to action", ""],
     ["home.cta_secondary", "Ask a quick question", "branding", "Secondary call to action", ""],
+    ["home.hero_images", '["/hero/hero-1.png", "/hero/hero-2.png", "/hero/hero-3.png"]', "branding", "Hero images (JSON array)", "Rotating homepage hero images. JSON array of image URLs or paths — add, remove, or reorder freely."],
     ["auth.google_client_id", "", "auth", "Google OAuth client ID", "Leave empty to hide the Google sign-in button."],
     ["auth.google_client_secret", "", "auth", "Google OAuth client secret", ""],
     ["billing.free_plan_key", "free", "billing", "Free plan key", "Plan applied to users without a paid subscription."],
