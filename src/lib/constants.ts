@@ -19,6 +19,7 @@ export const ADMIN_AREAS = [
   { key: "admin.assignments", name: "Assignments" },
   { key: "admin.plans", name: "Plans & access control" },
   { key: "admin.payments", name: "Payment gateways" },
+  { key: "admin.transactions", name: "Transactions" },
   { key: "admin.ai", name: "AI providers" },
   { key: "admin.pipelines", name: "AI pipelines" },
   { key: "admin.content", name: "Content & agreements" },
