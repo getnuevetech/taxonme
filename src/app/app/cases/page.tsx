@@ -2,6 +2,7 @@ import Link from "next/link";
 import { db } from "@/lib/db";
 import { requireUser } from "@/lib/auth";
 import { PageHeader, Card, CardBody, ButtonLink, Badge, EmptyState, ProgressBar } from "@/components/ui";
+import { formatCaseNumber } from "@/lib/case-number";
 
 export const metadata = { title: "My cases" };
 
@@ -33,7 +34,10 @@ export default async function CasesPage() {
               <Card className="transition hover:border-indigo-300">
                 <CardBody>
                   <div className="flex flex-wrap items-center justify-between gap-2">
-                    <p className="font-semibold text-slate-900">{c.title}</p>
+                    <p className="font-semibold text-slate-900">
+                      <span className="mr-2 font-mono text-xs text-indigo-600">{formatCaseNumber(c.number)}</span>
+                      {c.title}
+                    </p>
                     <Badge color={c.status === "analyzed" ? "green" : c.status === "consultant_recommended" ? "amber" : "slate"}>
                       {c.status.replace(/_/g, " ")}
                     </Badge>

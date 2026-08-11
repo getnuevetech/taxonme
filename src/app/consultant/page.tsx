@@ -13,6 +13,9 @@ export default async function ConsultantDashboard({
 }) {
   const { submitted } = await searchParams;
   const user = await requireUser();
+  const { consultantSubscriptionsEnabled, hasActiveConsultantSubscription } = await import("@/lib/payments");
+  const subsEnabled = await consultantSubscriptionsEnabled();
+  const needsSubscription = subsEnabled && !(await hasActiveConsultantSubscription(user.id));
   const profile = await db.consultantProfile.findUnique({ where: { userId: user.id } });
   const assignments = await db.consultantAssignment.findMany({
     where: { consultantId: user.id, status: { notIn: ["revoked", "declined"] } },
@@ -32,6 +35,18 @@ export default async function ConsultantDashboard({
         <div className="mb-6 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
           Application received. {profile?.status === "approved" ? "You're approved and ready to accept clients." : "Our team reviews applications manually — we'll notify you."}
         </div>
+      )}
+
+      {needsSubscription && (
+        <Card className="mb-6 border-amber-300">
+          <CardBody className="flex items-center justify-between gap-4">
+            <div>
+              <p className="font-semibold text-slate-900">Partner subscription required</p>
+              <p className="text-sm text-slate-500">An active partner plan is required to accept new client assignments.</p>
+            </div>
+            <ButtonLink href="/consultant/billing">See partner plans →</ButtonLink>
+          </CardBody>
+        </Card>
       )}
 
       {!profile && (
@@ -105,11 +120,15 @@ export default async function ConsultantDashboard({
                       covering confidentiality and handling of the client&apos;s sensitive materials.
                     </p>
                     <div className="mt-3 flex gap-2">
-                      <form action={consultantRespondAssignmentAction.bind(null, a.id, true)}>
-                        <button className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700">
-                          Accept assignment
-                        </button>
-                      </form>
+                      {needsSubscription ? (
+                        <ButtonLink href="/consultant/billing?required=1">Subscribe to accept clients →</ButtonLink>
+                      ) : (
+                        <form action={consultantRespondAssignmentAction.bind(null, a.id, true)}>
+                          <button className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700">
+                            Accept assignment
+                          </button>
+                        </form>
+                      )}
                       <form action={consultantRespondAssignmentAction.bind(null, a.id, false)}>
                         <button className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm text-slate-600 hover:bg-slate-50">
                           Decline

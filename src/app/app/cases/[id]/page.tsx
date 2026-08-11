@@ -7,6 +7,7 @@ import { FEATURE_KEYS } from "@/lib/constants";
 import { PageHeader, Card, CardBody, StateMark, ConfidenceBadge, ProgressBar, Money, Badge, ButtonLink } from "@/components/ui";
 import { reanalyzeCaseAction, completePathStepAction, checkCaseProgressAction } from "@/actions/case";
 import { isVerifiable, VERIFIABLE_ACTIONS } from "@/lib/case-progress";
+import { formatCaseNumber } from "@/lib/case-number";
 import { CaseUpload } from "@/components/case-upload";
 
 export default async function CaseDetailPage({ params }: { params: Promise<{ id: string }> }) {
@@ -36,7 +37,7 @@ export default async function CaseDetailPage({ params }: { params: Promise<{ id:
     <div>
       <PageHeader
         title={c.title}
-        subtitle={`Opened ${c.createdAt.toLocaleDateString("en-US")} · ${c.issues.length} issue${c.issues.length === 1 ? "" : "s"} identified`}
+        subtitle={`Case ${formatCaseNumber(c.number)} · Opened ${c.createdAt.toLocaleDateString("en-US")} · ${c.issues.length} issue${c.issues.length === 1 ? "" : "s"} identified`}
         actions={
           <form action={reanalyzeCaseAction.bind(null, c.id)}>
             <button className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">

@@ -52,30 +52,13 @@ export async function POST(request: Request) {
         where: { gateway: "stripe", gatewayRef: session.id },
         data: { status: "succeeded" },
       });
-      // Replace any existing subscription with the paid plan.
-      await db.subscription.updateMany({
-        where: { userId, status: { in: ["active", "trialing"] } },
-        data: { status: "canceled", canceledAt: new Date() },
-      });
-      const periodEnd = new Date();
-      periodEnd.setMonth(periodEnd.getMonth() + (interval === "yearly" ? 12 : 1));
-      await db.subscription.create({
-        data: {
-          userId,
-          planId,
-          gateway: "stripe",
-          gatewayRef: String(session.subscription ?? session.id),
-          currentPeriodEnd: periodEnd,
-        },
-      });
-      await db.notification.create({
-        data: {
-          userId,
-          kind: "billing",
-          title: "Payment confirmed — your plan is active",
-          body: "Thanks! Your subscription features are unlocked.",
-          link: "/app/billing",
-        },
+      const { activateSubscription } = await import("@/lib/payments");
+      await activateSubscription({
+        userId,
+        planId,
+        interval: interval === "yearly" ? "yearly" : "monthly",
+        gateway: "stripe",
+        gatewayRef: String(session.subscription ?? session.id),
       });
     }
   }

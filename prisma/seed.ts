@@ -25,6 +25,7 @@ async function seedSettings() {
     ["consultants.auto_approve_min_years", "3", "consultants", "Auto-approve minimum years", "Minimum years of experience for automated approval."],
     ["consultants.auto_criteria", '["credential","ptin","proof","min_years","attestation"]', "consultants", "Auto-approval required criteria", "JSON array of criteria keys required for automated approval (managed on the CPA auto-approval page)."],
     ["consultants.auto_assign_enabled", "false", "consultants", "AI auto-assign consultants", "Automatically match flagged cases to the best-fitting consultant (managed on the Assignments page)."],
+    ["consultants.subscriptions_enabled", "false", "consultants", "Consultant subscriptions", "Require consultants to hold an active partner plan to accept clients (toggle on the Plans page)."],
     ["users.deleted_retention_days", "90", "users", "Deleted account retention (days)", "How long deleted accounts stay recoverable before being expunged permanently."],
     ["tickets.sla_first_response_hours", "24", "tickets", "Ticket first-response SLA (hours)", "Open tickets without a staff reply within this window are flagged SLA overdue."],
     ["tickets.inbound_email_secret", "", "tickets", "Inbound email webhook secret", "Set to a long random value to enable email-to-ticket at /api/inbound-email?secret=<value>. Empty disables it."],
@@ -182,6 +183,21 @@ async function seedPlansAndFeatures() {
       },
     },
   ];
+
+  // Partner plan for CPA/consultants (used when consultant subscriptions are enabled).
+  await db.subscriptionPlan.upsert({
+    where: { key: "partner" },
+    update: {},
+    create: {
+      key: "partner",
+      name: "Partner",
+      audience: "consultant",
+      description: "For CPA/EA partners: receive AI-matched client assignments and manage them in your workspace.",
+      priceMonthlyCents: 4900,
+      priceYearlyCents: 49900,
+      sortOrder: 10,
+    },
+  });
 
   for (const p of plans) {
     const plan = await db.subscriptionPlan.upsert({

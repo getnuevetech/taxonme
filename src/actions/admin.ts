@@ -115,6 +115,7 @@ export async function savePlanAction(_prev: ActionState, formData: FormData): Pr
   const data = {
     key: String(formData.get("key") ?? "").trim().toLowerCase(),
     name: String(formData.get("name") ?? "").trim(),
+    audience: formData.get("audience") === "consultant" ? "consultant" : "customer",
     description: String(formData.get("description") ?? ""),
     priceMonthlyCents: Math.round(Number(formData.get("priceMonthly") ?? 0) * 100) || 0,
     priceYearlyCents: Math.round(Number(formData.get("priceYearly") ?? 0) * 100) || 0,

@@ -2,6 +2,7 @@ import Link from "next/link";
 import { db } from "@/lib/db";
 import { guardAdminPage } from "@/lib/admin-guard";
 import { PageHeader, Badge } from "@/components/ui";
+import { formatCaseNumber } from "@/lib/case-number";
 
 export const metadata = { title: "Cases" };
 
@@ -53,6 +54,7 @@ export default async function AdminCasesPage() {
                     <Link href={`/admin/cases/${c.id}`} className="font-medium text-indigo-600 underline">
                       {c.title.slice(0, 60)}
                     </Link>
+                    <p className="font-mono text-xs text-slate-400">{formatCaseNumber(c.number)}</p>
                   </td>
                   <td className="px-4 py-3 text-slate-600">
                     {c.user ? `${c.user.firstName} ${c.user.lastName}`.trim() || c.user.email : <Badge>guest</Badge>}

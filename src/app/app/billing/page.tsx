@@ -14,10 +14,13 @@ export default async function BillingPage({
 }) {
   const { subscribed, pending } = await searchParams;
   const user = await requireUser();
+  // Confirm any in-flight Stripe checkout directly with Stripe — no webhook required.
+  const { reconcilePendingStripeTransactions } = await import("@/lib/payments");
+  const justActivated = await reconcilePendingStripeTransactions(user.id);
   const [currentPlan, plans, subscription, transactions, activeGateway] = await Promise.all([
     getActivePlan(user.id),
     db.subscriptionPlan.findMany({
-      where: { isActive: true },
+      where: { isActive: true, audience: "customer" },
       orderBy: { sortOrder: "asc" },
       include: { features: { where: { enabled: true }, include: { feature: true } } },
     }),
@@ -33,12 +36,12 @@ export default async function BillingPage({
   return (
     <div>
       <PageHeader title="Plan & billing" subtitle="Upgrade or downgrade anytime. Access changes immediately." />
-      {subscribed && (
+      {(subscribed || justActivated) && (
         <div className="mb-6 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
           Your plan is active. Enjoy your new features!
         </div>
       )}
-      {pending && (
+      {pending && !justActivated && (
         <div className="mb-6 rounded-xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-800">
           Payment received — your plan activates as soon as the payment processor confirms it (usually within a
           minute). Refresh this page shortly.

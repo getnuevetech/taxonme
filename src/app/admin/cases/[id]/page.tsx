@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import { db } from "@/lib/db";
 import { guardAdminPage } from "@/lib/admin-guard";
 import { PageHeader, Card, CardBody, Badge, StateMark, ProgressBar, Money } from "@/components/ui";
+import { formatCaseNumber } from "@/lib/case-number";
 
 export default async function AdminCaseDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -29,7 +30,7 @@ export default async function AdminCaseDetailPage({ params }: { params: Promise<
     <div>
       <PageHeader
         title={c.title}
-        subtitle={`${c.user ? `${c.user.firstName} ${c.user.lastName} · ${c.user.email}` : "Guest intake (unclaimed)"} · created ${c.createdAt.toLocaleString("en-US")}`}
+        subtitle={`Case ${formatCaseNumber(c.number)} · ${c.user ? `${c.user.firstName} ${c.user.lastName} · ${c.user.email}` : "Guest intake (unclaimed)"} · created ${c.createdAt.toLocaleString("en-US")}`}
       />
 
       <div className="mb-6 flex flex-wrap items-center gap-2">

@@ -14,12 +14,46 @@ export async function subscribeAction(_prev: ActionState, formData: FormData): P
   const plan = await db.subscriptionPlan.findUnique({ where: { id: planId } });
   if (!plan || !plan.isActive) return { error: "Plan not available." };
 
+  // Plans are audience-specific: customers can't buy consultant plans and vice versa.
+  const expectedAudience = user.role === "consultant" ? "consultant" : "customer";
+  if (plan.audience !== expectedAudience) return { error: "This plan is not available for your account type." };
+
+  // Settle any in-flight checkout first, so the duplicate check sees the truth.
+  const { reconcilePendingStripeTransactions } = await import("@/lib/payments");
+  await reconcilePendingStripeTransactions(user.id);
+
+  // No duplicate subscriptions: the same active plan can't be purchased again.
+  // Switching to a different plan (upgrade/downgrade) is allowed.
+  const currentSub = await db.subscription.findFirst({
+    where: {
+      userId: user.id,
+      status: { in: ["active", "trialing"] },
+      OR: [{ currentPeriodEnd: null }, { currentPeriodEnd: { gte: new Date() } }],
+    },
+    orderBy: { createdAt: "desc" },
+  });
+  if (currentSub?.planId === plan.id) {
+    return { error: `You're already subscribed to the ${plan.name} plan. Pick a different plan to upgrade or downgrade.` };
+  }
+  const inFlight = await db.paymentTransaction.findFirst({
+    where: {
+      userId: user.id,
+      planId: plan.id,
+      status: "pending",
+      createdAt: { gte: new Date(Date.now() - 30 * 60000) },
+    },
+  });
+  if (inFlight) {
+    return { error: "Your previous payment for this plan is still processing. Give it a minute, then refresh this page — if it doesn't confirm, the checkout expires automatically and you can try again." };
+  }
+
   const gateway = await db.paymentGatewayConfig.findFirst({
     where: { isActive: true },
     orderBy: [{ isDefault: "desc" }],
   });
   const amountCents = interval === "yearly" ? plan.priceYearlyCents : plan.priceMonthlyCents;
 
+  const billingPath = user.role === "consultant" ? "/consultant/billing" : "/app/billing";
   if (!gateway || gateway.kind === "manual" || amountCents === 0) {
     // Manual/dev gateway or free plan: activate immediately.
     await db.subscription.updateMany({
@@ -47,7 +81,7 @@ export async function subscribeAction(_prev: ActionState, formData: FormData): P
         },
       });
     }
-    redirect("/app/billing?subscribed=1");
+    redirect(`${billingPath}?subscribed=1`);
   }
 
   if (gateway.kind === "stripe") {
@@ -60,8 +94,8 @@ export async function subscribeAction(_prev: ActionState, formData: FormData): P
       "line_items[0][price_data][unit_amount]": String(amountCents),
       "line_items[0][price_data][recurring][interval]": interval === "yearly" ? "year" : "month",
       "line_items[0][price_data][product_data][name]": plan.name,
-      success_url: `${cfg.appUrl || ""}/app/billing?pending=1`,
-      cancel_url: `${cfg.appUrl || ""}/app/billing?canceled=1`,
+      success_url: `${cfg.appUrl || ""}${billingPath}?pending=1`,
+      cancel_url: `${cfg.appUrl || ""}${billingPath}?canceled=1`,
       client_reference_id: user.id,
       customer_email: user.email,
       // The webhook uses this metadata to activate the right plan after payment.
@@ -102,5 +136,5 @@ export async function cancelSubscriptionAction() {
     where: { userId: user.id, status: { in: ["active", "trialing"] } },
     data: { status: "canceled", canceledAt: new Date() },
   });
-  redirect("/app/billing?canceled=1");
+  redirect(user.role === "consultant" ? "/consultant/billing?canceled=1" : "/app/billing?canceled=1");
 }

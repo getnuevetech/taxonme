@@ -154,6 +154,13 @@ export async function consultantRespondAssignmentAction(assignmentId: string, ac
   const user = await requireUser();
   const a = await db.consultantAssignment.findUnique({ where: { id: assignmentId } });
   if (!a || a.consultantId !== user.id) return;
+  if (accept) {
+    // When partner subscriptions are enabled, an active plan is required to take clients.
+    const { consultantSubscriptionsEnabled, hasActiveConsultantSubscription } = await import("@/lib/payments");
+    if ((await consultantSubscriptionsEnabled()) && !(await hasActiveConsultantSubscription(user.id))) {
+      redirect("/consultant/billing?required=1");
+    }
+  }
   if (!accept) {
     await db.consultantAssignment.update({ where: { id: assignmentId }, data: { status: "declined" } });
   } else {

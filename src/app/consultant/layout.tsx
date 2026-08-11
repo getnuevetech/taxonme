@@ -22,6 +22,7 @@ export default async function ConsultantLayout({ children }: { children: React.R
             <Link href="/consultant" className="text-slate-600 hover:text-slate-900">Clients</Link>
             <Link href="/consultant/onboarding" className="text-slate-600 hover:text-slate-900">My credentials</Link>
             <Link href="/consultant/experience" className="text-slate-600 hover:text-slate-900">Experience</Link>
+            <Link href="/consultant/billing" className="text-slate-600 hover:text-slate-900">Billing</Link>
             <form action={logoutAction}>
               <button className="font-medium text-slate-500 hover:text-slate-900">Sign out</button>
             </form>

@@ -6,7 +6,7 @@ export const metadata = { title: "Pricing" };
 
 export default async function PricingPage() {
   const plans = await db.subscriptionPlan.findMany({
-    where: { isActive: true },
+    where: { isActive: true, audience: "customer" },
     orderBy: { sortOrder: "asc" },
     include: { features: { where: { enabled: true }, include: { feature: true } } },
   });

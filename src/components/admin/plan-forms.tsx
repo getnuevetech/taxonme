@@ -1,13 +1,14 @@
 "use client";
 
 import { ActionForm, SubmitButton } from "../action-form";
-import { savePlanAction, saveFeatureMatrixAction } from "@/actions/admin";
+import { savePlanAction, saveFeatureMatrixAction, saveSettingsAction } from "@/actions/admin";
 import { Field, inputClass } from "../ui";
 
 type Plan = {
   id: string;
   key: string;
   name: string;
+  audience: string;
   description: string;
   priceMonthly: number;
   priceYearly: number;
@@ -25,6 +26,12 @@ export function PlanForm({ plan }: { plan: Plan }) {
           <input name="key" defaultValue={plan?.key} required className={inputClass} />
         </Field>
         <Field label="Name"><input name="name" defaultValue={plan?.name} required className={inputClass} /></Field>
+        <Field label="Audience" hint="Who can subscribe to this plan.">
+          <select name="audience" defaultValue={plan?.audience ?? "customer"} className={inputClass}>
+            <option value="customer">Customers</option>
+            <option value="consultant">CPA / Consultants</option>
+          </select>
+        </Field>
         <Field label="Badge" hint="e.g. 'Most popular' (optional)"><input name="badge" defaultValue={plan?.badge} className={inputClass} /></Field>
         <Field label="Price / month (USD)"><input name="priceMonthly" type="number" step="0.01" defaultValue={plan?.priceMonthly ?? 0} className={inputClass} /></Field>
         <Field label="Price / year (USD)"><input name="priceYearly" type="number" step="0.01" defaultValue={plan?.priceYearly ?? 0} className={inputClass} /></Field>
@@ -39,6 +46,27 @@ export function PlanForm({ plan }: { plan: Plan }) {
           Active (visible on pricing page)
         </label>
         <SubmitButton>{plan ? "Save plan" : "Add plan"}</SubmitButton>
+      </div>
+    </ActionForm>
+  );
+}
+
+export function ConsultantSubsToggle({ enabled }: { enabled: boolean }) {
+  return (
+    <ActionForm action={saveSettingsAction} successMessage="Consultant subscription setting saved.">
+      <div className="flex items-center gap-3">
+        <input type="hidden" name="setting:consultants.subscriptions_enabled" value="false" />
+        <label className="flex items-center gap-2 text-sm font-medium text-slate-700">
+          <input
+            type="checkbox"
+            name="setting:consultants.subscriptions_enabled"
+            value="true"
+            defaultChecked={enabled}
+            className="h-5 w-5 rounded border-slate-300 text-indigo-600"
+          />
+          Require a partner subscription for consultants to accept clients
+        </label>
+        <SubmitButton>Save</SubmitButton>
       </div>
     </ActionForm>
   );

@@ -4,6 +4,7 @@ import { requireUser } from "@/lib/auth";
 import { getActivePlan } from "@/lib/access";
 import { PageHeader, Card, CardBody, Stat, ButtonLink, StateMark, ProgressBar, Money, EmptyState, Badge } from "@/components/ui";
 import { markNotificationReadAction } from "@/actions/user";
+import { formatCaseNumber } from "@/lib/case-number";
 
 export default async function DashboardPage() {
   const user = await requireUser();
@@ -86,7 +87,7 @@ export default async function DashboardPage() {
                       <div className="min-w-0">
                         <p className="truncate font-medium text-slate-900">{c.title}</p>
                         <p className="text-xs text-slate-500">
-                          {c.issues.length} issue{c.issues.length === 1 ? "" : "s"} · readiness {c.readinessScore}%
+                          {formatCaseNumber(c.number)} · {c.issues.length} issue{c.issues.length === 1 ? "" : "s"} · readiness {c.readinessScore}%
                         </p>
                       </div>
                       <Badge color={c.status === "analyzed" ? "green" : c.status === "consultant_recommended" ? "amber" : "slate"}>

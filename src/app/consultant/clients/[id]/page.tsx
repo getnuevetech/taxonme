@@ -3,6 +3,7 @@ import Link from "next/link";
 import { db } from "@/lib/db";
 import { requireUser } from "@/lib/auth";
 import { PageHeader, Card, CardBody, Badge, StateMark, ProgressBar, EmptyState } from "@/components/ui";
+import { formatCaseNumber } from "@/lib/case-number";
 
 export default async function ClientWorkspacePage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -42,7 +43,10 @@ export default async function ClientWorkspacePage({ params }: { params: Promise<
                 <Card key={c.id}>
                   <CardBody>
                     <div className="flex items-center justify-between gap-2">
-                      <p className="font-semibold text-slate-900">{c.title}</p>
+                      <p className="font-semibold text-slate-900">
+                        <span className="mr-2 font-mono text-xs text-indigo-600">{formatCaseNumber(c.number)}</span>
+                        {c.title}
+                      </p>
                       <Badge>{c.status.replace(/_/g, " ")}</Badge>
                     </div>
                     <p className="mt-1 text-sm text-slate-500">Goal: {c.goal || "—"}</p>

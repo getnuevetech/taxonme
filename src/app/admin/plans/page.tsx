@@ -1,15 +1,17 @@
 import { db } from "@/lib/db";
 import { guardAdminPage } from "@/lib/admin-guard";
 import { PageHeader, Card, CardBody, Badge } from "@/components/ui";
-import { PlanForm, FeatureMatrix } from "@/components/admin/plan-forms";
+import { PlanForm, FeatureMatrix, ConsultantSubsToggle } from "@/components/admin/plan-forms";
+import { getBoolSetting } from "@/lib/settings";
 
 export const metadata = { title: "Plans & access control" };
 
 export default async function AdminPlansPage() {
   await guardAdminPage("admin.plans");
-  const [plans, features] = await Promise.all([
-    db.subscriptionPlan.findMany({ orderBy: { sortOrder: "asc" }, include: { features: true } }),
+  const [plans, features, consultantSubsEnabled] = await Promise.all([
+    db.subscriptionPlan.findMany({ orderBy: [{ audience: "asc" }, { sortOrder: "asc" }], include: { features: true } }),
     db.featureDef.findMany({ orderBy: [{ category: "asc" }, { sortOrder: "asc" }] }),
+    getBoolSetting("consultants.subscriptions_enabled", false),
   ]);
 
   return (
@@ -18,6 +20,17 @@ export default async function AdminPlansPage() {
         title="Plans & access control"
         subtitle="Every feature of the app is gated here by subscription level. Toggle what each plan can access."
       />
+
+      <Card className="mb-8">
+        <CardBody>
+          <h2 className="mb-2 text-sm font-semibold text-slate-900">Consultant / CPA subscriptions</h2>
+          <p className="mb-3 text-xs text-slate-500">
+            When enabled, consultants must hold an active partner plan (audience: CPA / Consultants) to accept new client
+            assignments. When disabled, consultants work without a subscription and partner plans are hidden.
+          </p>
+          <ConsultantSubsToggle enabled={consultantSubsEnabled} />
+        </CardBody>
+      </Card>
 
       <Card className="mb-8">
         <CardBody>
@@ -40,6 +53,9 @@ export default async function AdminPlansPage() {
               <div className="mb-3 flex items-center gap-2">
                 <h3 className="font-semibold text-slate-900">{p.name}</h3>
                 <Badge>{p.key}</Badge>
+                <Badge color={p.audience === "consultant" ? "amber" : "indigo"}>
+                  {p.audience === "consultant" ? "CPA / Consultants" : "Customers"}
+                </Badge>
                 {!p.isActive && <Badge color="red">inactive</Badge>}
               </div>
               <PlanForm
@@ -47,6 +63,7 @@ export default async function AdminPlansPage() {
                   id: p.id,
                   key: p.key,
                   name: p.name,
+                  audience: p.audience,
                   description: p.description,
                   priceMonthly: p.priceMonthlyCents / 100,
                   priceYearly: p.priceYearlyCents / 100,
