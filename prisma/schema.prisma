@@ -528,6 +528,7 @@ model ConsultantPastCase {
 
 model Ticket {
   id           String   @id @default(cuid())
+  number       Int      @unique @default(autoincrement()) // human-friendly ticket number (TKT-000001)
   userId       String
   subject      String
   category     String   @default("customer_service") // customer_service | tech_support

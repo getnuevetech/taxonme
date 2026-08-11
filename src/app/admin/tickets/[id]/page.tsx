@@ -4,6 +4,7 @@ import { guardAdminPage } from "@/lib/admin-guard";
 import { PageHeader, Card, CardBody, Badge } from "@/components/ui";
 import { TicketReplyForm } from "@/components/ticket-forms";
 import { AssignAgentForm } from "@/components/admin/ticket-admin-forms";
+import { formatTicketNumber } from "@/lib/ticket-number";
 import { setTicketStatusAction, setTicketCategoryAction, setTicketPriorityAction } from "@/actions/support";
 
 export default async function AdminTicketDetailPage({
@@ -43,7 +44,7 @@ export default async function AdminTicketDetailPage({
     <div className="max-w-3xl">
       <PageHeader
         title={ticket.subject}
-        subtitle={`#${ticket.id.slice(-6).toUpperCase()} · ${ticket.user.firstName} ${ticket.user.lastName} (${ticket.user.email}${ticket.user.phone ? ` · ${ticket.user.phone}` : ""}) · opened ${ticket.createdAt.toLocaleString("en-US")} · source: ${ticket.source}`}
+        subtitle={`${formatTicketNumber(ticket.number)} · ${ticket.user.firstName} ${ticket.user.lastName} (${ticket.user.email}${ticket.user.phone ? ` · ${ticket.user.phone}` : ""}) · opened ${ticket.createdAt.toLocaleString("en-US")} · source: ${ticket.source}`}
       />
 
       {created && (

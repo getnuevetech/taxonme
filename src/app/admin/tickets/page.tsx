@@ -4,6 +4,7 @@ import type { Prisma } from "@prisma/client";
 import { guardAdminPage } from "@/lib/admin-guard";
 import { PageHeader, Badge, Stat, Card, CardBody } from "@/components/ui";
 import { AdminCreateTicketForm } from "@/components/admin/ticket-admin-forms";
+import { formatTicketNumber } from "@/lib/ticket-number";
 
 export const metadata = { title: "Support tickets" };
 
@@ -18,7 +19,7 @@ export default async function AdminTicketsPage({
   if (f.status) where.status = f.status;
   if (f.category) where.category = f.category;
 
-  const [tickets, openCount, techCount, serviceCount, users, agents] = await Promise.all([
+  const [tickets, openCount, techCount, serviceCount, agents] = await Promise.all([
     db.ticket.findMany({
       where,
       orderBy: [{ status: "asc" }, { updatedAt: "desc" }],
@@ -32,11 +33,6 @@ export default async function AdminTicketsPage({
     db.ticket.count({ where: { status: { in: ["open", "in_progress"] } } }),
     db.ticket.count({ where: { category: "tech_support", status: { in: ["open", "in_progress"] } } }),
     db.ticket.count({ where: { category: "customer_service", status: { in: ["open", "in_progress"] } } }),
-    db.user.findMany({
-      where: { role: { in: ["user", "consultant"] }, status: "active" },
-      orderBy: { createdAt: "desc" },
-      select: { id: true, email: true, firstName: true, lastName: true, role: true },
-    }),
     db.user.findMany({
       where: { role: { in: ["admin", "super_admin"] }, status: "active" },
       orderBy: { createdAt: "asc" },
@@ -73,10 +69,6 @@ export default async function AdminTicketsPage({
             </summary>
             <div className="mt-4">
               <AdminCreateTicketForm
-                users={users.map((u) => ({
-                  id: u.id,
-                  label: `${`${u.firstName} ${u.lastName}`.trim() || u.email} · ${u.email} (${u.role === "consultant" ? "consultant" : "customer"})`,
-                }))}
                 agents={agents.map((a) => ({ id: a.id, label: `${a.firstName} ${a.lastName}`.trim() || a.email }))}
               />
             </div>
@@ -117,7 +109,7 @@ export default async function AdminTicketsPage({
                   <Link href={`/admin/tickets/${t.id}`} className="font-medium text-indigo-600 underline">
                     {t.subject.slice(0, 60)}
                   </Link>
-                  <p className="text-xs text-slate-400">#{t.id.slice(-6).toUpperCase()} · {t._count.messages} msg</p>
+                  <p className="text-xs text-slate-400">{formatTicketNumber(t.number)} · {t._count.messages} msg</p>
                 </td>
                 <td className="px-4 py-3 text-slate-600">{t.user.email}</td>
                 <td className="px-4 py-3">

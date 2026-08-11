@@ -4,6 +4,7 @@ import { requireUser } from "@/lib/auth";
 import { PageHeader, Card, CardBody, Badge } from "@/components/ui";
 import { TicketReplyForm } from "@/components/ticket-forms";
 import { closeOwnTicketAction } from "@/actions/support";
+import { formatTicketNumber } from "@/lib/ticket-number";
 
 export default async function TicketPage({
   params,
@@ -25,7 +26,7 @@ export default async function TicketPage({
     <div className="max-w-2xl">
       <PageHeader
         title={ticket.subject}
-        subtitle={`Ticket #${ticket.id.slice(-6).toUpperCase()} · ${ticket.category === "tech_support" ? "Tech support" : "Customer service"}`}
+        subtitle={`Ticket ${formatTicketNumber(ticket.number)} · ${ticket.category === "tech_support" ? "Tech support" : "Customer service"}`}
         actions={
           ticket.status !== "closed" ? (
             <form action={closeOwnTicketAction.bind(null, ticket.id)}>

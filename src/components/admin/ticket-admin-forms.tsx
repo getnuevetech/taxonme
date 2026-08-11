@@ -3,18 +3,16 @@
 import { ActionForm, SubmitButton } from "../action-form";
 import { adminCreateTicketAction, assignTicketAgentAction } from "@/actions/support";
 import { Field, inputClass } from "../ui";
+import { UserSearchPicker } from "./user-search-picker";
 
 type Option = { id: string; label: string };
 
-export function AdminCreateTicketForm({ users, agents }: { users: Option[]; agents: Option[] }) {
+export function AdminCreateTicketForm({ agents }: { agents: Option[] }) {
   return (
     <ActionForm action={adminCreateTicketAction}>
       <div className="grid gap-3 sm:grid-cols-2">
-        <Field label="On behalf of">
-          <select name="userId" required defaultValue="" className={inputClass}>
-            <option value="" disabled>Choose a customer or consultant…</option>
-            {users.map((u) => <option key={u.id} value={u.id}>{u.label}</option>)}
-          </select>
+        <Field label="On behalf of" hint="Type at least 2 characters of their name, email, or mobile.">
+          <UserSearchPicker name="userId" />
         </Field>
         <Field label="Queue">
           <select name="category" className={inputClass}>

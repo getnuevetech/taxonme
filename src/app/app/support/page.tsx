@@ -2,6 +2,7 @@ import Link from "next/link";
 import { db } from "@/lib/db";
 import { requireUser } from "@/lib/auth";
 import { PageHeader, Card, CardBody, Badge, EmptyState, ButtonLink } from "@/components/ui";
+import { formatTicketNumber } from "@/lib/ticket-number";
 
 export const metadata = { title: "Support tickets" };
 
@@ -37,7 +38,7 @@ export default async function SupportPage() {
                   <div>
                     <p className="font-medium text-slate-900">{t.subject}</p>
                     <p className="text-xs text-slate-500">
-                      #{t.id.slice(-6).toUpperCase()} · {t.category === "tech_support" ? "Tech support" : "Customer service"} ·{" "}
+                      {formatTicketNumber(t.number)} · {t.category === "tech_support" ? "Tech support" : "Customer service"} ·{" "}
                       {t._count.messages} message{t._count.messages === 1 ? "" : "s"} · updated {t.updatedAt.toLocaleDateString("en-US")}
                     </p>
                   </div>
