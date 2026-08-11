@@ -25,6 +25,7 @@ export default async function CaseDetailPage({ params }: { params: Promise<{ id:
   if (!c) notFound();
 
   const fullAccess = await hasFeature(user.id, FEATURE_KEYS.CASE_FULL_RESULTS);
+  const hasReportAccess = await hasFeature(user.id, FEATURE_KEYS.CASE_REPORT);
   const visibleIssues = fullAccess ? c.issues : c.issues.slice(0, 1);
   const verificationFlags = c.runs.filter((r) => r.consensus?.verificationRequired).length;
   // If no AI provider produced output, this analysis came from the rule-based engine.
@@ -39,11 +40,21 @@ export default async function CaseDetailPage({ params }: { params: Promise<{ id:
         title={c.title}
         subtitle={`Case ${formatCaseNumber(c.number)} · Opened ${c.createdAt.toLocaleDateString("en-US")} · ${c.issues.length} issue${c.issues.length === 1 ? "" : "s"} identified`}
         actions={
-          <form action={reanalyzeCaseAction.bind(null, c.id)}>
-            <button className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">
-              Re-run analysis
-            </button>
-          </form>
+          <div className="flex gap-2">
+            <a
+              href={`/api/cases/${c.id}/report`}
+              target="_blank"
+              className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+              title={hasReportAccess ? "View the full case report (print for PDF)" : "Included in higher plans"}
+            >
+              {hasReportAccess ? "Case report ↗" : "Case report 🔒"}
+            </a>
+            <form action={reanalyzeCaseAction.bind(null, c.id)}>
+              <button className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">
+                Re-run analysis
+              </button>
+            </form>
+          </div>
         }
       />
 

@@ -105,6 +105,14 @@ export async function subscribeAction(_prev: ActionState, formData: FormData): P
       await db.paymentTransaction.update({ where: { id: tx.id }, data: { status: "abandoned" } });
     }
 
+    // Create our transaction FIRST so its reference travels to Stripe — every
+    // Stripe object (session, subscription) carries our TXN number for tracing.
+    const tx = await db.paymentTransaction.create({
+      data: { userId: user.id, planId: plan.id, amountCents, gateway: "stripe", status: "pending" },
+    });
+    const { formatTransactionNumber } = await import("@/lib/ticket-number");
+    const txnRef = formatTransactionNumber(tx.number);
+
     const params = new URLSearchParams({
       mode: "subscription",
       "line_items[0][quantity]": "1",
@@ -116,11 +124,15 @@ export async function subscribeAction(_prev: ActionState, formData: FormData): P
       cancel_url: `${cfg.appUrl || ""}${billingPath}?canceled=1`,
       client_reference_id: user.id,
       customer_email: user.email,
-      // The webhook uses this metadata to activate the right plan after payment.
+      // The webhook uses this metadata to activate the right plan after payment;
+      // the transaction reference makes the payment traceable end to end.
       "metadata[planId]": plan.id,
       "metadata[interval]": interval,
+      "metadata[transactionRef]": txnRef,
+      "metadata[transactionId]": tx.id,
       "subscription_data[metadata][planId]": plan.id,
       "subscription_data[metadata][interval]": interval,
+      "subscription_data[metadata][transactionRef]": txnRef,
     });
     // Stripe proration: the unused value of the old plan becomes free days of
     // the new plan (billing starts after the credit period).
@@ -135,18 +147,12 @@ export async function subscribeAction(_prev: ActionState, formData: FormData): P
       },
       body: params.toString(),
     });
-    if (!res.ok) return { error: "Could not start checkout. Please try again or contact support." };
+    if (!res.ok) {
+      await db.paymentTransaction.update({ where: { id: tx.id }, data: { status: "failed" } });
+      return { error: "Could not start checkout. Please try again or contact support." };
+    }
     const session = await res.json();
-    await db.paymentTransaction.create({
-      data: {
-        userId: user.id,
-        planId: plan.id,
-        amountCents,
-        gateway: "stripe",
-        gatewayRef: session.id ?? "",
-        status: "pending",
-      },
-    });
+    await db.paymentTransaction.update({ where: { id: tx.id }, data: { gatewayRef: session.id ?? "" } });
     redirect(session.url);
   }
 

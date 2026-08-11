@@ -10,6 +10,8 @@ export const metadata = { title: "Payment gateways" };
 export default async function AdminPaymentsPage() {
   await guardAdminPage("admin.payments");
   const gateways = await db.paymentGatewayConfig.findMany({ orderBy: { updatedAt: "desc" } });
+  const { getSetting } = await import("@/lib/settings");
+  const appUrl = (await getSetting("app.url", "http://localhost:3000")).replace(/\/$/, "");
 
   return (
     <div>
@@ -22,6 +24,29 @@ export default async function AdminPaymentsPage() {
           </Link>
         }
       />
+      <Card className="mb-6 border-indigo-200">
+        <CardBody>
+          <h2 className="text-sm font-semibold text-slate-900">Stripe webhook endpoint</h2>
+          <p className="mt-1 text-xs text-slate-500">
+            In the Stripe dashboard → Developers → Webhooks, add this endpoint and subscribe to{" "}
+            <code className="rounded bg-slate-100 px-1">checkout.session.completed</code>,{" "}
+            <code className="rounded bg-slate-100 px-1">invoice.payment_failed</code>, and{" "}
+            <code className="rounded bg-slate-100 px-1">customer.subscription.deleted</code>. Put the signing secret in the
+            Stripe gateway config below as <code className="rounded bg-slate-100 px-1">webhookSecret</code>. Every checkout also
+            carries our TXN reference in Stripe metadata for end-to-end tracing. (Payments confirm even without the webhook —
+            the app reconciles with Stripe directly — but webhooks make it instant and cover renewals/cancellations.)
+          </p>
+          <p className="mt-2 select-all rounded-lg bg-slate-900 px-3 py-2 font-mono text-sm text-emerald-300">
+            {appUrl}/api/webhooks/stripe
+          </p>
+          {appUrl.includes("localhost") && (
+            <p className="mt-1 text-xs text-amber-600">
+              Note: your App URL is currently localhost — Stripe can&apos;t reach it. Set your public App URL in Settings once deployed.
+            </p>
+          )}
+        </CardBody>
+      </Card>
+
       <div className="space-y-6">
         {gateways.map((g) => (
           <Card key={g.id}>

@@ -5,6 +5,8 @@ import Link from "next/link";
 import { ActionForm, SubmitButton } from "./action-form";
 import { consultantOnboardingAction } from "@/actions/consultant";
 import { Field, inputClass } from "./ui";
+import { SearchSelect, MultiSearchSelect } from "./search-select";
+import { US_STATES } from "@/lib/us-states";
 import { CONSULTANT_SPECIALTIES } from "@/lib/constants";
 
 type Existing = {
@@ -56,7 +58,13 @@ export function ConsultantOnboardingForm({
             </Field>
             {credType === "cpa" && (
               <Field label="State of licensure" hint="The state board that issued your CPA license.">
-                <input name="licenseState" defaultValue={existing?.licenseState} required placeholder="e.g. CA" className={inputClass} />
+                <SearchSelect
+                  name="licenseState"
+                  required
+                  defaultValue={existing?.licenseState}
+                  placeholder="Search states…"
+                  options={US_STATES.map((s) => ({ value: s.code, label: `${s.name} (${s.code})` }))}
+                />
               </Field>
             )}
           </div>
@@ -100,8 +108,13 @@ export function ConsultantOnboardingForm({
           <Field label="Years of experience">
             <input name="yearsExperience" type="number" min={0} defaultValue={existing?.yearsExperience ?? 0} className={inputClass} />
           </Field>
-          <Field label="States served" hint="Comma-separated, e.g. CA, TX, NY — or 'All'">
-            <input name="statesServed" defaultValue={existing?.statesServed} className={inputClass} />
+          <Field label="States served" hint="Search and add every state you serve.">
+            <MultiSearchSelect
+              name="statesServed"
+              defaultValues={(existing?.statesServed ?? "").split(",").map((s) => s.trim()).filter(Boolean)}
+              placeholder="Search states…"
+              options={[{ value: "ALL", label: "All states (nationwide)" }, ...US_STATES.map((s) => ({ value: s.code, label: `${s.name} (${s.code})` }))]}
+            />
           </Field>
         </div>
 

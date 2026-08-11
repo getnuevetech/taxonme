@@ -3,6 +3,7 @@ import { db } from "@/lib/db";
 import { guardAdminPage } from "@/lib/admin-guard";
 import { PageHeader, Badge, Money, Stat } from "@/components/ui";
 import { inputClass } from "@/components/ui";
+import { formatTransactionNumber } from "@/lib/ticket-number";
 
 export const metadata = { title: "Transactions" };
 
@@ -33,10 +34,12 @@ export default async function AdminTransactionsPage({
 
   if (f.q?.trim()) {
     const q = f.q.trim();
+    const asNumber = Number(q.replace(/^TXN-?/i, ""));
     and.push({
       OR: [
         { id: { contains: q } },
         { gatewayRef: { contains: q } },
+        ...(Number.isInteger(asNumber) && asNumber > 0 ? [{ number: asNumber }] : []),
         { user: { email: { contains: q, mode: "insensitive" } } },
         { user: { firstName: { contains: q, mode: "insensitive" } } },
         { user: { lastName: { contains: q, mode: "insensitive" } } },
@@ -101,7 +104,7 @@ export default async function AdminTransactionsPage({
             <input
               name="q"
               defaultValue={f.q ?? ""}
-              placeholder="Email, name, phone, plan, transaction ID, gateway reference…"
+              placeholder="TXN number, email, name, phone, plan, gateway reference…"
               className={inputClass}
             />
           </label>
@@ -161,6 +164,7 @@ export default async function AdminTransactionsPage({
         <table className="w-full text-sm">
           <thead className="bg-slate-50 text-left text-xs font-medium uppercase tracking-wide text-slate-500">
             <tr>
+              <th className="px-4 py-3">Transaction</th>
               <th className="px-4 py-3">Date</th>
               <th className="px-4 py-3">Customer</th>
               <th className="px-4 py-3">Plan</th>
@@ -173,13 +177,14 @@ export default async function AdminTransactionsPage({
           <tbody className="divide-y divide-slate-100">
             {transactions.length === 0 && (
               <tr>
-                <td colSpan={7} className="px-4 py-8 text-center text-slate-400">
+                <td colSpan={8} className="px-4 py-8 text-center text-slate-400">
                   {hasFilters ? "No transactions match these filters." : "No transactions yet."}
                 </td>
               </tr>
             )}
             {transactions.map((t) => (
               <tr key={t.id} className="hover:bg-slate-50">
+                <td className="px-4 py-3 font-mono text-xs font-semibold text-indigo-700">{formatTransactionNumber(t.number)}</td>
                 <td className="px-4 py-3 text-slate-600">
                   <p>{t.createdAt.toLocaleDateString("en-US")}</p>
                   <p className="text-xs text-slate-400">{t.createdAt.toLocaleTimeString("en-US")}</p>

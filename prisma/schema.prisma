@@ -237,6 +237,7 @@ model Subscription {
 
 model PaymentTransaction {
   id          String            @id @default(cuid())
+  number      Int               @unique @default(autoincrement()) // shown as TXN-000123, sent to the gateway as a reference
   userId      String
   planId      String?
   amountCents Int

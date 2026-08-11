@@ -3,6 +3,7 @@
 import { ActionForm, SubmitButton } from "./action-form";
 import { saveExperiencesAction, addPastCaseAction } from "@/actions/consultant";
 import { Field, inputClass } from "./ui";
+import { SearchSelect } from "./search-select";
 import { CONSULTANT_SPECIALTIES } from "@/lib/constants";
 
 export function ExperienceForm({ experiences }: { experiences: string }) {
@@ -28,7 +29,16 @@ export function PastCaseForm() {
             ))}
           </select>
         </Field>
-        <Field label="Year (optional)"><input name="year" type="number" min={1990} max={2100} className={inputClass} /></Field>
+        <Field label="Year (optional)">
+          <SearchSelect
+            name="year"
+            placeholder="Search year…"
+            options={Array.from({ length: 40 }, (_, i) => {
+              const y = String(new Date().getFullYear() - i);
+              return { value: y, label: y };
+            })}
+          />
+        </Field>
         <Field label="Outcome (optional)"><input name="outcome" placeholder="e.g. Penalties abated in full" className={inputClass} /></Field>
       </div>
       <div className="mt-3">

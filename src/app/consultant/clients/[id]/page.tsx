@@ -47,7 +47,12 @@ export default async function ClientWorkspacePage({ params }: { params: Promise<
                         <span className="mr-2 font-mono text-xs text-indigo-600">{formatCaseNumber(c.number)}</span>
                         {c.title}
                       </p>
-                      <Badge>{c.status.replace(/_/g, " ")}</Badge>
+                      <span className="flex items-center gap-2">
+                        <a href={`/api/cases/${c.id}/report`} target="_blank" className="text-xs font-medium text-indigo-600 underline">
+                          Report ↗
+                        </a>
+                        <Badge>{c.status.replace(/_/g, " ")}</Badge>
+                      </span>
                     </div>
                     <p className="mt-1 text-sm text-slate-500">Goal: {c.goal || "—"}</p>
                     <div className="mt-3"><ProgressBar value={c.readinessScore} label="Readiness" /></div>

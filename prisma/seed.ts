@@ -114,6 +114,7 @@ async function seedPlansAndFeatures() {
     ["forms.wizard", "Simplified IRS form wizards", "forms", 11],
     ["consultant.referral", "CPA/EA referral service", "consultants", 12],
     ["guide.chatbot", "Personal case guide chatbot", "assistant", 13],
+    ["case.report", "Downloadable full case report (with document copies)", "analysis", 14],
   ];
   for (const [key, name, category, sortOrder] of features) {
     await db.featureDef.upsert({ where: { key }, update: {}, create: { key, name, category, sortOrder } });
@@ -183,6 +184,7 @@ async function seedPlansAndFeatures() {
         "forms.wizard": { enabled: true, limit: null },
         "consultant.referral": { enabled: true, limit: null },
         "guide.chatbot": { enabled: true, limit: null },
+        "case.report": { enabled: true, limit: null },
       },
     },
   ];
