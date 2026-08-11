@@ -26,15 +26,43 @@ export default async function FillFormPage({
   const data: Record<string, string> = JSON.parse(submission.dataJson || "{}");
 
   if (done || submission.status === "completed") {
+    const { getBoolSetting } = await import("@/lib/settings");
+    const { hasFeature } = await import("@/lib/access");
+    const { FEATURE_KEYS } = await import("@/lib/constants");
+    const paidDownloads = await getBoolSetting("forms.paid_downloads", true);
+    const canDownload = !paidDownloads || (await hasFeature(user.id, FEATURE_KEYS.FORMS_DOWNLOAD));
     return (
       <div className="max-w-3xl">
         <PageHeader
           title={`Form ${submission.template.formNumber} — complete`}
           subtitle="Here's your regenerated form, assembled from your answers. Review it, print it, and use it with your filing."
+          actions={
+            canDownload ? (
+              <a
+                href={`/api/forms/${submission.id}/download`}
+                className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700"
+              >
+                ⬇ Download completed form
+              </a>
+            ) : (
+              <Link
+                href="/app/billing?upgrade=forms-download"
+                className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700"
+              >
+                🔒 Unlock download
+              </Link>
+            )
+          }
         />
         <div className="mb-4 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
           Level complete — every question answered. Nicely done.
         </div>
+        {!canDownload && (
+          <div className="mb-4 rounded-xl border border-indigo-200 bg-indigo-50 px-4 py-3 text-sm text-indigo-800">
+            Your completed form is saved. Downloading a print-ready copy is included in higher plans —{" "}
+            <Link href="/app/billing?upgrade=forms-download" className="font-semibold underline">see plans</Link>.
+          </div>
+        )}
         <Card>
           <CardBody>
             <pre className="overflow-x-auto whitespace-pre-wrap font-mono text-xs leading-relaxed text-slate-800">

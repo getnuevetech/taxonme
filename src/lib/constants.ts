@@ -48,6 +48,7 @@ export const FEATURE_KEYS = {
   CONSULTANT_REFERRAL: "consultant.referral",
   GUIDE_CHATBOT: "guide.chatbot",
   CASE_REPORT: "case.report",
+  FORMS_DOWNLOAD: "forms.download",
 } as const;
 
 export const STAGE_KEYS = {

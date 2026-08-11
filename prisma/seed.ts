@@ -32,6 +32,7 @@ async function seedSettings() {
     ["tickets.auto_close_days", "7", "tickets", "Ticket auto-close (days)", "Tickets are closed automatically when the customer doesn't respond for this many days after a staff reply. 0 disables."],
     ["billing.proration_enabled", "true", "billing", "Proration on plan changes", "Credit the unused value of the current plan when a subscriber upgrades (toggle on the Plans page)."],
     ["billing.proration_downgrade_enabled", "false", "billing", "Proration on downgrades", "Also apply the credit when subscribers downgrade (toggle on the Plans page)."],
+    ["forms.paid_downloads", "true", "forms", "Paid form downloads", "Whether downloading completed IRS forms requires a plan with the forms.download feature (toggle on the IRS form templates page)."],
     ["mail.host", "", "mail", "SMTP host", "Leave empty to disable outbound email (reset links are then shown to admins for manual delivery)."],
     ["mail.port", "587", "mail", "SMTP port", ""],
     ["mail.username", "", "mail", "SMTP username", ""],
@@ -115,6 +116,7 @@ async function seedPlansAndFeatures() {
     ["consultant.referral", "CPA/EA referral service", "consultants", 12],
     ["guide.chatbot", "Personal case guide chatbot", "assistant", 13],
     ["case.report", "Downloadable full case report (with document copies)", "analysis", 14],
+    ["forms.download", "Downloadable completed IRS forms", "forms", 15],
   ];
   for (const [key, name, category, sortOrder] of features) {
     await db.featureDef.upsert({ where: { key }, update: {}, create: { key, name, category, sortOrder } });
@@ -160,6 +162,7 @@ async function seedPlansAndFeatures() {
         "vault.storage": { enabled: true, limit: null },
         "forms.wizard": { enabled: true, limit: null },
         "guide.chatbot": { enabled: true, limit: null },
+        "forms.download": { enabled: true, limit: null },
       },
     },
     {
@@ -185,6 +188,7 @@ async function seedPlansAndFeatures() {
         "consultant.referral": { enabled: true, limit: null },
         "guide.chatbot": { enabled: true, limit: null },
         "case.report": { enabled: true, limit: null },
+        "forms.download": { enabled: true, limit: null },
       },
     },
   ];
@@ -797,7 +801,422 @@ before submitting.`,
     },
   ];
 
-  for (const t of templates) {
+  const moreTemplates = [
+    {
+      formNumber: "4868",
+      title: "Extension of Time to File",
+      description: "Need more time? Get an automatic 6-month filing extension. 3 quick steps.",
+      category: "individual",
+      sortOrder: 3,
+      stepsJson: JSON.stringify([
+        {
+          id: "you",
+          title: "Who's filing?",
+          help: "Same details as on your tax return.",
+          fields: [
+            { key: "name", label: "Your name (and spouse's if filing jointly)", type: "text", required: true },
+            { key: "address", label: "Address", type: "text", required: true },
+            { key: "ssn", label: "Your Social Security number", type: "text", required: true },
+            { key: "spouse_ssn", label: "Spouse's SSN (if joint)", type: "text" },
+          ],
+        },
+        {
+          id: "estimate",
+          title: "Your best estimate",
+          help: "An extension gives you more time to FILE, not more time to PAY — estimate what you owe and pay what you can to limit interest.",
+          fields: [
+            { key: "tax_estimate", label: "Estimated total tax for the year", type: "money", required: true, hint: "Your best guess is fine." },
+            { key: "payments", label: "Total payments already made (withholding etc.)", type: "money", required: true },
+            { key: "paying_now", label: "Amount you're paying with this extension", type: "money", required: true, hint: "Can be $0, but paying reduces penalties." },
+          ],
+        },
+        {
+          id: "flags",
+          title: "Special situations",
+          help: "Most people answer No to both.",
+          fields: [
+            { key: "out_of_country", label: "Are you out of the country on the filing deadline?", type: "boolean" },
+            { key: "file_1040nr", label: "Will you file Form 1040-NR (nonresident)?", type: "boolean" },
+          ],
+        },
+      ]),
+      outputTemplate: `FORM 4868 — APPLICATION FOR AUTOMATIC EXTENSION OF TIME TO FILE
+================================================================
+
+PART I — IDENTIFICATION
+  1. Name(s):   {{name}}
+     Address:   {{address}}
+  2. SSN:       {{ssn}}
+  3. Spouse:    {{spouse_ssn}}
+
+PART II — INDIVIDUAL INCOME TAX
+  4. Estimate of total tax liability ........ $ {{tax_estimate}}
+  5. Total payments .......................... $ {{payments}}
+  6. Balance due (line 4 minus line 5)
+  7. Amount you are paying ................... $ {{paying_now}}
+  8. Out of the country:  {{out_of_country}}
+  9. Filing Form 1040-NR:  {{file_1040nr}}
+
+File by the regular due date of your return. This grants a
+6-month FILING extension — interest still applies to unpaid tax.
+Compare against the official IRS Form 4868 before submitting.`,
+    },
+    {
+      formNumber: "W-9",
+      title: "Request for Taxpayer Identification Number",
+      description: "The form clients ask freelancers and contractors for. 3 quick steps.",
+      category: "individual",
+      sortOrder: 4,
+      stepsJson: JSON.stringify([
+        {
+          id: "you",
+          title: "Who are you?",
+          help: "Line 1 must match the name on your tax return.",
+          fields: [
+            { key: "name", label: "Your name (as on your tax return)", type: "text", required: true },
+            { key: "business_name", label: "Business/disregarded entity name (if different)", type: "text" },
+            {
+              key: "tax_class", label: "Federal tax classification", type: "select", required: true,
+              options: [
+                { value: "Individual/sole proprietor", label: "Individual / sole proprietor (most freelancers)" },
+                { value: "Single-member LLC", label: "Single-member LLC" },
+                { value: "C Corporation", label: "C Corporation" },
+                { value: "S Corporation", label: "S Corporation" },
+                { value: "Partnership", label: "Partnership" },
+                { value: "Trust/estate", label: "Trust / estate" },
+              ],
+            },
+          ],
+        },
+        {
+          id: "address",
+          title: "Where should the 1099 go?",
+          help: "The payer uses this address for your tax documents.",
+          fields: [
+            { key: "address", label: "Street address", type: "text", required: true },
+            { key: "city_state_zip", label: "City, state, ZIP", type: "text", required: true },
+          ],
+        },
+        {
+          id: "tin",
+          title: "Your tax ID",
+          help: "SSN for individuals; EIN if you have a business entity.",
+          fields: [
+            { key: "tin", label: "SSN or EIN", type: "text", required: true, placeholder: "000-00-0000 or 00-0000000" },
+            { key: "backup_withholding", label: "Are you subject to backup withholding?", type: "boolean", hint: "Most people answer No — the IRS notifies you if you are." },
+          ],
+        },
+      ]),
+      outputTemplate: `FORM W-9 — REQUEST FOR TAXPAYER IDENTIFICATION NUMBER AND CERTIFICATION
+=======================================================================
+
+1. Name:                     {{name}}
+2. Business name:            {{business_name}}
+3. Federal tax classification: {{tax_class}}
+5. Address:                  {{address}}
+6. City, state, ZIP:         {{city_state_zip}}
+
+PART I — TAXPAYER IDENTIFICATION NUMBER
+  TIN (SSN or EIN):          {{tin}}
+
+PART II — CERTIFICATION
+  Subject to backup withholding: {{backup_withholding}}
+  Sign: ______________________________   Date: ____________
+
+Give this form to the person who requested it — do NOT send it to the IRS.
+Compare against the official IRS Form W-9 before submitting.`,
+    },
+    {
+      formNumber: "8822",
+      title: "Change of Address",
+      description: "Moved? Make sure IRS letters reach you — missing one can cost you. 3 quick steps.",
+      category: "individual",
+      sortOrder: 5,
+      stepsJson: JSON.stringify([
+        {
+          id: "who",
+          title: "Who moved?",
+          help: "Include your spouse if you file jointly.",
+          fields: [
+            { key: "name", label: "Your full name", type: "text", required: true },
+            { key: "ssn", label: "Your SSN", type: "text", required: true },
+            { key: "spouse_name", label: "Spouse's name (if joint)", type: "text" },
+            { key: "spouse_ssn", label: "Spouse's SSN (if joint)", type: "text" },
+          ],
+        },
+        {
+          id: "old",
+          title: "Your old address",
+          help: "The address the IRS currently has on file.",
+          fields: [
+            { key: "old_address", label: "Old street address", type: "text", required: true },
+            { key: "old_city_state_zip", label: "Old city, state, ZIP", type: "text", required: true },
+          ],
+        },
+        {
+          id: "new",
+          title: "Your new address",
+          help: "Where the IRS should send everything from now on.",
+          fields: [
+            { key: "new_address", label: "New street address", type: "text", required: true },
+            { key: "new_city_state_zip", label: "New city, state, ZIP", type: "text", required: true },
+            { key: "phone", label: "Daytime phone (optional)", type: "text" },
+          ],
+        },
+      ]),
+      outputTemplate: `FORM 8822 — CHANGE OF ADDRESS
+=============================
+
+PART I — INDIVIDUAL INCOME TAX RETURNS
+  1. This change affects: individual income tax returns (Forms 1040)
+
+  3a. Your name:        {{name}}
+  3b. Your SSN:         {{ssn}}
+  4a. Spouse's name:    {{spouse_name}}
+  4b. Spouse's SSN:     {{spouse_ssn}}
+
+  6a. Old address:      {{old_address}}
+                        {{old_city_state_zip}}
+  7.  New address:      {{new_address}}
+                        {{new_city_state_zip}}
+  Phone:                {{phone}}
+
+SIGNATURE
+  Sign: ______________________________   Date: ____________
+
+Mail to the IRS address for your state (see the official instructions).
+Compare against the official IRS Form 8822 before submitting.`,
+    },
+    {
+      formNumber: "2848",
+      title: "Power of Attorney (Representative Authorization)",
+      description: "Authorize your CPA or Enrolled Agent to deal with the IRS for you. 3 quick steps.",
+      category: "individual",
+      sortOrder: 6,
+      stepsJson: JSON.stringify([
+        {
+          id: "taxpayer",
+          title: "About you",
+          help: "You're the taxpayer granting the authorization.",
+          fields: [
+            { key: "name", label: "Your full name", type: "text", required: true },
+            { key: "address", label: "Address", type: "text", required: true },
+            { key: "ssn", label: "SSN", type: "text", required: true },
+            { key: "phone", label: "Phone", type: "text" },
+          ],
+        },
+        {
+          id: "rep",
+          title: "Your representative",
+          help: "Usually your CPA or Enrolled Agent — ask them for their CAF number and PTIN.",
+          fields: [
+            { key: "rep_name", label: "Representative's name", type: "text", required: true },
+            { key: "rep_address", label: "Representative's address", type: "text", required: true },
+            { key: "rep_caf", label: "CAF number (if they have one)", type: "text" },
+            { key: "rep_ptin", label: "PTIN", type: "text" },
+            { key: "rep_phone", label: "Representative's phone", type: "text" },
+          ],
+        },
+        {
+          id: "scope",
+          title: "What can they handle?",
+          help: "Be specific — the IRS honors exactly what's listed.",
+          fields: [
+            { key: "tax_matters", label: "Tax matter (e.g. Income, Form 1040)", type: "text", required: true, placeholder: "Income — Form 1040" },
+            { key: "years", label: "Year(s) or period(s)", type: "text", required: true, placeholder: "2022, 2023, 2024" },
+          ],
+        },
+      ]),
+      outputTemplate: `FORM 2848 — POWER OF ATTORNEY AND DECLARATION OF REPRESENTATIVE
+================================================================
+
+PART I — POWER OF ATTORNEY
+1. Taxpayer:
+   Name:     {{name}}
+   Address:  {{address}}
+   SSN:      {{ssn}}
+   Phone:    {{phone}}
+
+2. Representative:
+   Name:     {{rep_name}}
+   Address:  {{rep_address}}
+   CAF No.:  {{rep_caf}}
+   PTIN:     {{rep_ptin}}
+   Phone:    {{rep_phone}}
+
+3. Acts authorized:
+   Tax matter:        {{tax_matters}}
+   Years/periods:     {{years}}
+
+SIGNATURES
+  Taxpayer: ______________________  Date: ________
+  Representative signs Part II declaration.
+
+Compare against the official IRS Form 2848 before submitting.`,
+    },
+    {
+      formNumber: "SS-4",
+      title: "Application for EIN",
+      description: "Starting a business or side hustle? Get your federal Employer ID Number. 3 quick steps.",
+      category: "business",
+      sortOrder: 7,
+      stepsJson: JSON.stringify([
+        {
+          id: "entity",
+          title: "The business",
+          help: "The legal name is what's on your formation papers (or your own name for sole proprietors).",
+          fields: [
+            { key: "legal_name", label: "Legal name of entity (or your name)", type: "text", required: true },
+            { key: "trade_name", label: "Trade name / DBA (if different)", type: "text" },
+            { key: "responsible_name", label: "Responsible party (usually you)", type: "text", required: true },
+            { key: "responsible_ssn", label: "Responsible party's SSN/ITIN", type: "text", required: true },
+          ],
+        },
+        {
+          id: "address",
+          title: "Business address",
+          help: "Where the IRS should send EIN correspondence.",
+          fields: [
+            { key: "address", label: "Mailing address", type: "text", required: true },
+            { key: "city_state_zip", label: "City, state, ZIP", type: "text", required: true },
+            { key: "phone", label: "Phone", type: "text" },
+          ],
+        },
+        {
+          id: "type",
+          title: "Type & reason",
+          help: "Pick what matches your situation.",
+          fields: [
+            {
+              key: "entity_type", label: "Type of entity", type: "select", required: true,
+              options: [
+                { value: "Sole proprietor", label: "Sole proprietor" },
+                { value: "Single-member LLC", label: "LLC (just me)" },
+                { value: "Multi-member LLC", label: "LLC (with partners)" },
+                { value: "Partnership", label: "Partnership" },
+                { value: "Corporation", label: "Corporation" },
+              ],
+            },
+            {
+              key: "reason", label: "Reason for applying", type: "select", required: true,
+              options: [
+                { value: "Started new business", label: "Started a new business" },
+                { value: "Hired employees", label: "Hired (or will hire) employees" },
+                { value: "Banking purpose", label: "Opening a business bank account" },
+                { value: "Changed type of organization", label: "Changed business structure" },
+              ],
+            },
+            { key: "start_date", label: "Date business started (or will start)", type: "date", required: true },
+            { key: "employees", label: "Employees expected in the next 12 months", type: "number", hint: "0 is a fine answer." },
+          ],
+        },
+      ]),
+      outputTemplate: `FORM SS-4 — APPLICATION FOR EMPLOYER IDENTIFICATION NUMBER
+===========================================================
+
+1.  Legal name:            {{legal_name}}
+2.  Trade name / DBA:      {{trade_name}}
+3.  Responsible party:     {{responsible_name}}   SSN/ITIN: {{responsible_ssn}}
+4.  Mailing address:       {{address}}
+                           {{city_state_zip}}
+    Phone:                 {{phone}}
+9a. Type of entity:        {{entity_type}}
+10. Reason for applying:   {{reason}}
+11. Date business started: {{start_date}}
+13. Employees expected (next 12 months): {{employees}}
+
+SIGNATURE
+  Sign: ______________________________   Date: ____________
+
+Fastest option: apply online at irs.gov (EIN issued immediately).
+Compare against the official IRS Form SS-4 before submitting.`,
+    },
+    {
+      formNumber: "433-F",
+      title: "Collection Information Statement",
+      description: "The financial snapshot the IRS asks for when arranging payment on tax debt. 4 quick steps.",
+      category: "individual",
+      sortOrder: 8,
+      stepsJson: JSON.stringify([
+        {
+          id: "personal",
+          title: "About you",
+          help: "The IRS uses this to understand your household.",
+          fields: [
+            { key: "name", label: "Full name", type: "text", required: true },
+            { key: "ssn", label: "SSN", type: "text", required: true },
+            { key: "phone", label: "Phone", type: "text", required: true },
+            { key: "dependents", label: "Number of dependents you support", type: "number" },
+          ],
+        },
+        {
+          id: "income",
+          title: "Monthly income",
+          help: "Gross means before taxes are taken out.",
+          fields: [
+            { key: "employer", label: "Employer (or 'self-employed')", type: "text" },
+            { key: "monthly_gross", label: "Monthly gross wages", type: "money", required: true },
+            { key: "other_income", label: "Other monthly income (benefits, side work…)", type: "money" },
+          ],
+        },
+        {
+          id: "expenses",
+          title: "Monthly living expenses",
+          help: "Honest numbers help you get an affordable arrangement.",
+          fields: [
+            { key: "rent", label: "Rent / mortgage", type: "money", required: true },
+            { key: "utilities", label: "Utilities (power, water, phone, internet)", type: "money" },
+            { key: "food", label: "Food & household", type: "money" },
+            { key: "transportation", label: "Transportation (car payment, gas, transit)", type: "money" },
+            { key: "medical", label: "Health insurance & medical", type: "money" },
+            { key: "other_expenses", label: "Other necessary expenses", type: "money" },
+          ],
+        },
+        {
+          id: "assets",
+          title: "What you have",
+          help: "Rounded numbers are fine.",
+          fields: [
+            { key: "bank_balance", label: "Total in bank accounts", type: "money", required: true },
+            { key: "vehicles_value", label: "Vehicles — rough total value", type: "money" },
+            { key: "owe_irs", label: "Total you owe the IRS", type: "money", required: true },
+          ],
+        },
+      ]),
+      outputTemplate: `FORM 433-F — COLLECTION INFORMATION STATEMENT
+=============================================
+
+SECTION 1 — PERSONAL
+  Name: {{name}}    SSN: {{ssn}}    Phone: {{phone}}
+  Dependents: {{dependents}}
+
+SECTION 2 — EMPLOYMENT / INCOME (monthly)
+  Employer:            {{employer}}
+  Gross wages:         $ {{monthly_gross}}
+  Other income:        $ {{other_income}}
+
+SECTION 3 — MONTHLY NECESSARY LIVING EXPENSES
+  Rent/mortgage:       $ {{rent}}
+  Utilities:           $ {{utilities}}
+  Food/household:      $ {{food}}
+  Transportation:      $ {{transportation}}
+  Medical/insurance:   $ {{medical}}
+  Other:               $ {{other_expenses}}
+
+SECTION 4 — ACCOUNTS / ASSETS
+  Bank accounts total: $ {{bank_balance}}
+  Vehicles value:      $ {{vehicles_value}}
+  Total IRS balance:   $ {{owe_irs}}
+
+SIGNATURE
+  Sign: ______________________________   Date: ____________
+
+Used when requesting payment plans or hardship status on tax debt.
+Compare against the official IRS Form 433-F before submitting.`,
+    },
+  ];
+
+  for (const t of [...templates, ...moreTemplates]) {
     const exists = await db.irsFormTemplate.findFirst({ where: { formNumber: t.formNumber } });
     if (!exists) await db.irsFormTemplate.create({ data: { ...t, isPublished: true } });
   }
