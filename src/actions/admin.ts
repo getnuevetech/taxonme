@@ -234,16 +234,48 @@ export async function adminDeleteUserAction(userId: string) {
   revalidatePath("/admin/users");
 }
 
-// ---------- Admin roles (granular sub-admins) ----------
+// ---------- Role management (standalone) ----------
+
+export async function saveAdminRoleAction(_prev: ActionState, formData: FormData): Promise<ActionState> {
+  await requireAdminArea("admin.roles");
+  const id = String(formData.get("id") ?? "");
+  const name = String(formData.get("name") ?? "").trim();
+  const description = String(formData.get("description") ?? "");
+  const areas = formData.getAll("areas").map(String);
+  if (!name) return { error: "Role name is required." };
+  if (areas.length === 0) return { error: "Select at least one admin area for this role." };
+
+  const clash = await db.adminRole.findUnique({ where: { name } });
+  if (clash && clash.id !== id) return { error: "A role with this name already exists." };
+
+  const data = { name, description, areasJson: JSON.stringify(areas) };
+  if (id) await db.adminRole.update({ where: { id }, data });
+  else await db.adminRole.create({ data });
+  revalidatePath("/admin/roles");
+  revalidatePath("/admin/admins");
+  return { ok: true };
+}
+
+export async function deleteAdminRoleAction(id: string) {
+  await requireAdminArea("admin.roles");
+  // Users keep their account; they simply lose the role (and its areas).
+  await db.adminRole.delete({ where: { id } });
+  revalidatePath("/admin/roles");
+  revalidatePath("/admin/admins");
+}
+
+// ---------- Admin users ----------
 
 export async function createAdminAction(_prev: ActionState, formData: FormData): Promise<ActionState> {
   const actor = await requireAdminArea("admin.admins");
   if (actor.role !== "super_admin") return { error: "Only the super admin can create admin accounts." };
   const email = String(formData.get("email") ?? "").trim().toLowerCase();
   const password = String(formData.get("password") ?? "");
-  const areas = formData.getAll("areas").map(String);
+  const roleId = String(formData.get("roleId") ?? "");
   if (!email || password.length < 8) return { error: "Email and a password of 8+ characters are required." };
-  if (areas.length === 0) return { error: "Select at least one admin area." };
+  if (!roleId) return { error: "Assign a role to this admin. Create roles under Roles & permissions." };
+  const role = await db.adminRole.findUnique({ where: { id: roleId } });
+  if (!role) return { error: "That role no longer exists." };
   const existing = await db.user.findUnique({ where: { email } });
   if (existing) return { error: "A user with this email already exists." };
   const admin = await db.user.create({
@@ -253,20 +285,27 @@ export async function createAdminAction(_prev: ActionState, formData: FormData):
       lastName: String(formData.get("lastName") ?? ""),
       passwordHash: await hashPassword(password),
       role: "admin",
-      adminPermissions: { create: areas.map((featureKey) => ({ featureKey })) },
+      adminRoleId: role.id,
     },
   });
   revalidatePath("/admin/admins");
   return { ok: !!admin };
 }
 
-export async function updateAdminAreasAction(_prev: ActionState, formData: FormData): Promise<ActionState> {
+export async function assignAdminRoleAction(_prev: ActionState, formData: FormData): Promise<ActionState> {
   const actor = await requireAdminArea("admin.admins");
-  if (actor.role !== "super_admin") return { error: "Only the super admin can edit admin permissions." };
+  if (actor.role !== "super_admin") return { error: "Only the super admin can change an admin's role." };
   const userId = String(formData.get("userId") ?? "");
-  const areas = formData.getAll("areas").map(String);
+  const roleId = String(formData.get("roleId") ?? "") || null;
+  const target = await db.user.findUnique({ where: { id: userId } });
+  if (!target || target.role !== "admin") return { error: "Admin user not found." };
+  if (roleId) {
+    const role = await db.adminRole.findUnique({ where: { id: roleId } });
+    if (!role) return { error: "That role no longer exists." };
+  }
+  await db.user.update({ where: { id: userId }, data: { adminRoleId: roleId } });
+  // Clear legacy per-user permissions; the role is now the source of truth.
   await db.adminPermission.deleteMany({ where: { userId } });
-  await db.adminPermission.createMany({ data: areas.map((featureKey) => ({ userId, featureKey })) });
   revalidatePath("/admin/admins");
   return { ok: true };
 }

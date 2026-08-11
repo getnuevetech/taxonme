@@ -15,6 +15,7 @@ export const ADMIN_AREAS = [
   { key: "admin.cases", name: "Cases" },
   { key: "admin.users", name: "Customers" },
   { key: "admin.admins", name: "Admin users" },
+  { key: "admin.roles", name: "Roles & permissions" },
   { key: "admin.consultants", name: "CPA / Consultants" },
   { key: "admin.assignments", name: "Assignments" },
   { key: "admin.plans", name: "Plans & access control" },

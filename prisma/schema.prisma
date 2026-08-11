@@ -137,6 +137,8 @@ model User {
   emailVerifiedAt DateTime?
   createdAt       DateTime  @default(now())
   deletedAt       DateTime?
+  adminRoleId     String?
+  adminRole       AdminRole? @relation(fields: [adminRoleId], references: [id], onDelete: SetNull)
 
   adminPermissions    AdminPermission[]
   subscriptions       Subscription[]
@@ -162,6 +164,18 @@ model AdminPermission {
   user       User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([userId, featureKey])
+}
+
+// Standalone role management: a role bundles a set of admin areas and can be
+// assigned to any admin user. Roles are created/edited independently of users.
+model AdminRole {
+  id          String   @id @default(cuid())
+  name        String   @unique
+  description String   @default("")
+  areasJson   String   @default("[]") // JSON array of admin area keys
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  users       User[]
 }
 
 model ContentPage {

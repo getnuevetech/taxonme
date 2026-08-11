@@ -78,7 +78,7 @@ export const getCurrentUser = cache(async () => {
     if (!payload.sub) return null;
     const user = await db.user.findUnique({
       where: { id: payload.sub },
-      include: { adminPermissions: true, consultantProfile: true },
+      include: { adminPermissions: true, adminRole: true, consultantProfile: true },
     });
     if (!user || user.status !== "active") return null;
     return user;
@@ -102,6 +102,15 @@ export function isAdmin(user: { role: string }) {
 export function hasAdminArea(user: CurrentUser, areaKey: string) {
   if (user.role === ROLES.SUPER_ADMIN) return true;
   if (user.role !== ROLES.ADMIN) return false;
+  // Areas come from the assigned role; legacy per-user permissions still count.
+  if (user.adminRole) {
+    try {
+      const areas: string[] = JSON.parse(user.adminRole.areasJson || "[]");
+      if (areas.includes(areaKey)) return true;
+    } catch {
+      // fall through to per-user permissions
+    }
+  }
   return user.adminPermissions.some((p) => p.featureKey === areaKey);
 }
 

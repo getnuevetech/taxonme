@@ -10,6 +10,7 @@ const NAV: { area: string; href: string; label: string; section: string }[] = [
   { area: "admin.users", href: "/admin/users", label: "Customers", section: "People" },
   { area: "admin.consultants", href: "/admin/consultants", label: "CPA / Consultants", section: "People" },
   { area: "admin.admins", href: "/admin/admins", label: "Admin users", section: "People" },
+  { area: "admin.roles", href: "/admin/roles", label: "Roles & permissions", section: "People" },
   { area: "admin.assignments", href: "/admin/assignments", label: "Assignments", section: "People" },
   { area: "admin.ai", href: "/admin/ai-providers", label: "AI providers", section: "Intelligence" },
   { area: "admin.pipelines", href: "/admin/pipelines", label: "AI pipelines", section: "Intelligence" },

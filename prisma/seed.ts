@@ -51,6 +51,39 @@ async function seedAdmin() {
   console.log(`Super admin: ${email} / ${password}`);
 }
 
+async function seedAdminRoles() {
+  // Example roles the super admin can edit, delete, or extend.
+  const roles = [
+    {
+      name: "Operations",
+      description: "Day-to-day platform operations: customers, cases, consultants.",
+      areas: ["admin.dashboard", "admin.cases", "admin.users", "admin.consultants", "admin.assignments", "admin.notifications"],
+    },
+    {
+      name: "Finance",
+      description: "Billing: plans, payment gateways, and transactions.",
+      areas: ["admin.dashboard", "admin.plans", "admin.payments", "admin.transactions"],
+    },
+    {
+      name: "Content manager",
+      description: "Site content, agreements, form templates, and the IRS knowledge base.",
+      areas: ["admin.dashboard", "admin.content", "admin.forms", "admin.knowledge"],
+    },
+    {
+      name: "AI engineer",
+      description: "AI providers, pipelines, and the knowledge base.",
+      areas: ["admin.dashboard", "admin.ai", "admin.pipelines", "admin.knowledge", "admin.cases"],
+    },
+  ];
+  for (const r of roles) {
+    await db.adminRole.upsert({
+      where: { name: r.name },
+      update: {},
+      create: { name: r.name, description: r.description, areasJson: JSON.stringify(r.areas) },
+    });
+  }
+}
+
 async function seedPlansAndFeatures() {
   const features: [string, string, string, number][] = [
     ["notice.upload", "Upload & photograph IRS notices", "notices", 1],
@@ -681,6 +714,7 @@ before submitting.`,
 async function main() {
   await seedSettings();
   await seedAdmin();
+  await seedAdminRoles();
   await seedPlansAndFeatures();
   await seedGateway();
   await seedAiAndPipelines();
