@@ -2,7 +2,14 @@
 
 @theme inline {
   --font-sans: var(--font-geist-sans);
+  --font-serif: var(--font-playfair);
   --font-mono: var(--font-geist-mono);
+}
+
+/* Giant outlined wordmark used in the dark footer */
+.text-outline {
+  color: transparent;
+  -webkit-text-stroke: 1.5px rgba(148, 163, 184, 0.28);
 }
 
 :root {
