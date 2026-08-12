@@ -31,6 +31,18 @@ export function CommentComposer({ caseId, checkboxLabel }: { caseId: string; che
           {pending ? "Posting…" : "Post"}
         </button>
       </div>
+      <div className="mt-2 flex flex-wrap items-center gap-3">
+        <input
+          type="file"
+          name="files"
+          multiple
+          accept="image/*,.pdf,.doc,.docx,.txt,.csv,.png,.jpg,.jpeg,.heic,.webp"
+          className="text-xs text-slate-500 file:mr-2 file:rounded-lg file:border-0 file:bg-indigo-50 file:px-2.5 file:py-1.5 file:text-xs file:font-medium file:text-indigo-700"
+        />
+        <span className="text-[11px] text-slate-400">
+          Attached files join the case documents and are analyzed automatically.
+        </span>
+      </div>
       {checkboxLabel && (
         <label className="mt-2 flex items-start gap-2 text-xs text-slate-600">
           <input type="checkbox" name="hide" className="mt-0.5 h-4 w-4 rounded border-slate-300 text-amber-600" />

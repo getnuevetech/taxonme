@@ -37,6 +37,31 @@ export async function CaseComments({ caseId, viewer }: { caseId: string; viewer:
                   <span className="text-xs text-slate-400">{cm.createdAt.toLocaleString("en-US")}</span>
                 </div>
                 <p className="whitespace-pre-wrap text-sm leading-relaxed text-slate-700">{cm.body}</p>
+                {cm.attachments.length > 0 && (
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {cm.attachments.map((att) =>
+                      att.mimeType.startsWith("image/") ? (
+                        <a key={att.id} href={`/api/files/${att.id}`} target="_blank" title={att.fileName}>
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img
+                            src={`/api/files/${att.id}`}
+                            alt={att.fileName}
+                            className="h-24 w-24 rounded-lg object-cover ring-1 ring-slate-200 transition hover:ring-indigo-400"
+                          />
+                        </a>
+                      ) : (
+                        <a
+                          key={att.id}
+                          href={`/api/files/${att.id}`}
+                          target="_blank"
+                          className="flex items-center gap-1.5 rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1.5 text-xs font-medium text-indigo-700 hover:bg-indigo-50"
+                        >
+                          📎 {att.fileName}
+                        </a>
+                      ),
+                    )}
+                  </div>
+                )}
               </div>
             ))}
           </div>

@@ -98,24 +98,50 @@ export async function clarifyAnswerAction(_prev: ActionState, formData: FormData
   const user = await requireUser();
   const caseId = String(formData.get("caseId") ?? "");
   const answer = String(formData.get("answer") ?? "").trim();
+  const files = formData.getAll("files").filter((f): f is File => f instanceof File && f.size > 0);
   const c = await db.case.findUnique({ where: { id: caseId } });
   if (!c || c.userId !== user.id) return { error: "Case not found." };
-  if (!answer) return { error: "Type an answer first." };
+  if (!answer && files.length === 0) return { error: "Type an answer (or attach a file) first." };
+  for (const f of files) {
+    if (f.size > 20 * 1024 * 1024) return { error: `${f.name} is larger than 20 MB.` };
+  }
 
   const { nextClarifyQuestion, situationLine } = await import("@/lib/clarify");
   const q = await nextClarifyQuestion(caseId);
   if (!q) return { error: "All questions are already answered — the analysis is up to date." };
 
+  // Attached files go straight into the customer's vault as case documents,
+  // where the re-analysis below picks them up as evidence.
+  const attachedNames: string[] = [];
+  for (const file of files.slice(0, 10)) {
+    const { filePath, sizeBytes } = await saveUpload(file);
+    await db.document.create({
+      data: {
+        userId: user.id,
+        caseId,
+        fileName: file.name,
+        filePath,
+        mimeType: file.type || "application/octet-stream",
+        sizeBytes,
+        docKind: "other",
+      },
+    });
+    attachedNames.push(file.name);
+  }
+  const answerWithFiles = [answer, attachedNames.length ? `(attached: ${attachedNames.join(", ")})` : ""]
+    .filter(Boolean)
+    .join(" ");
+
   await db.caseClarifyMessage.create({
     data: { caseId, role: "assistant", questionKey: q.key, content: q.text },
   });
   await db.caseClarifyMessage.create({
-    data: { caseId, role: "user", questionKey: q.key, content: answer.slice(0, 2000) },
+    data: { caseId, role: "user", questionKey: q.key, content: answerWithFiles.slice(0, 2000) },
   });
   await db.case.update({
     where: { id: caseId },
     data: {
-      situation: `${c.situation}\n\n${situationLine(q.key, q.text, answer)}`,
+      situation: `${c.situation}\n\n${situationLine(q.key, q.text, answerWithFiles)}`,
       status: "analyzing",
     },
   });

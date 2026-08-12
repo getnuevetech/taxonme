@@ -423,6 +423,7 @@ model CaseComment {
   authorRole String // customer | consultant | admin
   body       String
   visibility String   @default("all") // all | hidden_from_customer | private
+  attachmentsJson String @default("[]") // Document ids attached to this comment
   createdAt  DateTime @default(now())
   case       Case     @relation(fields: [caseId], references: [id], onDelete: Cascade)
 }

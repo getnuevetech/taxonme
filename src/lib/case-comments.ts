@@ -20,8 +20,28 @@ export async function getVisibleComments(caseId: string, role: ViewerRole, userI
     where: { id: { in: Array.from(new Set(comments.map((cm) => cm.authorId))) } },
     select: { id: true, firstName: true, lastName: true, email: true },
   });
+  // Resolve comment attachments (documents in the customer's vault).
+  const attachmentIds = comments.flatMap((cm) => {
+    try {
+      const parsed = JSON.parse(cm.attachmentsJson || "[]");
+      return Array.isArray(parsed) ? parsed.map(String) : [];
+    } catch {
+      return [];
+    }
+  });
+  const docs = attachmentIds.length
+    ? await db.document.findMany({
+        where: { id: { in: attachmentIds }, deletedAt: null },
+        select: { id: true, fileName: true, mimeType: true },
+      })
+    : [];
   return comments.map((cm) => {
     const a = authors.find((x) => x.id === cm.authorId);
+    let ids: string[] = [];
+    try {
+      const parsed = JSON.parse(cm.attachmentsJson || "[]");
+      if (Array.isArray(parsed)) ids = parsed.map(String);
+    } catch { /* legacy comments */ }
     return {
       id: cm.id,
       body: cm.body,
@@ -30,6 +50,9 @@ export async function getVisibleComments(caseId: string, role: ViewerRole, userI
       authorName: a ? `${a.firstName} ${a.lastName}`.trim() || a.email : "(deleted account)",
       isOwn: cm.authorId === userId,
       createdAt: cm.createdAt,
+      attachments: ids
+        .map((id) => docs.find((d) => d.id === id))
+        .filter((d): d is (typeof docs)[number] => Boolean(d)),
     };
   });
 }
