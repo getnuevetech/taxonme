@@ -1,65 +1,169 @@
 import Link from "next/link";
 import { db } from "@/lib/db";
 import { guardAdminPage } from "@/lib/admin-guard";
-import { PageHeader, Stat, Card, CardBody, Badge } from "@/components/ui";
+import { PageHeader, Card, CardBody, Badge } from "@/components/ui";
+import { KpiCard, BarSeries, Donut, HBars } from "@/components/admin/charts";
+import { getAdminAnalytics } from "@/lib/admin-analytics";
 import { markNotificationReadAction } from "@/actions/user";
 
-export const metadata = { title: "Admin overview" };
+export const metadata = { title: "Analytics dashboard" };
+
+const usd = (cents: number) => (cents / 100).toLocaleString("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 });
 
 export default async function AdminOverviewPage() {
   const admin = await guardAdminPage("admin.dashboard");
-  const [users, consultantsPending, cases, needConsultant, activeSubs, providers, notifications, liveGateway] = await Promise.all([
-    db.user.count({ where: { role: "user" } }),
-    db.consultantProfile.count({ where: { status: "pending" } }),
-    db.case.count(),
-    db.case.count({ where: { status: "consultant_recommended" } }),
-    db.subscription.count({ where: { status: { in: ["active", "trialing"] } } }),
-    db.aiProvider.count({ where: { isEnabled: true, apiKey: { not: "" } } }),
-    db.notification.findMany({ where: { userId: admin.id, readAt: null }, orderBy: { createdAt: "desc" }, take: 10 }),
+  const [a, notifications, liveGateway] = await Promise.all([
+    getAdminAnalytics(),
+    db.notification.findMany({ where: { userId: admin.id, readAt: null }, orderBy: { createdAt: "desc" }, take: 8 }),
     db.paymentGatewayConfig.findFirst({ where: { isActive: true, mode: "live", kind: { not: "manual" } } }),
   ]);
 
   return (
     <div>
-      <PageHeader title="Overview" subtitle="Platform health at a glance." />
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        <Stat label="Registered users" value={users} />
-        <Stat label="Active subscriptions" value={activeSubs} />
-        <Stat label="Cases analyzed" value={cases} sub={`${needConsultant} flagged for consultant`} />
-        <Stat label="Consultant applications" value={consultantsPending} sub="pending manual review" />
-        <Stat label="Connected AI providers" value={providers} sub={providers === 0 ? "add providers to enable AI analysis" : "ready"} />
+      <PageHeader title="Analytics dashboard" subtitle="The entire platform at a glance — people, money, cases, support, and the AI engine." />
+
+      {/* Operational alerts */}
+      {(a.engine.providers === 0 || !liveGateway || a.engine.aiCallsFailed > 0) && (
+        <div className="mb-6 space-y-2">
+          {a.engine.providers === 0 && (
+            <div className="rounded-xl border border-amber-300 bg-amber-50 px-4 py-2.5 text-sm text-amber-900">
+              AI not connected — analyses run in rule-based mode. <Link href="/admin/ai-providers" className="font-semibold underline">Add providers</Link>.
+            </div>
+          )}
+          {a.engine.aiCallsFailed > 0 && (
+            <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-2.5 text-sm text-red-800">
+              {a.engine.aiCallsFailed} failed AI model call{a.engine.aiCallsFailed === 1 ? "" : "s"} recorded — check provider keys/models in{" "}
+              <Link href="/admin/ai-providers" className="font-semibold underline">AI providers</Link> and per-case diagnostics.
+            </div>
+          )}
+          {!liveGateway && (
+            <div className="rounded-xl border border-amber-300 bg-amber-50 px-4 py-2.5 text-sm text-amber-900">
+              Payments in test mode — subscriptions activate without charging. <Link href="/admin/payments" className="font-semibold underline">Configure a live gateway</Link>.
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* KPI row */}
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+        <KpiCard label="Customers" value={String(a.users.customersTotal)} delta={a.users.customersDelta} sub={`${a.users.customersNew30} new in 30d`} />
+        <KpiCard label="MRR" value={usd(a.revenue.mrrCents)} sub={`${a.revenue.activeSubscriptions} active subscription${a.revenue.activeSubscriptions === 1 ? "" : "s"}`} />
+        <KpiCard label="Revenue (30d)" value={usd(a.revenue.last30Cents)} delta={Math.round((a.revenue.last30Cents - a.revenue.prev30Cents) / 100)} deltaLabel="$ vs prior 30d" sub={`${usd(a.revenue.totalCents)} all-time`} />
+        <KpiCard label="Cases" value={String(a.cases.total)} sub={`avg readiness ${a.cases.avgReadiness}%`} />
+        <KpiCard label="Open tickets" value={String(a.tickets.open)} sub={a.tickets.avgFirstResponseHours !== null ? `first response ~${a.tickets.avgFirstResponseHours}h` : "no responses yet"} />
+        <KpiCard label="CSAT" value={a.tickets.csatAvg !== null ? `${a.tickets.csatAvg}/5` : "—"} sub={`${a.tickets.csatCount} rating${a.tickets.csatCount === 1 ? "" : "s"}`} />
       </div>
 
-      {providers === 0 && (
-        <Card className="mt-6 border-amber-300">
-          <CardBody>
-            <p className="font-semibold text-slate-900">AI is not connected yet</p>
-            <p className="mt-1 text-sm text-slate-600">
-              The platform is running in deterministic fallback mode (rule-based analysis, labeled &ldquo;preliminary&rdquo; to users).
-              Add 3–5 AI providers under{" "}
-              <Link href="/admin/ai-providers" className="font-medium text-indigo-600 underline">AI providers</Link>, then assign them to
-              analysis stages in <Link href="/admin/pipelines" className="font-medium text-indigo-600 underline">AI pipelines</Link>.
-            </p>
-          </CardBody>
-        </Card>
-      )}
+      {/* Trends */}
+      <div className="mt-6 grid gap-4 lg:grid-cols-3">
+        <Card><CardBody>
+          <h3 className="mb-2 text-sm font-semibold text-slate-900">Signups — last 30 days</h3>
+          <BarSeries data={a.users.signupSeries} />
+        </CardBody></Card>
+        <Card><CardBody>
+          <h3 className="mb-2 text-sm font-semibold text-slate-900">Cases opened — last 30 days</h3>
+          <BarSeries data={a.cases.caseSeries} color="#0ea5e9" />
+        </CardBody></Card>
+        <Card><CardBody>
+          <h3 className="mb-2 text-sm font-semibold text-slate-900">Revenue — last 30 days ($)</h3>
+          <BarSeries data={a.revenue.revenueSeries} color="#10b981" valueFormat={(v) => `$${v}`} />
+        </CardBody></Card>
+      </div>
 
-      {!liveGateway && (
-        <Card className="mt-6 border-amber-300">
-          <CardBody>
-            <p className="font-semibold text-slate-900">Payments are in test mode</p>
-            <p className="mt-1 text-sm text-slate-600">
-              No live payment gateway is active, so subscriptions activate without charging (the &ldquo;Manual / development&rdquo;
-              gateway simulates payment). To charge real payments: open{" "}
-              <Link href="/admin/payments" className="font-medium text-indigo-600 underline">Payment gateways</Link>, add your Stripe
-              live keys (including <code className="rounded bg-slate-100 px-1">webhookSecret</code>, with the webhook endpoint set to{" "}
-              <code className="rounded bg-slate-100 px-1">/api/webhooks/stripe</code> in the Stripe dashboard), set it to live and
-              default, and deactivate the manual gateway.
-            </p>
-          </CardBody>
-        </Card>
-      )}
+      {/* Distributions */}
+      <div className="mt-6 grid gap-4 lg:grid-cols-2 xl:grid-cols-4">
+        <Card><CardBody>
+          <h3 className="mb-3 text-sm font-semibold text-slate-900">Active plan mix</h3>
+          <Donut segments={a.revenue.planMix} centerLabel="active subs" centerValue={String(a.revenue.activeSubscriptions)} />
+        </CardBody></Card>
+        <Card><CardBody>
+          <h3 className="mb-3 text-sm font-semibold text-slate-900">Cases by status</h3>
+          <Donut segments={a.cases.byStatus} centerLabel="cases" centerValue={String(a.cases.total)} />
+        </CardBody></Card>
+        <Card><CardBody>
+          <h3 className="mb-3 text-sm font-semibold text-slate-900">Tickets by status</h3>
+          <Donut segments={a.tickets.byStatus} centerLabel="queues" centerValue={String(a.tickets.byQueue.reduce((s, q) => s + q.value, 0))} />
+        </CardBody></Card>
+        <Card><CardBody>
+          <h3 className="mb-3 text-sm font-semibold text-slate-900">Transactions by status</h3>
+          <Donut segments={a.revenue.txByStatus} centerLabel="transactions" centerValue={String(a.revenue.txByStatus.reduce((s, t) => s + t.value, 0))} />
+        </CardBody></Card>
+      </div>
 
+      {/* Deep dives */}
+      <div className="mt-6 grid gap-4 lg:grid-cols-3">
+        <Card><CardBody>
+          <h3 className="mb-3 text-sm font-semibold text-slate-900">Findings by issue type</h3>
+          <HBars data={a.cases.issuesByType} />
+        </CardBody></Card>
+        <Card><CardBody>
+          <h3 className="mb-3 text-sm font-semibold text-slate-900">AI engine</h3>
+          <dl className="space-y-2.5 text-sm">
+            <div className="flex justify-between"><dt className="text-slate-600">Connected providers</dt><dd className="font-semibold text-slate-900">{a.engine.providers}</dd></div>
+            <div className="flex justify-between"><dt className="text-slate-600">Analysis runs (AI / total)</dt><dd className="font-semibold text-slate-900">{a.engine.runsWithAi} / {a.engine.runsTotal}</dd></div>
+            <div className="flex justify-between"><dt className="text-slate-600">Model calls succeeded</dt><dd className="font-semibold text-emerald-600">{a.engine.aiCallsOk}</dd></div>
+            <div className="flex justify-between"><dt className="text-slate-600">Model calls failed</dt><dd className={`font-semibold ${a.engine.aiCallsFailed > 0 ? "text-red-600" : "text-slate-900"}`}>{a.engine.aiCallsFailed}</dd></div>
+            <div className="flex justify-between"><dt className="text-slate-600">Call success rate</dt><dd className="font-semibold text-slate-900">{a.engine.callSuccessRate !== null ? `${a.engine.callSuccessRate}%` : "—"}</dd></div>
+          </dl>
+        </CardBody></Card>
+        <Card><CardBody>
+          <h3 className="mb-3 text-sm font-semibold text-slate-900">Consultant network</h3>
+          <dl className="space-y-2.5 text-sm">
+            <div className="flex justify-between"><dt className="text-slate-600">Consultants (approved)</dt><dd className="font-semibold text-slate-900">{a.users.consultantsTotal} ({a.users.consultantsApproved})</dd></div>
+            <div className="flex justify-between"><dt className="text-slate-600">Applications pending</dt><dd className={`font-semibold ${a.users.consultantsPending > 0 ? "text-amber-600" : "text-slate-900"}`}>{a.users.consultantsPending}</dd></div>
+            <div className="flex justify-between"><dt className="text-slate-600">AI auto-assignments</dt><dd className="font-semibold text-slate-900">{a.consultantsOps.autoAssigned}</dd></div>
+          </dl>
+          <div className="mt-3">
+            <HBars data={a.consultantsOps.assignmentsByStatus} />
+          </div>
+        </CardBody></Card>
+      </div>
+
+      {/* Activity & people counters */}
+      <div className="mt-6 grid gap-4 lg:grid-cols-2">
+        <Card><CardBody>
+          <h3 className="mb-3 text-sm font-semibold text-slate-900">Product activity</h3>
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+            {[
+              { label: "Documents in vaults", value: a.content.docsCount },
+              { label: "Forms completed", value: a.content.formsCompleted },
+              { label: "Letters drafted", value: a.content.lettersCount },
+              { label: "Notices explained", value: a.content.noticesCount },
+              { label: "Q&A questions", value: a.content.qaMessages },
+              { label: "Guide conversations", value: a.content.guideThreads },
+              { label: "System messages sent", value: a.content.messagesSent },
+              { label: "…of which emailed", value: a.content.messagesEmailed },
+            ].map((x) => (
+              <div key={x.label} className="rounded-xl bg-slate-50 p-3 text-center">
+                <p className="text-xl font-bold text-slate-900">{x.value}</p>
+                <p className="mt-0.5 text-[10px] uppercase tracking-wide text-slate-400">{x.label}</p>
+              </div>
+            ))}
+          </div>
+        </CardBody></Card>
+        <Card><CardBody>
+          <h3 className="mb-3 text-sm font-semibold text-slate-900">People & support</h3>
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+            {[
+              { label: "Admin users", value: a.users.adminCount },
+              { label: "Suspended accounts", value: a.users.suspended },
+              { label: "Deleted (retained)", value: a.users.deleted },
+              { label: "Tickets total", value: a.tickets.byStatus.reduce((s, t) => s + t.value, 0) },
+            ].map((x) => (
+              <div key={x.label} className="rounded-xl bg-slate-50 p-3 text-center">
+                <p className="text-xl font-bold text-slate-900">{x.value}</p>
+                <p className="mt-0.5 text-[10px] uppercase tracking-wide text-slate-400">{x.label}</p>
+              </div>
+            ))}
+          </div>
+          <div className="mt-3">
+            <h4 className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">Ticket queues</h4>
+            <HBars data={a.tickets.byQueue} />
+          </div>
+        </CardBody></Card>
+      </div>
+
+      {/* Notifications */}
       <div className="mt-8">
         <h2 className="mb-3 text-base font-semibold text-slate-900">Notifications</h2>
         {notifications.length === 0 ? (
