@@ -1246,28 +1246,173 @@ Compare against the official IRS Form 433-F before submitting.`,
     });
   }
 
-  // Field mapping for Form 9465 (Rev. 9-2020 field names), wizard key → PDF field.
-  const map9465 = JSON.stringify([
-    { field: "topmostSubform[0].Page1[0].f1_1[0]", source: "tax_form" },
-    { field: "topmostSubform[0].Page1[0].f1_2[0]", source: "tax_years" },
-    { field: "topmostSubform[0].Page1[0].f1_3[0]", source: "name", transform: "first_words" },
-    { field: "topmostSubform[0].Page1[0].f1_4[0]", source: "name", transform: "last_word" },
-    { field: "topmostSubform[0].Page1[0].f1_5[0]", source: "ssn" },
-    { field: "topmostSubform[0].Page1[0].f1_9[0]", source: "address", transform: "street" },
-    { field: "topmostSubform[0].Page1[0].f1_11[0]", source: "address", transform: "city_state_zip" },
-    { field: "topmostSubform[0].Page1[0].f1_17[0]", source: "phone" },
-    { field: "topmostSubform[0].Page1[0].f1_22[0]", source: "amount_owed", transform: "money" },
-    { field: "topmostSubform[0].Page1[0].f1_24[0]", source: "amount_owed", transform: "money" },
-    { field: "topmostSubform[0].Page1[0].f1_25[0]", source: "down_payment", transform: "money" },
-    { field: "topmostSubform[0].Page1[0].f1_26[0]", expr: "amount_owed - down_payment" },
-    { field: "topmostSubform[0].Page1[0].f1_27[0]", expr: "(amount_owed - down_payment) / 72" },
-    { field: "topmostSubform[0].Page1[0].f1_28[0]", source: "monthly_payment", transform: "money" },
-    { field: "topmostSubform[0].Page1[0].f1_30[0]", source: "payment_day" },
-  ]);
-  await db.irsFormTemplate.updateMany({
-    where: { formNumber: "9465", pdfMapJson: "[]" },
-    data: { pdfMapJson: map9465 },
-  });
+  // Field mappings, wizard key → official PDF AcroForm field, for every form.
+  // Field names were extracted from the current IRS fill-in PDFs. Applied only
+  // when the admin hasn't configured their own mapping.
+  const P1 = "topmostSubform[0].Page1[0]";
+  const P2 = "topmostSubform[0].Page2[0]";
+  const formPdfMaps: Record<string, unknown[]> = {
+    // Form 9465 (Rev. 9-2020)
+    "9465": [
+      { field: `${P1}.f1_1[0]`, source: "tax_form" },
+      { field: `${P1}.f1_2[0]`, source: "tax_years" },
+      { field: `${P1}.f1_3[0]`, source: "name", transform: "first_words" },
+      { field: `${P1}.f1_4[0]`, source: "name", transform: "last_word" },
+      { field: `${P1}.f1_5[0]`, source: "ssn" },
+      { field: `${P1}.f1_9[0]`, source: "address", transform: "street" },
+      { field: `${P1}.f1_11[0]`, source: "address", transform: "city_state_zip" },
+      { field: `${P1}.f1_17[0]`, source: "phone" },
+      { field: `${P1}.f1_22[0]`, source: "amount_owed", transform: "money" },
+      { field: `${P1}.f1_24[0]`, source: "amount_owed", transform: "money" },
+      { field: `${P1}.f1_25[0]`, source: "down_payment", transform: "money" },
+      { field: `${P1}.f1_26[0]`, expr: "amount_owed - down_payment" },
+      { field: `${P1}.f1_27[0]`, expr: "(amount_owed - down_payment) / 72" },
+      { field: `${P1}.f1_28[0]`, source: "monthly_payment", transform: "money" },
+      { field: `${P1}.f1_30[0]`, source: "payment_day" },
+    ],
+    // Form W-4 (2026)
+    "W-4": [
+      { field: `${P1}.Step1a[0].f1_01[0]`, source: "first_name" },
+      { field: `${P1}.Step1a[0].f1_02[0]`, source: "last_name" },
+      { field: `${P1}.Step1a[0].f1_03[0]`, source: "address" },
+      { field: `${P1}.Step1a[0].f1_04[0]`, source: "city_state_zip" },
+      { field: `${P1}.f1_05[0]`, source: "ssn" },
+      { field: `${P1}.c1_1[0]`, source: "filing_status", checkIf: "Single or Married filing separately" },
+      { field: `${P1}.c1_1[1]`, source: "filing_status", checkIf: "Married filing jointly or Qualifying surviving spouse" },
+      { field: `${P1}.c1_1[2]`, source: "filing_status", checkIf: "Head of household" },
+      { field: `${P1}.c1_2[0]`, source: "multiple_jobs", checkIf: "Yes" },
+      { field: `${P1}.Step3_ReadOrder[0].f1_06[0]`, expr: "children_count * 2200" },
+      { field: `${P1}.Step3_ReadOrder[0].f1_07[0]`, expr: "other_dependents_count * 500" },
+      { field: `${P1}.f1_08[0]`, expr: "children_count * 2200 + other_dependents_count * 500" },
+      { field: `${P1}.f1_09[0]`, source: "other_income", transform: "money" },
+      { field: `${P1}.f1_10[0]`, source: "deductions", transform: "money" },
+      { field: `${P1}.f1_11[0]`, source: "extra_withholding", transform: "money" },
+    ],
+    // Form 4506-T (Rev. 4-2025)
+    "4506-T": [
+      { field: `${P1}.f1_1[0]`, source: "name" },
+      { field: `${P1}.f1_2[0]`, source: "ssn" },
+      { field: `${P1}.f1_5[0]`, source: "address" },
+      { field: `${P1}.f1_6[0]`, source: "previous_address" },
+      { field: `${P1}.f1_8[0]`, const: "1040" },
+      { field: `${P1}.c1_1[0]`, source: "transcript_type", checkIf: "Return Transcript (6a)" },
+      { field: `${P1}.c1_1[1]`, source: "transcript_type", checkIf: "Account Transcript (6b)" },
+      { field: `${P1}.c1_1[2]`, source: "transcript_type", checkIf: "Record of Account (6c)" },
+      { field: `${P1}.c1_1[4]`, source: "transcript_type", checkIf: "Wage and Income (8)" },
+      { field: `${P1}.f1_15[0]`, const: "12" },
+      { field: `${P1}.f1_16[0]`, const: "31" },
+      { field: `${P1}.f1_17[0]`, source: "tax_years", transform: "first_year" },
+      { field: `${P1}.f1_13[0]`, source: "phone" },
+    ],
+    // Form 4868 (2025)
+    "4868": [
+      { field: `${P1}.PartI_ReadOrder[0].f1_4[0]`, source: "name" },
+      { field: `${P1}.PartI_ReadOrder[0].f1_5[0]`, source: "address", transform: "street" },
+      { field: `${P1}.PartI_ReadOrder[0].f1_6[0]`, source: "address", transform: "city" },
+      { field: `${P1}.PartI_ReadOrder[0].f1_7[0]`, source: "address", transform: "state" },
+      { field: `${P1}.PartI_ReadOrder[0].f1_8[0]`, source: "address", transform: "zip" },
+      { field: `${P1}.PartI_ReadOrder[0].f1_9[0]`, source: "ssn" },
+      { field: `${P1}.PartI_ReadOrder[0].f1_10[0]`, source: "spouse_ssn" },
+      { field: `${P1}.f1_11[0]`, source: "tax_estimate", transform: "money" },
+      { field: `${P1}.f1_12[0]`, source: "payments", transform: "money" },
+      { field: `${P1}.f1_13[0]`, expr: "tax_estimate - payments" },
+      { field: `${P1}.f1_14[0]`, source: "paying_now", transform: "money" },
+      { field: `${P1}.c1_1[0]`, source: "out_of_country", checkIf: "Yes" },
+      { field: `${P1}.c1_2[0]`, source: "file_1040nr", checkIf: "Yes" },
+    ],
+    // Form W-9 (Rev. 3-2024)
+    "W-9": [
+      { field: `${P1}.f1_01[0]`, source: "name" },
+      { field: `${P1}.f1_02[0]`, source: "business_name" },
+      { field: `${P1}.Boxes3a-b_ReadOrder[0].c1_1[0]`, source: "tax_class", checkIf: "Individual/sole proprietor" },
+      { field: `${P1}.Boxes3a-b_ReadOrder[0].c1_1[0]`, source: "tax_class", checkIf: "Single-member LLC" },
+      { field: `${P1}.Boxes3a-b_ReadOrder[0].c1_1[1]`, source: "tax_class", checkIf: "C Corporation" },
+      { field: `${P1}.Boxes3a-b_ReadOrder[0].c1_1[2]`, source: "tax_class", checkIf: "S Corporation" },
+      { field: `${P1}.Boxes3a-b_ReadOrder[0].c1_1[3]`, source: "tax_class", checkIf: "Partnership" },
+      { field: `${P1}.Boxes3a-b_ReadOrder[0].c1_1[4]`, source: "tax_class", checkIf: "Trust/estate" },
+      { field: `${P1}.Address_ReadOrder[0].f1_07[0]`, source: "address" },
+      { field: `${P1}.Address_ReadOrder[0].f1_08[0]`, source: "city_state_zip" },
+      { field: `${P1}.f1_11[0]`, source: "tin", transform: "ssn_first3" },
+      { field: `${P1}.f1_12[0]`, source: "tin", transform: "ssn_mid2" },
+      { field: `${P1}.f1_13[0]`, source: "tin", transform: "ssn_last4" },
+    ],
+    // Form 8822 (Rev. 2-2021)
+    "8822": [
+      { field: `${P1}.c1_1[0]`, const: "x", checkIf: "x" }, // box 1: individual income tax returns
+      { field: `${P1}.f1_3[0]`, source: "name" },
+      { field: `${P1}.f1_4[0]`, source: "ssn" },
+      { field: `${P1}.f1_5[0]`, source: "spouse_name" },
+      { field: `${P1}.f1_6[0]`, source: "spouse_ssn" },
+      { field: `${P1}.f1_9[0]`, join: ["old_address", "old_city_state_zip"] },
+      { field: `${P1}.f1_17[0]`, join: ["new_address", "new_city_state_zip"] },
+      { field: `${P1}.f1_21[0]`, source: "phone" },
+    ],
+    // Form 2848 (Rev. 1-2021)
+    "2848": [
+      { field: `${P1}.TaxpayerName[0]`, source: "name" },
+      { field: `${P1}.TaxpayerAddress[0]`, source: "address" },
+      { field: `${P1}.TaxpayerIDSSN[0]`, source: "ssn" },
+      { field: `${P1}.TaxpayerTelephone[0]`, source: "phone" },
+      { field: `${P1}.RepresentativesName1[0]`, source: "rep_name" },
+      { field: `${P1}.RepresentativesAddress1[0]`, source: "rep_address" },
+      { field: `${P1}.CAFNumber1[0]`, source: "rep_caf" },
+      { field: `${P1}.PTIN1[0]`, source: "rep_ptin" },
+      { field: `${P1}.TelephoneNo1[0]`, source: "rep_phone" },
+      { field: `${P1}.Table_Line3[0].BodyRow1[0].Description1[0]`, source: "tax_matters" },
+      { field: `${P1}.Table_Line3[0].BodyRow1[0].TaxForm1[0]`, const: "1040" },
+      { field: `${P1}.Table_Line3[0].BodyRow1[0].Years1[0]`, source: "years" },
+    ],
+    // Form SS-4 (Rev. 12-2025)
+    "SS-4": [
+      { field: `${P1}.f1_2[0]`, source: "legal_name" },
+      { field: `${P1}.f1_3[0]`, source: "trade_name" },
+      { field: `${P1}.Line4ReadOrder[0].f1_5[0]`, source: "address" },
+      { field: `${P1}.Line4ReadOrder[0].f1_6[0]`, source: "city_state_zip" },
+      { field: `${P1}.f1_10[0]`, source: "responsible_name" },
+      { field: `${P1}.f1_11[0]`, source: "responsible_ssn" },
+      { field: `${P1}.c1_1[0]`, source: "entity_type", checkIf: "Single-member LLC" }, // 8a LLC = Yes
+      { field: `${P1}.c1_1[0]`, source: "entity_type", checkIf: "Multi-member LLC" },
+      { field: `${P1}.c1_3[0]`, source: "entity_type", checkIf: "Sole proprietor" },
+      { field: `${P1}.f1_13[0]`, source: "responsible_ssn" }, // sole proprietor SSN line
+      { field: `${P1}.c1_3[2]`, source: "entity_type", checkIf: "Partnership" },
+      { field: `${P1}.c1_3[4]`, source: "entity_type", checkIf: "Corporation" },
+      { field: `${P1}.c1_4[0]`, source: "reason", checkIf: "Started new business" },
+      { field: `${P1}.f1_31[0]`, source: "start_date" },
+      { field: `${P1}.f1_35[0]`, source: "employees" },
+      { field: `${P1}.f1_45[0]`, source: "phone" },
+    ],
+    // Form 433-F (Rev. 7-2024)
+    "433-F": [
+      { field: `${P1}.address[0].NamesAddress[0]`, source: "name" },
+      { field: `${P1}.ssn[0].YourSocialSecurityNu[0]`, source: "ssn" },
+      { field: `${P1}.your_telephone[0].Home11[0]`, source: "phone" },
+      { field: `${P1}.age[0].Under65[0]`, source: "dependents" },
+      { field: `${P1}.AccountsTable[0].#subform[1].Name_and_Address_of_Institution[0]`, const: "Primary bank account" },
+      { field: `${P1}.AccountsTable[0].#subform[1].Cuirenl_Balance_I_Value[0]`, source: "bank_balance", transform: "money" },
+      { field: `${P1}.OtherAssetsTableSubform[0].RowSubform1[0].Description1[0]`, const: "Vehicles (total value)" },
+      { field: `${P1}.OtherAssetsTableSubform[0].RowSubform1[0].Current_Value1[0]`, source: "vehicles_value", transform: "money" },
+      { field: `${P2}.sectionF[0].column_1[0].fieldXmlnshttpwwwxfa[0]`, source: "employer" },
+      { field: `${P2}.sectionF[0].column_1[0].GrossPerPayPeriod[0]`, source: "monthly_gross", transform: "money" },
+      { field: `${P2}.sectionG[0].column_3[0].Other[0]`, source: "other_income", transform: "money" },
+      { field: `${P2}.sectionG[0].column_3[0].if_other[0]`, const: "Other monthly income" },
+      { field: `${P2}.sectionH[0].column_1[0].housing_utilities[0].Row1[0].rent_monthly[0]`, source: "rent", transform: "money" },
+      { field: `${P2}.sectionH[0].column_1[0].housing_utilities[0].Row2[0].electric_monthly[0]`, source: "utilities", transform: "money" },
+      { field: `${P2}.sectionH[0].column_1[0].housing_utilities[0].Row6[0].total_monthly[0]`, expr: "rent + utilities" },
+      { field: `${P2}.sectionH[0].column_1[0].food_personal_care[0].food_personal_care[0].Row1[0].food_monthly[0]`, source: "food", transform: "money" },
+      { field: `${P2}.sectionH[0].column_1[0].food_personal_care[0].food_personal_care[0].Row5[0].miscellaneous_monthly[0]`, source: "other_expenses", transform: "money" },
+      { field: `${P2}.sectionH[0].column_1[0].food_personal_care[0].food_personal_care[0].Row6[0].total_monthly[0]`, expr: "food + other_expenses" },
+      { field: `${P2}.sectionH[0].column_1[0].transportation[0].Row1[0].gas_monthly[0]`, source: "transportation", transform: "money" },
+      { field: `${P2}.sectionH[0].column_1[0].transportation[0].Row3[0].total_monthly[0]`, source: "transportation", transform: "money" },
+      { field: `${P2}.sectionH[0].column_2[0].medical[0].Row2[0].out_of_monthly[0]`, source: "medical", transform: "money" },
+      { field: `${P2}.sectionH[0].column_2[0].medical[0].Row3[0].total_monthly[0]`, source: "medical", transform: "money" },
+    ],
+  };
+  for (const [formNumber, map] of Object.entries(formPdfMaps)) {
+    await db.irsFormTemplate.updateMany({
+      where: { formNumber, pdfMapJson: "[]" },
+      data: { pdfMapJson: JSON.stringify(map) },
+    });
+  }
 }
 
 async function seedCannedResponses() {

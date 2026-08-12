@@ -14,9 +14,22 @@ import { logSystem } from "./syslog";
 export type PdfMapEntry = {
   field: string; // AcroForm field name, e.g. topmostSubform[0].Page1[0].f1_3[0]
   source?: string; // wizard answer key
+  join?: string[]; // multiple answer keys joined with ", "
   const?: string; // fixed value
   expr?: string; // arithmetic over answer keys, e.g. "(amount_owed - down_payment) / 72"
-  transform?: "first_words" | "last_word" | "street" | "city_state_zip" | "money";
+  transform?:
+    | "first_words"
+    | "last_word"
+    | "street"
+    | "city_state_zip"
+    | "city"
+    | "state"
+    | "zip"
+    | "money"
+    | "first_year"
+    | "ssn_first3"
+    | "ssn_mid2"
+    | "ssn_last4";
   checkIf?: string; // makes the entry a checkbox: check when the value equals this
 };
 
@@ -91,10 +104,26 @@ function applyTransform(value: string, transform: PdfMapEntry["transform"]): str
       return value.split(",")[0]?.trim() ?? value;
     case "city_state_zip":
       return value.split(",").slice(1).join(",").trim();
+    case "city":
+      return value.split(",")[1]?.trim() ?? "";
+    case "state": {
+      const rest = value.split(",").slice(1).join(",");
+      return rest.match(/\b[A-Z]{2}\b/)?.[0] ?? "";
+    }
+    case "zip":
+      return value.match(/\b\d{5}(-\d{4})?\b/)?.[0] ?? "";
     case "money": {
       const n = toNumber(value);
       return n > 0 ? money(n) : value;
     }
+    case "first_year":
+      return value.match(/\b(19|20)\d{2}\b/)?.[0] ?? "";
+    case "ssn_first3":
+      return value.replace(/\D/g, "").slice(0, 3);
+    case "ssn_mid2":
+      return value.replace(/\D/g, "").slice(3, 5);
+    case "ssn_last4":
+      return value.replace(/\D/g, "").slice(5, 9);
     default:
       return value;
   }
@@ -132,8 +161,10 @@ export async function fillOfficialPdf(
         if (entry.const !== undefined) value = entry.const;
         else if (entry.expr) {
           const n = evalExpr(entry.expr, data);
-          if (n === null) continue;
+          if (n === null || n === 0) continue; // don't print zeros on optional lines
           value = money(Math.round(n * 100) / 100);
+        } else if (entry.join) {
+          value = entry.join.map((k) => data[k] ?? "").filter(Boolean).join(", ");
         } else {
           value = data[entry.source ?? ""] ?? "";
         }
@@ -141,9 +172,9 @@ export async function fillOfficialPdf(
         if (!value && entry.checkIf === undefined) continue;
 
         if (entry.checkIf !== undefined) {
-          const box = form.getCheckBox(entry.field);
-          if (value === entry.checkIf) box.check();
-          else box.uncheck();
+          // Never uncheck on mismatch: boxes start unchecked, and multiple
+          // entries may target one box with different qualifying values (OR).
+          if (value === entry.checkIf) form.getCheckBox(entry.field).check();
         } else {
           form.getTextField(entry.field).setText(value);
         }
