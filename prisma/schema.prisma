@@ -291,6 +291,7 @@ model Case {
   letters        ResponseLetter[]
   notices        Notice[]
   assignments    ConsultantAssignment[]
+  comments       CaseComment[]
 }
 
 model Document {
@@ -366,6 +367,19 @@ model Issue {
   evidenceJson   String  @default("[]")
   createdAt      DateTime @default(now())
   case           Case    @relation(fields: [caseId], references: [id], onDelete: Cascade)
+}
+
+// Case discussion: customers, consultants, and admins comment on a case with
+// visibility controls (which checkboxes are available is admin-configurable).
+model CaseComment {
+  id         String   @id @default(cuid())
+  caseId     String
+  authorId   String
+  authorRole String // customer | consultant | admin
+  body       String
+  visibility String   @default("all") // all | hidden_from_customer | private
+  createdAt  DateTime @default(now())
+  case       Case     @relation(fields: [caseId], references: [id], onDelete: Cascade)
 }
 
 model PathStep {

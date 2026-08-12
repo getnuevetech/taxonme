@@ -47,12 +47,7 @@ export default async function ClientWorkspacePage({ params }: { params: Promise<
                         <span className="mr-2 font-mono text-xs text-indigo-600">{formatCaseNumber(c.number)}</span>
                         {c.title}
                       </p>
-                      <span className="flex items-center gap-2">
-                        <a href={`/api/cases/${c.id}/report`} target="_blank" className="text-xs font-medium text-indigo-600 underline">
-                          Report ↗
-                        </a>
-                        <Badge>{c.status.replace(/_/g, " ")}</Badge>
-                      </span>
+                      <Badge>{c.status.replace(/_/g, " ")}</Badge>
                     </div>
                     <p className="mt-1 text-sm text-slate-500">Goal: {c.goal || "—"}</p>
                     <div className="mt-3"><ProgressBar value={c.readinessScore} label="Readiness" /></div>
@@ -63,6 +58,17 @@ export default async function ClientWorkspacePage({ params }: { params: Promise<
                           <StateMark state={i.state} />
                         </div>
                       ))}
+                    </div>
+                    <div className="mt-4 flex gap-2">
+                      <Link
+                        href={`/consultant/clients/${assignment.id}/cases/${c.id}`}
+                        className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700"
+                      >
+                        Open full analysis →
+                      </Link>
+                      <a href={`/api/cases/${c.id}/report`} target="_blank" className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">
+                        Report ↗
+                      </a>
                     </div>
                   </CardBody>
                 </Card>

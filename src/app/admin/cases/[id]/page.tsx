@@ -1,19 +1,20 @@
 import { notFound } from "next/navigation";
 import { db } from "@/lib/db";
 import { guardAdminPage } from "@/lib/admin-guard";
-import { PageHeader, Card, CardBody, Badge, StateMark, ProgressBar, Money } from "@/components/ui";
+import { PageHeader, Card, CardBody, Badge } from "@/components/ui";
 import { formatCaseNumber } from "@/lib/case-number";
+import { CaseAnalysisView } from "@/components/case-analysis-view";
+import { CaseComments } from "@/components/case-comments";
 
+// Admins see EXACTLY what the customer sees, plus the case discussion (with
+// internal comments) and the technical pipeline diagnostics collapsed below.
 export default async function AdminCaseDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  await guardAdminPage("admin.cases");
+  const admin = await guardAdminPage("admin.cases");
   const c = await db.case.findUnique({
     where: { id },
     include: {
       user: { select: { email: true, firstName: true, lastName: true } },
-      issues: { orderBy: { createdAt: "asc" } },
-      pathSteps: { orderBy: { sortOrder: "asc" } },
-      documents: { where: { deletedAt: null } },
       runs: {
         orderBy: { startedAt: "desc" },
         include: {
@@ -25,86 +26,36 @@ export default async function AdminCaseDetailPage({ params }: { params: Promise<
   });
   if (!c) notFound();
   const usedAi = c.runs.some((r) => r.stepResults.length > 0);
+  const failedCalls = c.runs.flatMap((r) => r.stepResults).filter((sr) => sr.status === "failed");
 
   return (
     <div>
       <PageHeader
         title={c.title}
-        subtitle={`Case ${formatCaseNumber(c.number)} · ${c.user ? `${c.user.firstName} ${c.user.lastName} · ${c.user.email}` : "Guest intake (unclaimed)"} · created ${c.createdAt.toLocaleString("en-US")}`}
+        subtitle={`Case ${formatCaseNumber(c.number)} · ${c.user ? `${c.user.firstName} ${c.user.lastName} · ${c.user.email}` : "Guest intake (unclaimed)"} · created ${c.createdAt.toLocaleString("en-US")} — you are seeing the same analysis as the customer`}
       />
 
       <div className="mb-6 flex flex-wrap items-center gap-2">
-        <Badge color={c.status === "analyzed" ? "green" : c.status === "consultant_recommended" ? "amber" : "slate"}>
-          {c.status.replace(/_/g, " ")}
-        </Badge>
         <Badge color={usedAi ? "green" : "amber"}>{usedAi ? "AI pipeline" : "rule-based fallback"}</Badge>
-        <Badge>{c.documents.length} documents</Badge>
-        <div className="w-48"><ProgressBar value={c.readinessScore} /></div>
+        {failedCalls.length > 0 && (
+          <Badge color="red">{failedCalls.length} failed model call{failedCalls.length === 1 ? "" : "s"} — see diagnostics below</Badge>
+        )}
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-2">
-        <section>
-          <h2 className="mb-3 text-base font-semibold text-slate-900">Situation & goal</h2>
-          <Card>
-            <CardBody>
-              <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Situation</p>
-              <p className="mt-1 whitespace-pre-line text-sm text-slate-700">{c.situation}</p>
-              <p className="mt-4 text-xs font-semibold uppercase tracking-wide text-slate-400">Goal</p>
-              <p className="mt-1 whitespace-pre-line text-sm text-slate-700">{c.goal || "—"}</p>
-            </CardBody>
-          </Card>
+      <CaseAnalysisView caseId={c.id} viewer={{ role: "admin", userId: admin.id }} />
+      <CaseComments caseId={c.id} viewer={{ role: "admin", userId: admin.id }} />
 
-          <h2 className="mb-3 mt-6 text-base font-semibold text-slate-900">Issues ({c.issues.length})</h2>
-          <div className="space-y-3">
-            {c.issues.map((i) => (
-              <Card key={i.id}>
-                <CardBody className="!p-4">
-                  <div className="flex items-center justify-between gap-2">
-                    <p className="font-medium text-slate-900">{i.taxYear ? `${i.taxYear} · ` : ""}{i.title}</p>
-                    <StateMark state={i.state} />
-                  </div>
-                  {i.differenceCents !== null && (
-                    <p className="mt-1 text-sm text-slate-600">
-                      Expected <Money cents={i.expectedCents} /> · Received <Money cents={i.receivedCents} /> · Difference{" "}
-                      <Money cents={i.differenceCents} />
-                    </p>
-                  )}
-                  <p className="mt-1 text-xs text-slate-500">
-                    {i.issueType} · confidence {i.confidence} · priority {i.priority}
-                    {i.nextAction ? ` · next: ${i.nextAction}` : ""}
-                  </p>
-                </CardBody>
-              </Card>
-            ))}
-          </div>
-
-          <h2 className="mb-3 mt-6 text-base font-semibold text-slate-900">Path steps</h2>
-          <Card>
-            <CardBody className="!p-4">
-              <ul className="space-y-2 text-sm">
-                {c.pathSteps.map((s) => (
-                  <li key={s.id} className="flex items-center justify-between gap-2">
-                    <span className={s.status === "done" ? "text-slate-400 line-through" : "text-slate-700"}>
-                      {s.sortOrder + 1}. {s.title}
-                    </span>
-                    <span className="flex items-center gap-2">
-                      {s.actionKey && <Badge>{s.actionKey}</Badge>}
-                      <Badge color={s.status === "done" ? "green" : s.status === "current" ? "indigo" : "slate"}>{s.status}</Badge>
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            </CardBody>
-          </Card>
-        </section>
-
-        <section>
-          <h2 className="mb-3 text-base font-semibold text-slate-900">Analysis runs ({c.runs.length})</h2>
-          <div className="space-y-3">
-            {c.runs.map((r) => (
-              <Card key={r.id}>
-                <CardBody className="!p-4">
-                  <details>
+      {/* Staff-only engineering view: raw model calls and consensus data. */}
+      <section className="mt-8">
+        <Card>
+          <CardBody>
+            <details>
+              <summary className="cursor-pointer text-sm font-semibold text-slate-700">
+                ⚙ Technical diagnostics — analysis runs ({c.runs.length}), model calls, and consensus data (staff only)
+              </summary>
+              <div className="mt-4 space-y-3">
+                {c.runs.map((r) => (
+                  <details key={r.id} className="rounded-xl border border-slate-200 p-3">
                     <summary className="flex cursor-pointer flex-wrap items-center gap-2 text-sm">
                       <span className="font-semibold text-slate-800">{r.stageKey}</span>
                       <Badge color={r.status === "complete" ? "green" : r.status === "failed" ? "red" : "slate"}>{r.status}</Badge>
@@ -116,8 +67,8 @@ export default async function AdminCaseDetailPage({ params }: { params: Promise<
                     </summary>
                     <div className="mt-3 space-y-2">
                       {r.stepResults.map((sr) => (
-                        <div key={sr.id} className="rounded-lg bg-slate-50 p-3 text-xs">
-                          <p className="font-medium text-slate-700">
+                        <div key={sr.id} className={`rounded-lg p-3 text-xs ${sr.status === "failed" ? "bg-red-50" : "bg-slate-50"}`}>
+                          <p className={`font-medium ${sr.status === "failed" ? "text-red-700" : "text-slate-700"}`}>
                             {sr.provider?.name ?? "(provider removed)"} · {sr.roleKey} · {sr.status} · {sr.latencyMs}ms
                           </p>
                           {sr.rawText && (
@@ -135,12 +86,12 @@ export default async function AdminCaseDetailPage({ params }: { params: Promise<
                       )}
                     </div>
                   </details>
-                </CardBody>
-              </Card>
-            ))}
-          </div>
-        </section>
-      </div>
+                ))}
+              </div>
+            </details>
+          </CardBody>
+        </Card>
+      </section>
     </div>
   );
 }
