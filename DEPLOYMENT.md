@@ -63,6 +63,47 @@ PORT=3000 npm run start
 4. Payment gateways → configure Stripe/PayPal (the seeded "Manual / development" gateway activates subscriptions instantly and is for testing only — disable it in production).
 5. Content & agreements → replace placeholder terms/privacy/agreements.
 
+## Moving to a dedicated server (and migrating your data)
+
+Setting up a second computer as the server:
+
+```bash
+# On the NEW server (Ubuntu recommended):
+curl -fsSL https://get.docker.com | sudo sh
+sudo systemctl enable --now docker
+git clone https://github.com/getnuevetech/taxonme.git && cd taxonme
+cp .env.deploy.example .env.deploy   # set POSTGRES_PASSWORD + SEED_ADMIN_PASSWORD
+docker compose --env-file .env.deploy up -d --build
+```
+
+Migrating existing data from the old machine:
+
+```bash
+# On the OLD machine — export database and uploaded files:
+docker compose --env-file .env.deploy exec db pg_dump -U taxonme -c taxonme > taxonme.sql
+docker run --rm -v taxonme_taxonme_uploads:/data -v "$PWD":/backup alpine tar czf /backup/uploads.tgz -C /data .
+
+# Copy taxonme.sql and uploads.tgz to the new server (scp/AirDrop/USB), then on the NEW server:
+docker compose --env-file .env.deploy exec -T db psql -U taxonme taxonme < taxonme.sql
+docker run --rm -v taxonme_taxonme_uploads:/data -v "$PWD":/backup alpine tar xzf /backup/uploads.tgz -C /data
+docker compose --env-file .env.deploy restart app
+```
+
+Then on the new server's admin → Settings, set **App URL** to the address users will use
+(e.g. `http://192.168.1.50:3000` for LAN, or your HTTPS domain), and point a daily cron at the
+maintenance endpoint: `crontab -e` → `0 6 * * * curl -s http://localhost:3000/api/health > /dev/null`.
+
+For internet-facing servers, put Caddy in front for automatic HTTPS:
+
+```bash
+sudo apt install -y caddy
+# /etc/caddy/Caddyfile:
+#   yourdomain.com {
+#     reverse_proxy localhost:3000
+#   }
+sudo systemctl reload caddy
+```
+
 ## Notes
 
 - **Session secret**: auto-generated on first run and stored in the settings table; set `AUTH_SECRET` to override.
