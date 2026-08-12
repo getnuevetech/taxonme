@@ -2,6 +2,7 @@ import { db } from "@/lib/db";
 import { guardAdminPage } from "@/lib/admin-guard";
 import { PageHeader, Card, CardBody, Badge } from "@/components/ui";
 import { AiProviderForm } from "@/components/admin/ai-provider-form";
+import { AiProviderTest } from "@/components/admin/ai-provider-test";
 import { deleteAiProviderAction } from "@/actions/admin";
 
 export const metadata = { title: "AI providers" };
@@ -20,12 +21,15 @@ export default async function AiProvidersPage() {
         {providers.map((p) => (
           <Card key={p.id}>
             <CardBody>
-              <div className="mb-3 flex items-center gap-2">
+              <div className="mb-3 flex flex-wrap items-center gap-2">
                 <h2 className="font-semibold text-slate-900">{p.name}</h2>
                 <Badge color={p.isEnabled && p.apiKey ? "green" : "slate"}>
                   {p.apiKey ? (p.isEnabled ? "connected" : "disabled") : "no API key"}
                 </Badge>
                 <Badge>{p.kind}</Badge>
+                <div className="ml-auto">
+                  <AiProviderTest providerId={p.id} disabled={!p.apiKey} />
+                </div>
               </div>
               <AiProviderForm
                 provider={{

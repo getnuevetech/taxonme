@@ -164,8 +164,9 @@ export async function pickConsultantForCase(caseId: string): Promise<Candidate |
         const parsed = extractJson(result.text);
         const chosen = parsed && top.find((t) => t.userId === String(parsed.consultant_id));
         if (chosen) return chosen;
-      } catch {
-        // try next model
+      } catch (err) {
+        const { logSystem } = await import("./syslog");
+        await logSystem("error", "ai_call", `${step.provider.name} failed re-ranking consultant matches`, String(err));
       }
     }
   }
@@ -221,8 +222,9 @@ export async function generateAssignmentReason(
         best = { summary: String(parsed.summary).slice(0, 300), detail: String(parsed.detailed_reason ?? "").slice(0, 2000) };
         draft = result.text;
       }
-    } catch {
-      // continue with the other model
+    } catch (err) {
+      const { logSystem } = await import("./syslog");
+      await logSystem("error", "ai_call", `${step.provider.name} failed writing the assignment reason`, String(err));
     }
   }
   return best ?? fallback();

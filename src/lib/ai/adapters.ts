@@ -7,10 +7,15 @@ export type ProviderResult = { text: string; latencyMs: number };
 // All provider details (base URL, key, model, limits) come from the AiProvider
 // row configured in the admin backend. Nothing here is hardcoded to one vendor.
 
+// Hung upstream calls must become visible failures (logged + surfaced in the
+// admin tester), never silently stuck requests.
+const CALL_TIMEOUT_MS = 90_000;
+
 async function callOpenAiCompatible(p: AiProvider, messages: ChatMessage[]): Promise<string> {
   const base = (p.baseUrl || "https://api.openai.com/v1").replace(/\/$/, "");
   const res = await fetch(`${base}/chat/completions`, {
     method: "POST",
+    signal: AbortSignal.timeout(CALL_TIMEOUT_MS),
     headers: {
       "Content-Type": "application/json",
       Authorization: `Bearer ${p.apiKey}`,
@@ -33,6 +38,7 @@ async function callAnthropic(p: AiProvider, messages: ChatMessage[]): Promise<st
   const rest = messages.filter((m) => m.role !== "system");
   const res = await fetch(`${base}/v1/messages`, {
     method: "POST",
+    signal: AbortSignal.timeout(CALL_TIMEOUT_MS),
     headers: {
       "Content-Type": "application/json",
       "x-api-key": p.apiKey,
@@ -59,6 +65,7 @@ async function callGoogle(p: AiProvider, messages: ChatMessage[]): Promise<strin
     .map((m) => ({ role: m.role === "assistant" ? "model" : "user", parts: [{ text: m.content }] }));
   const res = await fetch(`${base}/models/${p.model}:generateContent?key=${p.apiKey}`, {
     method: "POST",
+    signal: AbortSignal.timeout(CALL_TIMEOUT_MS),
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       contents,

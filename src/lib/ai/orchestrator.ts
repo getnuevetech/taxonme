@@ -381,10 +381,18 @@ export async function runQaChat(history: { role: string; content: string }[]): P
   if (steps.length === 0) {
     return "Our AI assistant isn't connected yet — the administrator needs to add an AI provider in the admin backend. Meanwhile, you can upload your documents to your vault and browse the guides, and we'll analyze everything as soon as the assistant is online.";
   }
-  const step = steps[0];
-  const prompt = fill(step.promptTemplate, { input: convo, knowledge: knowledge || "(none)" });
-  const result = await callProvider(step.provider, [{ role: "user", content: prompt }]);
-  return result.text;
+  // Try every configured model in order; log each failure to the system log.
+  for (const step of steps) {
+    try {
+      const prompt = fill(step.promptTemplate, { input: convo, knowledge: knowledge || "(none)" });
+      const result = await callProvider(step.provider, [{ role: "user", content: prompt }]);
+      if (result.text.trim()) return result.text;
+    } catch (err) {
+      const { logSystem } = await import("../syslog");
+      await logSystem("error", "ai_call", `${step.provider.name} failed answering the tax Q&A chat`, String(err));
+    }
+  }
+  return "Our assistant couldn't respond just now — the issue has been reported to our team. Please try again in a moment, or open a support ticket if it keeps happening.";
 }
 
 export async function explainNoticeContent(content: string): Promise<Json | null> {
@@ -412,7 +420,18 @@ export async function explainNoticeContent(content: string): Promise<Json | null
 
 export async function generateLetterDraft(context: string): Promise<string> {
   const steps = await getRunnableSteps(STAGE_KEYS.LETTER);
-  if (steps.length === 0) {
+  // Try every configured model; log failures; fall back to the template letter.
+  for (const step of steps) {
+    try {
+      const prompt = fill(step.promptTemplate, { input: context });
+      const result = await callProvider(step.provider, [{ role: "user", content: prompt }]);
+      if (result.text.trim()) return result.text;
+    } catch (err) {
+      const { logSystem } = await import("../syslog");
+      await logSystem("error", "ai_call", `${step.provider.name} failed generating a response letter draft`, String(err));
+    }
+  }
+  {
     return `[DATE]
 
 Internal Revenue Service
@@ -438,8 +457,4 @@ Sincerely,
 
 Enclosures: [LIST YOUR DOCUMENTS]`;
   }
-  const step = steps[0];
-  const prompt = fill(step.promptTemplate, { input: context });
-  const result = await callProvider(step.provider, [{ role: "user", content: prompt }]);
-  return result.text;
 }

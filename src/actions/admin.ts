@@ -73,6 +73,31 @@ export async function deleteAiProviderAction(id: string) {
   revalidatePath("/admin/ai-providers");
 }
 
+// Live connectivity test: sends a tiny prompt to the selected model and
+// reports the reply + latency, or the exact upstream error. Failures are also
+// written to the system log (source "ai_test").
+export async function testAiProviderAction(id: string): Promise<ActionState> {
+  await requireAdminArea("admin.ai");
+  const provider = await db.aiProvider.findUnique({ where: { id } });
+  if (!provider) return { error: "Provider not found." };
+  if (!provider.apiKey) return { error: "No API key saved for this provider — add the key first, then test." };
+
+  const { callProvider } = await import("@/lib/ai/adapters");
+  const { logSystem } = await import("@/lib/syslog");
+  try {
+    const result = await callProvider(provider, [
+      { role: "user", content: 'Connectivity test. Reply with exactly: OK' },
+    ]);
+    const reply = result.text.trim().slice(0, 120) || "(empty response)";
+    await logSystem("info", "ai_test", `${provider.name} (${provider.model}) responded in ${result.latencyMs}ms`, reply);
+    return { ok: true, info: `Responding — ${result.latencyMs}ms. Model replied: "${reply}"` };
+  } catch (err) {
+    const detail = String(err instanceof Error ? err.message : err).slice(0, 1000);
+    await logSystem("error", "ai_test", `${provider.name} (${provider.model}) failed the connectivity test`, detail);
+    return { error: `Not responding: ${detail}` };
+  }
+}
+
 // ---------- Pipelines ----------
 
 export async function savePipelineStepAction(_prev: ActionState, formData: FormData): Promise<ActionState> {
