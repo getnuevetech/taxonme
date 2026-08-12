@@ -129,72 +129,94 @@ export default async function ConsultantDashboard({
                   <Badge color={a.status === "active" ? "green" : "amber"}>{a.status.replace(/_/g, " ")}</Badge>
                 </div>
 
-                {kase ? (
-                  <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50/60 p-4">
-                    <div className="flex flex-wrap items-center justify-between gap-2">
-                      <p className="text-sm font-semibold text-slate-900">
-                        <span className="mr-2 font-mono text-xs text-indigo-600">{formatCaseNumber(kase.number)}</span>
-                        {kase.title}
-                      </p>
-                      <Badge>{kase.status.replace(/_/g, " ")}</Badge>
-                    </div>
-                    {kase.goal && (
-                      <p className="mt-2 text-sm text-slate-600">
-                        <span className="font-medium text-slate-700">Client&apos;s goal: </span>
-                        {kase.goal}
-                      </p>
-                    )}
-
-                    {kase.issues.length > 0 ? (
-                      <div className="mt-3">
-                        <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-                          What our analysis found ({kase.issues.length} issue{kase.issues.length === 1 ? "" : "s"})
-                        </p>
-                        <div className="mt-2 space-y-1.5">
-                          {kase.issues.map((i) => (
-                            <div key={i.id} className="flex items-center justify-between gap-2 rounded-lg bg-white px-3 py-2 text-sm ring-1 ring-slate-100">
-                              <span className="text-slate-700">
-                                {i.taxYear ? `${i.taxYear} · ` : ""}{i.title}
-                                {money(i.differenceCents) ? <span className="ml-1.5 font-semibold text-indigo-600">{money(i.differenceCents)}</span> : null}
-                              </span>
-                              <StateMark state={i.state} />
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    ) : (
-                      <p className="mt-3 text-sm text-slate-500">Analysis hasn&apos;t surfaced findings yet — the client may still be adding details.</p>
-                    )}
-
-                    <div className="mt-3 grid gap-3 sm:grid-cols-2">
-                      <ProgressBar value={kase.readinessScore} label="Case readiness" />
-                      <div className="text-sm text-slate-600">
-                        <p>
-                          <span className="font-medium text-slate-700">{doneSteps}/{kase.pathSteps.length}</span> path steps done
-                          <span className="mx-1.5 text-slate-300">·</span>
-                          <span className="font-medium text-slate-700">{kase._count.documents}</span> document{kase._count.documents === 1 ? "" : "s"} shared
-                        </p>
-                        {openIssues.length > 0 && (
-                          <p className="mt-0.5 text-xs text-slate-500">{openIssues.length} finding{openIssues.length === 1 ? "" : "s"} awaiting professional review</p>
-                        )}
-                      </div>
-                    </div>
-                    {nextStep && (
-                      <p className="mt-2 text-sm text-slate-600">
-                        <span className="font-medium text-slate-700">Where the case stands: </span>
-                        {nextStep.title}
-                      </p>
-                    )}
+                {a.status === "active" && kase && (
+                  <div className="mt-4 flex flex-wrap gap-2">
+                    <a
+                      href={`/api/cases/${kase.id}/report`}
+                      target="_blank"
+                      className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700"
+                    >
+                      Case report ↗
+                    </a>
+                    <Link
+                      href={`/consultant/clients/${a.id}/cases/${kase.id}`}
+                      className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+                    >
+                      Review full analysis →
+                    </Link>
                   </div>
-                ) : (
-                  <p className="mt-3 text-sm text-slate-500">This client hasn&apos;t started a case yet — you&apos;ll see the full analysis briefing here once they do.</p>
                 )}
 
-                {routingReason && (
-                  <p className="mt-3 text-xs text-slate-500">
-                    <span className="font-medium text-slate-600">Why this case was routed to you: </span>
-                    {routingReason}
-                  </p>
+                {kase ? (
+                  <details className="group mt-4 rounded-xl border border-slate-200 bg-slate-50/60">
+                    <summary className="flex cursor-pointer items-start gap-2 p-4 text-sm text-slate-600 [&::-webkit-details-marker]:hidden">
+                      <span className="mt-0.5 text-xs text-indigo-500 transition-transform group-open:rotate-90">▶</span>
+                      <span>
+                        <span className="font-semibold text-slate-800">Why this case was routed to you: </span>
+                        {routingReason ?? "This client's case is awaiting analysis — open for the case details."}
+                        <span className="ml-1.5 text-xs font-medium text-indigo-600">Case details</span>
+                      </span>
+                    </summary>
+
+                    <div className="border-t border-slate-200 p-4">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <p className="text-sm font-semibold text-slate-900">
+                          <span className="mr-2 font-mono text-xs text-indigo-600">{formatCaseNumber(kase.number)}</span>
+                          {kase.title}
+                        </p>
+                        <Badge>{kase.status.replace(/_/g, " ")}</Badge>
+                      </div>
+                      {kase.goal && (
+                        <p className="mt-2 text-sm text-slate-600">
+                          <span className="font-medium text-slate-700">Client&apos;s goal: </span>
+                          {kase.goal}
+                        </p>
+                      )}
+
+                      {kase.issues.length > 0 ? (
+                        <div className="mt-3">
+                          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                            What our analysis found ({kase.issues.length} issue{kase.issues.length === 1 ? "" : "s"})
+                          </p>
+                          <div className="mt-2 space-y-1.5">
+                            {kase.issues.map((i) => (
+                              <div key={i.id} className="flex items-center justify-between gap-2 rounded-lg bg-white px-3 py-2 text-sm ring-1 ring-slate-100">
+                                <span className="text-slate-700">
+                                  {i.taxYear ? `${i.taxYear} · ` : ""}{i.title}
+                                  {money(i.differenceCents) ? <span className="ml-1.5 font-semibold text-indigo-600">{money(i.differenceCents)}</span> : null}
+                                </span>
+                                <StateMark state={i.state} />
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      ) : (
+                        <p className="mt-3 text-sm text-slate-500">Analysis hasn&apos;t surfaced findings yet — the client may still be adding details.</p>
+                      )}
+
+                      <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                        <ProgressBar value={kase.readinessScore} label="Case readiness" />
+                        <div className="text-sm text-slate-600">
+                          <p>
+                            <span className="font-medium text-slate-700">{doneSteps}/{kase.pathSteps.length}</span> path steps done
+                            <span className="mx-1.5 text-slate-300">·</span>
+                            <span className="font-medium text-slate-700">{kase._count.documents}</span> document{kase._count.documents === 1 ? "" : "s"} shared
+                          </p>
+                          {openIssues.length > 0 && (
+                            <p className="mt-0.5 text-xs text-slate-500">{openIssues.length} finding{openIssues.length === 1 ? "" : "s"} awaiting professional review</p>
+                          )}
+                        </div>
+                      </div>
+                      {nextStep && (
+                        <p className="mt-2 text-sm text-slate-600">
+                          <span className="font-medium text-slate-700">Where the case stands: </span>
+                          {nextStep.title}
+                        </p>
+                      )}
+                    </div>
+                  </details>
+                ) : (
+                  <p className="mt-3 text-sm text-slate-500">This client hasn&apos;t started a case yet — you&apos;ll see the full analysis briefing here once they do.</p>
                 )}
 
                 {!a.consultantAgreedAt && a.status !== "active" && (
@@ -226,24 +248,6 @@ export default async function ConsultantDashboard({
                 )}
                 {a.consultantAgreedAt && !a.userAgreedAt && (
                   <p className="mt-3 text-sm text-slate-500">You&apos;ve accepted. Waiting for the client to approve the connection.</p>
-                )}
-                {a.status === "active" && (
-                  <div className="mt-4 flex flex-wrap gap-2">
-                    {kase && (
-                      <Link
-                        href={`/consultant/clients/${a.id}/cases/${kase.id}`}
-                        className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700"
-                      >
-                        Review full analysis →
-                      </Link>
-                    )}
-                    <Link
-                      href={`/consultant/clients/${a.id}`}
-                      className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
-                    >
-                      Client workspace
-                    </Link>
-                  </div>
                 )}
               </CardBody>
             </Card>
