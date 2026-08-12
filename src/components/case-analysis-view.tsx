@@ -5,6 +5,7 @@ import { reanalyzeCaseAction, completePathStepAction, checkCaseProgressAction } 
 import { startFormAction } from "@/actions/forms";
 import { InlineUpload } from "@/components/inline-upload";
 import { CaseUpload } from "@/components/case-upload";
+import { AutoRefresh } from "@/components/auto-refresh";
 import Link from "next/link";
 
 export type CaseViewer = { role: "customer" | "consultant" | "admin"; userId: string; fullResults?: boolean };
@@ -23,6 +24,13 @@ export async function CaseAnalysisView({ caseId, viewer }: { caseId: string; vie
     },
   });
   if (!c) return null;
+
+  // Self-heal: if a background analysis was cut off (deploy/restart), don't
+  // spin forever — recover to a stable status after 10 minutes.
+  if (c.status === "analyzing" && Date.now() - c.updatedAt.getTime() > 10 * 60000) {
+    c.status = c.issues.length > 0 ? "analyzed" : "needs_info";
+    await db.case.update({ where: { id: c.id }, data: { status: c.status } }).catch(() => null);
+  }
 
   const interactive = viewer.role === "customer";
   const fullAccess = viewer.role !== "customer" ? true : (viewer.fullResults ?? true);
@@ -121,6 +129,16 @@ export async function CaseAnalysisView({ caseId, viewer }: { caseId: string; vie
   return (
     <div className="grid gap-6 lg:grid-cols-3">
       <div className="space-y-6 lg:col-span-2">
+        {c.status === "analyzing" && (
+          <div className="flex items-center gap-3 rounded-xl border border-indigo-200 bg-indigo-50 px-4 py-3 text-sm text-indigo-900">
+            <span className="h-3 w-3 shrink-0 animate-ping rounded-full bg-indigo-500" />
+            <span>
+              <span className="font-semibold">Analysis in progress…</span> Your findings update on this page automatically —
+              multi-model runs can take a couple of minutes.
+            </span>
+            <AutoRefresh />
+          </div>
+        )}
         {c.status === "closed" && (
           <div className="rounded-2xl border border-slate-800 bg-slate-900 p-6 text-slate-100">
             <p className="text-xs font-bold uppercase tracking-wider text-slate-400">

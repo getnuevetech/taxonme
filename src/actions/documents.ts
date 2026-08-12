@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { after } from "next/server";
 import { db } from "@/lib/db";
 import { getCurrentUser, requireUser } from "@/lib/auth";
 import { getOrCreateGuestSession } from "@/lib/guest";
@@ -40,8 +41,20 @@ export async function uploadDocumentAction(_prev: ActionState, formData: FormDat
     if (caseId) {
       const c = await db.case.findFirst({ where: { id: caseId, userId: user.id }, select: { id: true } });
       if (c) {
-        const { runCaseAnalysis } = await import("@/lib/ai/orchestrator");
-        await runCaseAnalysis(caseId);
+        // Run the (potentially minutes-long) multi-model re-analysis in the
+        // background — the upload returns instantly and the case page
+        // live-refreshes while status is "analyzing".
+        await db.case.update({ where: { id: caseId }, data: { status: "analyzing" } });
+        after(async () => {
+          try {
+            const { runCaseAnalysis } = await import("@/lib/ai/orchestrator");
+            await runCaseAnalysis(caseId);
+          } catch (err) {
+            const { logSystem } = await import("@/lib/syslog");
+            await logSystem("error", "analysis", "Background re-analysis after upload failed", String(err));
+            await db.case.update({ where: { id: caseId }, data: { status: "analyzed" } }).catch(() => null);
+          }
+        });
       }
     } else {
       await verifyUserCasesProgress(user.id);
