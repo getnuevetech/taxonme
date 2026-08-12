@@ -99,6 +99,31 @@ export function credentialLabel(type: string): string {
   return type === "cpa" ? "CPA" : type === "ea" ? "Enrolled Agent" : "Tax Consultant";
 }
 
+const ISSUE_TYPE_PHRASES: Record<string, string> = {
+  refund_discrepancy: "a refund discrepancy",
+  balance_due: "a balance due the client can't pay in full",
+  missing_return: "an unfiled tax return",
+  notice_response: "an IRS notice that needs a response",
+  penalty: "IRS penalties",
+  other: "a general tax issue",
+};
+
+// Case-focused routing explanation shown to the CONSULTANT. Talks about the
+// client's case, not the consultant's own profile.
+export function caseRoutingReason(issueTypes: string[], consultantSpecialties: string[]): string {
+  const uniqueTypes = Array.from(new Set(issueTypes));
+  const phrases = uniqueTypes.map((t) => ISSUE_TYPE_PHRASES[t] ?? "a tax issue");
+  const list = phrases.length > 1 ? `${phrases.slice(0, -1).join(", ")} and ${phrases[phrases.length - 1]}` : phrases[0] ?? "a tax situation";
+
+  const wanted = new Set(uniqueTypes.flatMap((t) => ISSUE_SPECIALTY_MAP[t] ?? []));
+  const matched = consultantSpecialties.filter((s) => wanted.has(s));
+  const specialtyName = (k: string) => CONSULTANT_SPECIALTIES.find((s) => s.key === k)?.name ?? k;
+
+  return matched.length
+    ? `This case involves ${list} — work that falls within your listed specialties (${matched.map(specialtyName).join(", ")}).`
+    : `This case involves ${list}, and you had capacity to take it on.`;
+}
+
 function candidateText(cd: Candidate): string {
   const specialtyName = (k: string) => CONSULTANT_SPECIALTIES.find((s) => s.key === k)?.name ?? k;
   return [

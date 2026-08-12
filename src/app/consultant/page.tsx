@@ -4,6 +4,7 @@ import { requireUser } from "@/lib/auth";
 import { PageHeader, Card, CardBody, Badge, EmptyState, ButtonLink, StateMark, ProgressBar } from "@/components/ui";
 import { consultantRespondAssignmentAction } from "@/actions/consultant";
 import { formatCaseNumber } from "@/lib/case-number";
+import { caseRoutingReason } from "@/lib/matching";
 
 function money(cents: number | null): string | null {
   if (cents === null || cents === undefined) return null;
@@ -23,6 +24,7 @@ export default async function ConsultantDashboard({
   const subsEnabled = await consultantSubscriptionsEnabled();
   const needsSubscription = subsEnabled && !(await hasActiveConsultantSubscription(user.id));
   const profile = await db.consultantProfile.findUnique({ where: { userId: user.id } });
+  const mySpecialties: string[] = profile ? JSON.parse(profile.specialties || "[]") : [];
   const caseInclude = {
     issues: { orderBy: { createdAt: "asc" as const } },
     pathSteps: { orderBy: { sortOrder: "asc" as const } },
@@ -113,6 +115,9 @@ export default async function ConsultantDashboard({
             const openIssues = kase ? kase.issues.filter((i) => i.state !== "resolved") : [];
             const doneSteps = kase ? kase.pathSteps.filter((s) => s.status === "done").length : 0;
             const nextStep = kase ? kase.pathSteps.find((s) => s.status !== "done") : null;
+            const routingReason = kase && kase.issues.length > 0
+              ? caseRoutingReason(kase.issues.map((i) => i.issueType), mySpecialties)
+              : null;
             return (
             <Card key={a.id}>
               <CardBody>
@@ -185,14 +190,11 @@ export default async function ConsultantDashboard({
                   <p className="mt-3 text-sm text-slate-500">This client hasn&apos;t started a case yet — you&apos;ll see the full analysis briefing here once they do.</p>
                 )}
 
-                {(a.reasonSummary || a.note || a.reasonDetail) && (
-                  <details className="mt-3">
-                    <summary className="cursor-pointer text-xs font-medium text-slate-500 hover:text-slate-700">Why this case was matched to you</summary>
-                    <div className="mt-1 rounded-lg bg-slate-50 p-3 text-xs text-slate-600">
-                      {(a.reasonSummary || a.note) && <p>{a.reasonSummary || a.note}</p>}
-                      {a.reasonDetail && <p className="mt-1 whitespace-pre-line">{a.reasonDetail}</p>}
-                    </div>
-                  </details>
+                {routingReason && (
+                  <p className="mt-3 text-xs text-slate-500">
+                    <span className="font-medium text-slate-600">Why this case was routed to you: </span>
+                    {routingReason}
+                  </p>
                 )}
 
                 {!a.consultantAgreedAt && a.status !== "active" && (
