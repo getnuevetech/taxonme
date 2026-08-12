@@ -25,6 +25,7 @@ const NAV: { area: string; href: string; label: string; section: string }[] = [
   { area: "admin.messages", href: "/admin/messages", label: "System messages", section: "Content" },
   { area: "admin.forms", href: "/admin/forms", label: "IRS form templates", section: "Content" },
   { area: "admin.settings", href: "/admin/settings", label: "App settings", section: "System" },
+  { area: "admin.logs", href: "/admin/logs", label: "System logs", section: "System" },
 ];
 
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {

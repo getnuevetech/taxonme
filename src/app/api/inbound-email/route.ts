@@ -13,7 +13,11 @@ export async function POST(request: Request) {
   const secret = await getSetting("tickets.inbound_email_secret", "");
   if (!secret) return NextResponse.json({ error: "Inbound email is not enabled" }, { status: 403 });
   const provided = new URL(request.url).searchParams.get("secret") ?? request.headers.get("x-inbound-secret") ?? "";
-  if (provided !== secret) return NextResponse.json({ error: "Invalid secret" }, { status: 403 });
+  if (provided !== secret) {
+    const { logSystem } = await import("@/lib/syslog");
+    await logSystem("warning", "inbound_email", "Inbound email rejected: invalid secret");
+    return NextResponse.json({ error: "Invalid secret" }, { status: 403 });
+  }
 
   let from = "";
   let subject = "";

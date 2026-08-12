@@ -107,6 +107,8 @@ export async function runStage(
         });
       }
     } catch (err) {
+      const { logSystem } = await import("../syslog");
+      await logSystem("error", "ai_call", `${step.provider.name} failed in stage "${stageKey}" (${step.role})`, String(err));
       if (opts?.runId) {
         await db.analysisStepResult.create({
           data: {
@@ -331,7 +333,11 @@ export async function runCaseAnalysis(caseId: string): Promise<void> {
     }
     // AI auto-assignment (admin-controlled; both parties still consent).
     const { autoAssignConsultant } = await import("../matching");
-    await autoAssignConsultant(caseId).catch(() => false);
+    await autoAssignConsultant(caseId).catch(async (err) => {
+      const { logSystem } = await import("../syslog");
+      await logSystem("error", "matching", "Auto-assignment failed for a flagged case", String(err));
+      return false;
+    });
   }
 
   // Immediately verify path-step evidence (e.g. documents already uploaded at intake).

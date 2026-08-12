@@ -30,6 +30,7 @@ export const ADMIN_AREAS = [
   { key: "admin.notifications", name: "Notifications" },
   { key: "admin.tickets", name: "Support tickets" },
   { key: "admin.messages", name: "System messages" },
+  { key: "admin.logs", name: "System logs" },
 ] as const;
 
 // Feature keys gate what plans can access. The plan/feature matrix is edited in the admin backend.

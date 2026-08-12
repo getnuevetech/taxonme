@@ -653,6 +653,21 @@ model ConsultantAssignment {
   case               Case?     @relation(fields: [caseId], references: [id])
 }
 
+// ---------- System log (failures & operational events) ----------
+
+model SystemLog {
+  id         String   @id @default(cuid())
+  level      String   @default("error") // error | warning | info
+  source     String   @default("system") // ai_call | analysis | email | payment | webhook | inbound_email | guide | matching | cron
+  message    String
+  detail     String   @default("")
+  userId     String   @default("")
+  createdAt  DateTime @default(now())
+
+  @@index([level, createdAt])
+  @@index([source, createdAt])
+}
+
 // ---------- Notifications ----------
 
 model Notification {

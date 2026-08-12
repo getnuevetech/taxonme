@@ -160,7 +160,9 @@ export async function reconcilePendingStripeTransactions(userId: string): Promis
         // Abandoned checkout: don't let it linger as pending forever.
         await db.paymentTransaction.update({ where: { id: tx.id }, data: { status: "failed" } });
       }
-    } catch {
+    } catch (err) {
+      const { logSystem } = await import("./syslog");
+      await logSystem("warning", "payment", `Stripe reconciliation failed for session ${tx.gatewayRef}`, String(err), userId);
       // network hiccup — try again on next page load
     }
   }

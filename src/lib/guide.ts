@@ -176,7 +176,9 @@ export async function guideRespond(
       if (result.text.trim()) {
         return { message: result.text.trim(), actions: baseActions() };
       }
-    } catch {
+    } catch (err) {
+      const { logSystem } = await import("./syslog");
+      await logSystem("error", "guide", `${step.provider.name} failed answering the guide chat`, String(err), userId);
       // fall through to the next configured model
     }
   }

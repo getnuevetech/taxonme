@@ -149,6 +149,8 @@ export async function subscribeAction(_prev: ActionState, formData: FormData): P
     });
     if (!res.ok) {
       await db.paymentTransaction.update({ where: { id: tx.id }, data: { status: "failed" } });
+      const { logSystem } = await import("@/lib/syslog");
+      await logSystem("error", "payment", `Stripe checkout creation failed (HTTP ${res.status})`, (await res.text()).slice(0, 1000), user.id);
       return { error: "Could not start checkout. Please try again or contact support." };
     }
     const session = await res.json();

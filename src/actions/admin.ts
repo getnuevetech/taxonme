@@ -571,6 +571,15 @@ export async function runScheduledMessagesAction(): Promise<void> {
   revalidatePath("/admin/messages");
 }
 
+// ---------- System logs ----------
+
+export async function purgeSystemLogsAction() {
+  await requireAdminArea("admin.logs");
+  const { purgeOldSystemLogs } = await import("@/lib/syslog");
+  await purgeOldSystemLogs(30);
+  revalidatePath("/admin/logs");
+}
+
 // ---------- Knowledge base ----------
 
 export async function saveKnowledgeAction(_prev: ActionState, formData: FormData): Promise<ActionState> {

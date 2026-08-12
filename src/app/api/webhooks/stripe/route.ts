@@ -35,6 +35,8 @@ export async function POST(request: Request) {
   }
   const signatureHeader = request.headers.get("stripe-signature") ?? "";
   if (!verifySignature(payload, signatureHeader, cfg.webhookSecret)) {
+    const { logSystem } = await import("@/lib/syslog");
+    await logSystem("warning", "webhook", "Stripe webhook rejected: invalid signature", { header: signatureHeader.slice(0, 100) });
     return NextResponse.json({ error: "Invalid signature" }, { status: 400 });
   }
 

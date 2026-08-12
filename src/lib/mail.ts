@@ -25,6 +25,8 @@ export async function sendMail(to: string, subject: string, text: string, html?:
     });
     return { sent: true };
   } catch (err) {
+    const { logSystem } = await import("./syslog");
+    await logSystem("error", "email", `Failed to send email to ${to}: ${subject.slice(0, 80)}`, String(err));
     return { sent: false, error: String(err).slice(0, 300) };
   }
 }

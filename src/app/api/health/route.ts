@@ -23,10 +23,12 @@ export async function GET() {
       const { processScheduledMessages } = await import("@/lib/messaging");
       const { autoCloseInactiveTickets } = await import("@/actions/support");
       const { purgeExpiredDeletedAccounts } = await import("@/lib/deleted-accounts");
+      const { purgeOldSystemLogs } = await import("@/lib/syslog");
       maintenance = {
         scheduledMessagesSent: await processScheduledMessages(),
         ticketsAutoClosed: await autoCloseInactiveTickets(),
         accountsExpunged: await purgeExpiredDeletedAccounts(),
+        oldLogsPurged: await purgeOldSystemLogs(30),
       };
     } catch {
       // maintenance is best-effort
