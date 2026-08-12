@@ -14,6 +14,7 @@ const registerSchema = z.object({
   lastName: z.string().min(1, "Last name is required"),
   email: z.string().email("A valid email is required"),
   phone: z.string().optional().default(""),
+  address: z.string().optional().default(""),
   password: z.string().min(8, "Password must be at least 8 characters"),
   agree: z.literal("on", { message: "You must accept the agreement to continue" }),
 });
@@ -21,7 +22,7 @@ const registerSchema = z.object({
 export async function registerAction(_prev: ActionState, formData: FormData): Promise<ActionState> {
   const parsed = registerSchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) return { error: parsed.error.issues[0].message };
-  const { firstName, lastName, email, phone, password } = parsed.data;
+  const { firstName, lastName, email, phone, address, password } = parsed.data;
 
   const existing = await db.user.findUnique({ where: { email: email.toLowerCase() } });
   if (existing) return { error: "An account with this email already exists. Try signing in." };
@@ -31,6 +32,7 @@ export async function registerAction(_prev: ActionState, formData: FormData): Pr
     data: {
       email: email.toLowerCase(),
       phone,
+      address,
       firstName,
       lastName,
       passwordHash: await hashPassword(password),

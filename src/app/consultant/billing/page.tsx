@@ -33,6 +33,8 @@ export default async function ConsultantBillingPage({
       include: { plan: true },
     }),
   ]);
+  const { getPlanDiscounts } = await import("@/lib/discounts");
+  const discounts = await getPlanDiscounts(plans.map((p) => p.id), user.email);
 
   if (!enabled) {
     return (
@@ -86,6 +88,7 @@ export default async function ConsultantBillingPage({
         <EmptyState title="No partner plans published yet" body="The team is preparing partner plans — check back soon." />
       ) : (
         <PlanPicker
+          discounts={discounts}
           currentPlanId={subscription?.plan.audience === "consultant" ? subscription.planId : ""}
           plans={plans.map((p) => ({
             id: p.id,

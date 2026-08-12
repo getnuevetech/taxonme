@@ -25,6 +25,8 @@ export default async function ConsultantDashboard({
   const needsSubscription = subsEnabled && !(await hasActiveConsultantSubscription(user.id));
   const profile = await db.consultantProfile.findUnique({ where: { userId: user.id } });
   const mySpecialties: string[] = profile ? JSON.parse(profile.specialties || "[]") : [];
+  const { consultantCompleteness } = await import("@/lib/consultant-completeness");
+  const completeness = consultantCompleteness(user, profile);
   const caseInclude = {
     issues: { orderBy: { createdAt: "asc" as const } },
     pathSteps: { orderBy: { sortOrder: "asc" as const } },
@@ -80,6 +82,20 @@ export default async function ConsultantDashboard({
               <p className="text-sm text-slate-500">We need your credentials, proof, and specialties before you can be assigned clients.</p>
             </div>
             <ButtonLink href="/consultant/onboarding">Start onboarding →</ButtonLink>
+          </CardBody>
+        </Card>
+      )}
+
+      {completeness.pct < 100 && (
+        <Card className="mb-6">
+          <CardBody className="flex flex-wrap items-center justify-between gap-4">
+            <div className="min-w-64 flex-1">
+              <p className="font-semibold text-slate-900">Your profile is {completeness.pct}% complete</p>
+              <p className="text-sm text-slate-500">
+                Missing: {completeness.items.filter((i) => !i.done).map((i) => i.label).join(", ")}.
+              </p>
+            </div>
+            <ButtonLink href="/consultant/profile">Finish my profile →</ButtonLink>
           </CardBody>
         </Card>
       )}

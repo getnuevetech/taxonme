@@ -208,31 +208,41 @@ export async function fallbackAnalyze(
     });
   } else if (/refund/.test(lower)) {
     const guidance = evidenceGuidance(primaryYear);
+    const classified = [expectedRefund?.amount, receivedRefund?.amount, balanceDue?.amount].filter(Boolean) as number[];
+    const stray = fromNarrative.mentions.map((m) => m.amount).filter((a) => !classified.includes(a));
     issues.push({
       issue_type: "refund_discrepancy",
       item_kind: "missing_info",
       evidence_status: "possible",
       evidence_strength: "limited",
       tax_year: primaryYear,
-      title: "Possible refund issue",
-      what_we_know: `Your summary mentions a refund concern${hasDocs ? `, and you've provided ${docs.length} supporting document${docs.length === 1 ? "" : "s"}` : ""}. Refund shortfalls usually trace to an offset against another debt or an IRS adjustment — both appear plainly on your Account Transcript.`,
-      our_conclusion: "There are indicators of a refund issue, but the expected and received amounts aren't both established yet, so the gap can't be computed.",
+      title: `Possible ${primaryYear ? `${primaryYear} ` : ""}refund issue — two figures pin it down`,
+      what_we_know: `You raised a refund concern${primaryYear ? ` for tax year ${primaryYear}` : ""}${hasDocs ? `, and ${docs.length} supporting document${docs.length === 1 ? " is" : "s are"} on file` : ""}.${stray.length ? ` You mentioned ${stray.map(usd).join(" and ")} — telling us exactly what ${stray.length === 1 ? "that figure refers" : "those figures refer"} to (expected refund, amount received, or something else) lets us compute the gap immediately.` : ""} For context: the IRS issues most e-filed refunds within 21 days of acceptance — when one doesn't arrive in full, the difference is an offset (TC 826), an adjustment (CP12-type notice), or a review hold (TC 570), and each has a defined remedy.`,
+      our_conclusion: expectedRefund
+        ? `We have one side of the equation (${usd(expectedRefund.amount)} expected) — the amount actually received is the single missing number. Answer the questions below or add your transcript and this becomes a computed finding.`
+        : "Two numbers unlock this finding: the refund your return claimed (Form 1040, line 35a) and the amount that actually arrived. Answer the questions below — it takes under a minute — or add your tax return and Account Transcript and we'll extract them.",
       still_unclear: [
-        "The refund amount you expected (from your return)",
-        "The amount actually issued (from your transcript or bank record)",
-        "Whether an offset, adjustment, or hold caused any difference",
+        `The refund amount your ${yearText} return claimed (Form 1040, line 35a)`,
+        "The amount actually issued, and the date it arrived (bank record or transcript TC 846)",
+        "When you filed — refunds normally issue within 21 days of e-file acceptance, so the timeline tells us if something intervened",
+        "Whether an offset, adjustment, or hold caused any difference (your Account Transcript shows this code by code)",
+      ],
+      explanations: [
+        { title: "Refund offset", detail: "Part or all of the refund was applied to another debt — a prior tax year, state taxes, child support, or federal student loans (TC 826 or a Treasury Offset notice).", likelihood: "Possible" },
+        { title: "IRS adjustment", detail: "The IRS corrected the return (math errors, credit changes) and refunded a different amount — a CP12-type notice normally follows.", likelihood: "Possible" },
+        { title: "Refund hold or review", detail: "The refund (or part of it) is held pending review (TC 570) and may still be released.", likelihood: "Possible" },
       ],
       confidence: "low",
       priority: "medium",
       state: guidance.state,
       next_action: guidance.action,
-      alternative_action: "Tell us the expected and received amounts in your case summary and re-run the analysis.",
+      alternative_action: "Answer the quick questions on this page — each answer updates this analysis immediately.",
       analysis_outline: [
-        { heading: "Your situation", detail: "You raised a refund concern, but the expected and received amounts weren't both stated, so we can't compute the gap yet." },
-        { heading: "Tax rules", detail: "Rule: refund discrepancies come from offsets, return adjustments, or review holds. Why it matters to your case: all three are visible on your IRS Account Transcript, so the exact cause is establishable from one document.", source: "IRS Account Transcript transaction codes (TC 826, TC 570) · CP12 notice guidance" },
+        { heading: "Your situation", detail: `You raised a refund concern${primaryYear ? ` for ${yearText}` : ""}, but the expected and received amounts weren't both stated, so the gap can't be computed yet.${stray.length ? ` The figure${stray.length === 1 ? "" : "s"} ${stray.map(usd).join(", ")} in your summary couldn't be classified with certainty — the questions below resolve that.` : ""}` },
+        { heading: "Tax rules", detail: `Rule: e-filed refunds normally issue within 21 days of acceptance; when the amount differs from the return, IRS procedure allows exactly three causes — offset (TC 826), adjustment (CP12-type notices), or review hold (TC 570). Why it matters to your case: all three are visible on your Account Transcript, so the exact cause is establishable from one free document.`, source: "IRS refund timing guidance · Account Transcript transaction codes (TC 846, TC 826, TC 570) · CP12 notice guidance" },
         { heading: "Your evidence", detail: evidenceLine() },
-        { heading: "Our conclusion", detail: "A refund issue is possible but not yet established. One document — the Account Transcript — moves this from possible to confirmed or rules it out." },
-        { heading: "Your next move", detail: `Add your ${yearText} tax return and Account Transcript — we'll extract the numbers from them. Or state both amounts in your case summary and re-run.` },
+        { heading: "Our conclusion", detail: "A refund issue is possible but not yet established — and it is fully establishable: two numbers plus one document turn this into a computed, verified finding with a dollar figure and a specific cause." },
+        { heading: "Your next move", detail: `Fastest: answer the questions on this page (under a minute). Strongest: add your ${yearText} tax return and Account Transcript — we extract the numbers and match them against the transcript's transaction codes.` },
       ],
     });
   }
@@ -277,26 +287,32 @@ export async function fallbackAnalyze(
       evidence_status: "needs_verification",
       evidence_strength: "limited",
       tax_year: primaryYear,
-      title: "Possible balance due",
-      what_we_know: `We found evidence that you may have an IRS balance, but the available information does not yet establish the current amount.${hasDocs ? ` ${docs.length} document${docs.length === 1 ? " is" : "s are"} on file with information relevant to the balance.` : ""}`,
-      our_conclusion: "A balance may exist, but until the amount and its composition are established, no resolution option can responsibly be recommended.",
+      title: `Possible ${primaryYear ? `${primaryYear} ` : ""}balance due — one figure unlocks the options`,
+      what_we_know: `We found evidence that you may have an IRS balance${primaryYear ? ` for tax year ${primaryYear}` : ""}, but the available information does not yet establish the current amount.${hasDocs ? ` ${docs.length} document${docs.length === 1 ? " is" : "s are"} on file with information relevant to the balance.` : ""} The amount matters because the resolution thresholds are specific: balances of $50,000 or less generally qualify for a streamlined monthly installment agreement (no financial statement), and up to $100,000 can get a 180-day short-term plan.`,
+      our_conclusion: "A balance may exist, but until the amount and its composition (tax vs. penalties vs. interest) are established, no resolution option can responsibly be recommended. One number from your IRS notice or online account — given in the questions below — moves this forward immediately.",
       still_unclear: [
-        "The current balance",
-        "Tax principal versus penalties versus interest",
+        "The current balance (it grows with penalties and interest until arranged)",
+        "Which notice/letter states it, its date, and any respond-by deadline printed on it",
+        "Tax principal versus penalties versus interest — penalties may be relievable, interest is statutory",
         "Payments or credits already applied",
-        "Whether the balance is under active collection",
+        "Whether the balance is under active collection (that changes the urgency)",
+      ],
+      explanations: [
+        { title: "Filed but couldn't pay in full", detail: "The most common case — the balance is real and payment options (installment agreement, short-term plan) are the path.", likelihood: "Possible" },
+        { title: "IRS adjustment or proposed change", detail: "A CP2000-type proposal or correction — these can be agreed with, partially agreed, or disputed in writing before the deadline.", likelihood: "Possible" },
+        { title: "Penalties and interest inflating the base tax", detail: "Part of the balance may be relievable penalties (e.g. first-time abatement) rather than tax.", likelihood: "Possible" },
       ],
       confidence: "low",
       priority: "medium",
       state: guidance.state,
       next_action: guidance.action,
-      alternative_action: "State the amount from your IRS notice in the case summary and re-run the analysis.",
+      alternative_action: "Answer the quick questions on this page — the balance amount alone sharpens every recommendation.",
       analysis_outline: [
-        { heading: "Your situation", detail: "You reported owing the IRS, but the exact amount wasn't stated." },
-        { heading: "Tax rules", detail: "Rule: resolution options (full payment, installment agreements under IRC §6159, hardship status) depend on the confirmed balance and its composition. Why it matters to your case: the facts must be established before the right option can be identified — deciding the solution before the facts is how taxpayers end up on the wrong plan.", source: "IRC §6159 · IRS collection procedures" },
+        { heading: "Your situation", detail: "You reported owing the IRS, but the exact amount wasn't stated — so the right resolution path can't be sized yet." },
+        { heading: "Tax rules", detail: "Rule: resolution options are amount-driven — full payment, streamlined installment agreements under IRC §6159 (≤ $50,000), 180-day plans (≤ $100,000), or hardship status. Why it matters to your case: the facts must be established before the right option can be identified — deciding the solution before the facts is how taxpayers end up on the wrong plan.", source: "IRC §6159 · Form 9465 instructions · IRS collection procedures" },
         { heading: "Your evidence", detail: evidenceLine() },
-        { heading: "Our conclusion", detail: "The concern is credible but unverified. An Account Transcript plus the IRS notice would establish the amount, after which TaxOnMe can evaluate potential resolution paths." },
-        { heading: "Your next move", detail: "Add the IRS notice showing the balance, or your Account Transcript — either establishes the exact amount." },
+        { heading: "Our conclusion", detail: "The concern is credible but unverified. The IRS notice (or your online account balance) establishes the amount; the Account Transcript establishes its composition — together they let TaxOnMe evaluate the legitimate resolution paths for your circumstances." },
+        { heading: "Your next move", detail: "Fastest: answer the questions on this page with the amount from your notice. Strongest: upload the notice and your Account Transcript — we verify the amount and split it into tax, penalties, and interest." },
       ],
     });
   }

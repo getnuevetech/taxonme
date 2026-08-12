@@ -14,7 +14,23 @@ type Plan = {
   features: { name: string; limit: number | null }[];
 };
 
-export function PlanPicker({ plans, currentPlanId }: { plans: Plan[]; currentPlanId: string }) {
+export type PlanDiscountInfo = { name: string; percentOff: number; amountOffCents: number };
+
+function discounted(cents: number, d?: PlanDiscountInfo): number {
+  if (!d || cents <= 0) return cents;
+  const off = d.percentOff > 0 ? Math.round((cents * d.percentOff) / 100) : d.amountOffCents;
+  return Math.max(0, cents - off);
+}
+
+export function PlanPicker({
+  plans,
+  currentPlanId,
+  discounts = {},
+}: {
+  plans: Plan[];
+  currentPlanId: string;
+  discounts?: Record<string, PlanDiscountInfo>;
+}) {
   const [interval, setInterval] = useState<"monthly" | "yearly">("monthly");
   const [state, formAction] = useActionState(subscribeAction, null);
 
@@ -36,13 +52,21 @@ export function PlanPicker({ plans, currentPlanId }: { plans: Plan[]; currentPla
       )}
       <div className="grid gap-6 md:grid-cols-3">
         {plans.map((plan) => {
-          const price = interval === "yearly" ? plan.priceYearlyCents : plan.priceMonthlyCents;
+          const basePrice = interval === "yearly" ? plan.priceYearlyCents : plan.priceMonthlyCents;
+          const deal = discounts[plan.id];
+          const price = discounted(basePrice, deal);
+          const onSale = Boolean(deal) && price < basePrice;
           const isCurrent = plan.id === currentPlanId;
           return (
             <div
               key={plan.id}
-              className={`flex flex-col rounded-2xl border bg-white p-5 shadow-sm ${plan.badge ? "border-indigo-400 ring-1 ring-indigo-400" : "border-slate-200"}`}
+              className={`relative flex flex-col rounded-2xl border bg-white p-5 shadow-sm ${onSale ? "border-emerald-400 ring-1 ring-emerald-400" : plan.badge ? "border-indigo-400 ring-1 ring-indigo-400" : "border-slate-200"}`}
             >
+              {onSale && (
+                <span className="absolute -top-3 left-4 rounded-full bg-emerald-600 px-3 py-0.5 text-xs font-bold text-white shadow">
+                  {deal!.name}{deal!.percentOff > 0 ? ` · ${deal!.percentOff}% off` : ""}
+                </span>
+              )}
               <div className="flex items-center justify-between">
                 <h3 className="font-bold text-slate-900">{plan.name}</h3>
                 {plan.badge && (
@@ -51,7 +75,10 @@ export function PlanPicker({ plans, currentPlanId }: { plans: Plan[]; currentPla
               </div>
               <p className="mt-1 text-sm text-slate-500">{plan.description}</p>
               <p className="mt-3">
-                <span className="text-3xl font-extrabold text-slate-900">${(price / 100).toFixed(0)}</span>
+                {onSale && (
+                  <span className="mr-2 text-lg font-semibold text-slate-400 line-through">${(basePrice / 100).toFixed(0)}</span>
+                )}
+                <span className={`text-3xl font-extrabold ${onSale ? "text-emerald-600" : "text-slate-900"}`}>${(price / 100).toFixed(0)}</span>
                 <span className="text-sm text-slate-400">/{interval === "yearly" ? "year" : "month"}</span>
               </p>
               <ul className="mt-4 flex-1 space-y-1.5 text-sm text-slate-600">

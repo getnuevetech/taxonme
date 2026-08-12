@@ -74,6 +74,36 @@ export async function reanalyzeCaseAction(caseId: string) {
   revalidatePath(`/app/cases/${caseId}`);
 }
 
+// Clarifying interview: store the Q&A, fold the answer into the case
+// narrative in extraction-friendly phrasing, and re-run the analysis so the
+// customer immediately sees sharper findings.
+export async function clarifyAnswerAction(_prev: ActionState, formData: FormData): Promise<ActionState> {
+  const user = await requireUser();
+  const caseId = String(formData.get("caseId") ?? "");
+  const answer = String(formData.get("answer") ?? "").trim();
+  const c = await db.case.findUnique({ where: { id: caseId } });
+  if (!c || c.userId !== user.id) return { error: "Case not found." };
+  if (!answer) return { error: "Type an answer first." };
+
+  const { nextClarifyQuestion, situationLine } = await import("@/lib/clarify");
+  const q = await nextClarifyQuestion(caseId);
+  if (!q) return { error: "All questions are already answered — the analysis is up to date." };
+
+  await db.caseClarifyMessage.create({
+    data: { caseId, role: "assistant", questionKey: q.key, content: q.text },
+  });
+  await db.caseClarifyMessage.create({
+    data: { caseId, role: "user", questionKey: q.key, content: answer.slice(0, 2000) },
+  });
+  await db.case.update({
+    where: { id: caseId },
+    data: { situation: `${c.situation}\n\n${situationLine(q.key, q.text, answer)}` },
+  });
+  await runCaseAnalysis(caseId);
+  revalidatePath(`/app/cases/${caseId}`);
+  return { ok: true };
+}
+
 export async function completePathStepAction(stepId: string) {
   const user = await requireUser();
   const step = await db.pathStep.findUnique({ where: { id: stepId }, include: { case: true } });

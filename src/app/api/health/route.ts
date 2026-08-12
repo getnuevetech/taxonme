@@ -24,9 +24,11 @@ export async function GET() {
       const { autoCloseInactiveTickets } = await import("@/actions/support");
       const { purgeExpiredDeletedAccounts } = await import("@/lib/deleted-accounts");
       const { purgeOldSystemLogs } = await import("@/lib/syslog");
+      const { autoCloseCases } = await import("@/lib/case-closing");
       maintenance = {
         scheduledMessagesSent: await processScheduledMessages(),
         ticketsAutoClosed: await autoCloseInactiveTickets(),
+        casesAutoClosed: await autoCloseCases(),
         accountsExpunged: await purgeExpiredDeletedAccounts(),
         oldLogsPurged: await purgeOldSystemLogs(30),
       };

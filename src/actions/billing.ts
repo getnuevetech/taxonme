@@ -51,7 +51,10 @@ export async function subscribeAction(_prev: ActionState, formData: FormData): P
     where: { isActive: true },
     orderBy: [{ isDefault: "desc" }],
   });
-  const amountCents = interval === "yearly" ? plan.priceYearlyCents : plan.priceMonthlyCents;
+  // Admin-managed discounts (general or targeted at this customer's email).
+  const { getDiscountForPlan, applyDiscount } = await import("@/lib/discounts");
+  const discount = await getDiscountForPlan(plan.id, user.email);
+  const amountCents = applyDiscount(interval === "yearly" ? plan.priceYearlyCents : plan.priceMonthlyCents, discount);
   const billingPath = user.role === "consultant" ? "/consultant/billing" : "/app/billing";
 
   // Proration: switching plans mid-period credits the unused value of the
@@ -119,7 +122,7 @@ export async function subscribeAction(_prev: ActionState, formData: FormData): P
       "line_items[0][price_data][currency]": cfg.currency || "usd",
       "line_items[0][price_data][unit_amount]": String(amountCents),
       "line_items[0][price_data][recurring][interval]": interval === "yearly" ? "year" : "month",
-      "line_items[0][price_data][product_data][name]": plan.name,
+      "line_items[0][price_data][product_data][name]": discount ? `${plan.name} (${discount.name})` : plan.name,
       success_url: `${cfg.appUrl || ""}${billingPath}?pending=1`,
       cancel_url: `${cfg.appUrl || ""}${billingPath}?canceled=1`,
       client_reference_id: user.id,

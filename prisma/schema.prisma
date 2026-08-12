@@ -43,6 +43,25 @@ model SubscriptionPlan {
   features          PlanFeature[]
   subscriptions     Subscription[]
   transactions      PaymentTransaction[]
+  discounts         PlanDiscount[]
+}
+
+// Admin-managed subscription discounts: general (every customer sees the sale
+// price) or targeted at specific people by email. Time-bound and stackable
+// per plan (the best active discount wins).
+model PlanDiscount {
+  id             String    @id @default(cuid())
+  planId         String
+  name           String // shown to customers, e.g. "Launch sale"
+  percentOff     Int       @default(0) // 1–100; used when > 0
+  amountOffCents Int       @default(0) // fixed discount; used when percentOff = 0
+  audience       String    @default("all") // all | specific
+  emailsJson     String    @default("[]") // JSON array of emails when audience = specific
+  startsAt       DateTime?
+  endsAt         DateTime?
+  isActive       Boolean   @default(true)
+  createdAt      DateTime  @default(now())
+  plan           SubscriptionPlan @relation(fields: [planId], references: [id], onDelete: Cascade)
 }
 
 model PlanFeature {
@@ -277,9 +296,12 @@ model Case {
   title          String
   situation      String    @default("")
   goal           String    @default("")
-  status         String    @default("intake") // intake | analyzing | analyzed | needs_info | consultant_recommended | resolved
+  status         String    @default("intake") // intake | analyzing | analyzed | needs_info | consultant_recommended | resolved | closed
   readinessScore Int       @default(0)
   conflictsJson  String    @default("[]") // detected information conflicts [{topic, description, resolution}]
+  closedAt       DateTime?
+  closedReason   String    @default("") // completed | abandoned | manual
+  closingRemarks String    @default("") // final review & closing remarks (AI or deterministic)
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
   user           User?     @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -293,6 +315,20 @@ model Case {
   notices        Notice[]
   assignments    ConsultantAssignment[]
   comments       CaseComment[]
+  clarifyMessages CaseClarifyMessage[]
+}
+
+// The clarifying-questions conversation: when the analysis lacks specific
+// facts (amounts, dates, notice codes), the app interviews the customer and
+// feeds every answer back into the analysis automatically.
+model CaseClarifyMessage {
+  id        String   @id @default(cuid())
+  caseId    String
+  role      String // assistant | user
+  questionKey String @default("") // which targeted question this belongs to
+  content   String
+  createdAt DateTime @default(now())
+  case      Case     @relation(fields: [caseId], references: [id], onDelete: Cascade)
 }
 
 model Document {
@@ -537,6 +573,8 @@ model ConsultantProfile {
   approvedAt         DateTime?
   rejectionReason    String    @default("")
   experiences        String    @default("") // free-text list of experience areas, one per line
+  languages          String    @default("") // e.g. "English, Spanish"
+  website            String    @default("")
   createdAt          DateTime  @default(now())
   user               User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   pastCases          ConsultantPastCase[]

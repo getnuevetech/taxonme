@@ -8,6 +8,7 @@ import { reanalyzeCaseAction } from "@/actions/case";
 import { formatCaseNumber } from "@/lib/case-number";
 import { CaseAnalysisView } from "@/components/case-analysis-view";
 import { CaseComments } from "@/components/case-comments";
+import { CaseClarify } from "@/components/case-clarify";
 
 export default async function CaseDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -44,6 +45,9 @@ export default async function CaseDetailPage({ params }: { params: Promise<{ id:
           </div>
         }
       />
+      <div className="mb-6">
+        <CaseClarify caseId={c.id} />
+      </div>
       <CaseAnalysisView caseId={c.id} viewer={{ role: "customer", userId: user.id, fullResults }} />
       <CaseComments caseId={c.id} viewer={{ role: "customer", userId: user.id }} />
     </div>

@@ -10,6 +10,9 @@ export default async function PricingPage() {
     orderBy: { sortOrder: "asc" },
     include: { features: { where: { enabled: true }, include: { feature: true } } },
   });
+  const { getPlanDiscounts, applyDiscount } = await import("@/lib/discounts");
+  // Public page: only general (everyone) discounts show here.
+  const discounts = await getPlanDiscounts(plans.map((p) => p.id), null);
 
   return (
     <div className="flex min-h-screen flex-col">
@@ -20,22 +23,36 @@ export default async function PricingPage() {
           <p className="mt-2 text-slate-600">Start free. Upgrade when you want the full toolkit.</p>
         </div>
         <div className="mt-10 grid gap-6 md:grid-cols-3">
-          {plans.map((plan) => (
-            <Card key={plan.id} className={plan.badge ? "ring-2 ring-indigo-500" : ""}>
+          {plans.map((plan) => {
+            const deal = discounts[plan.id];
+            const monthly = applyDiscount(plan.priceMonthlyCents, deal);
+            const onSale = Boolean(deal) && monthly < plan.priceMonthlyCents;
+            return (
+            <Card key={plan.id} className={onSale ? "relative ring-2 ring-emerald-500" : plan.badge ? "ring-2 ring-indigo-500" : ""}>
               <CardBody className="flex h-full flex-col">
+                {onSale && (
+                  <span className="absolute -top-3 left-4 rounded-full bg-emerald-600 px-3 py-0.5 text-xs font-bold text-white shadow">
+                    {deal!.name}{deal!.percentOff > 0 ? ` · ${deal!.percentOff}% off` : ""}
+                  </span>
+                )}
                 <div className="flex items-center justify-between">
                   <h2 className="text-lg font-bold text-slate-900">{plan.name}</h2>
                   {plan.badge && <Badge color="indigo">{plan.badge}</Badge>}
                 </div>
                 <p className="mt-1 text-sm text-slate-500">{plan.description}</p>
                 <p className="mt-4">
-                  <span className="text-3xl font-extrabold text-slate-900">
-                    ${(plan.priceMonthlyCents / 100).toFixed(0)}
+                  {onSale && (
+                    <span className="mr-2 text-lg font-semibold text-slate-400 line-through">
+                      ${(plan.priceMonthlyCents / 100).toFixed(0)}
+                    </span>
+                  )}
+                  <span className={`text-3xl font-extrabold ${onSale ? "text-emerald-600" : "text-slate-900"}`}>
+                    ${(monthly / 100).toFixed(0)}
                   </span>
                   <span className="text-sm text-slate-500">/month</span>
                   {plan.priceYearlyCents > 0 && (
                     <span className="ml-2 text-xs text-slate-400">
-                      or ${(plan.priceYearlyCents / 100).toFixed(0)}/year
+                      or ${(applyDiscount(plan.priceYearlyCents, deal) / 100).toFixed(0)}/year
                     </span>
                   )}
                 </p>
@@ -65,7 +82,8 @@ export default async function PricingPage() {
                 </div>
               </CardBody>
             </Card>
-          ))}
+            );
+          })}
         </div>
       </main>
       <SiteFooter />

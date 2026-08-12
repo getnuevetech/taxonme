@@ -20,6 +20,7 @@ export default async function ConsultantLayout({ children }: { children: React.R
           </Link>
           <div className="flex items-center gap-4 text-sm">
             <Link href="/consultant" className="text-slate-600 hover:text-slate-900">Clients</Link>
+            <Link href="/consultant/profile" className="text-slate-600 hover:text-slate-900">My profile</Link>
             <Link href="/consultant/onboarding" className="text-slate-600 hover:text-slate-900">My credentials</Link>
             <Link href="/consultant/experience" className="text-slate-600 hover:text-slate-900">Experience</Link>
             <Link href="/consultant/billing" className="text-slate-600 hover:text-slate-900">Billing</Link>

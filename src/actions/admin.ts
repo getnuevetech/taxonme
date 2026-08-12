@@ -110,6 +110,46 @@ export async function testAiProviderAction(id: string): Promise<ActionState> {
   }
 }
 
+// ---------- Plan discounts ----------
+
+export async function savePlanDiscountAction(_prev: ActionState, formData: FormData): Promise<ActionState> {
+  await requireAdminArea("admin.plans");
+  const id = String(formData.get("id") ?? "");
+  const percentOff = Math.min(100, Math.max(0, Number(formData.get("percentOff") ?? 0) || 0));
+  const amountOff = Math.max(0, Number(formData.get("amountOff") ?? 0) || 0);
+  const audience = String(formData.get("audience") ?? "all") === "specific" ? "specific" : "all";
+  const emails = String(formData.get("emails") ?? "")
+    .split(/[\n,;]+/)
+    .map((e) => e.trim().toLowerCase())
+    .filter((e) => e.includes("@"));
+  const startsAtRaw = String(formData.get("startsAt") ?? "");
+  const endsAtRaw = String(formData.get("endsAt") ?? "");
+  const data = {
+    planId: String(formData.get("planId") ?? ""),
+    name: String(formData.get("name") ?? "").trim(),
+    percentOff,
+    amountOffCents: percentOff > 0 ? 0 : Math.round(amountOff * 100),
+    audience,
+    emailsJson: JSON.stringify(emails),
+    startsAt: startsAtRaw ? new Date(startsAtRaw) : null,
+    endsAt: endsAtRaw ? new Date(endsAtRaw) : null,
+    isActive: formData.get("isActive") === "on",
+  };
+  if (!data.planId || !data.name) return { error: "Plan and discount name are required." };
+  if (data.percentOff === 0 && data.amountOffCents === 0) return { error: "Set a percent off or a fixed amount off." };
+  if (audience === "specific" && emails.length === 0) return { error: "Add at least one email for a targeted discount." };
+  if (id) await db.planDiscount.update({ where: { id }, data });
+  else await db.planDiscount.create({ data });
+  revalidatePath("/admin/plans");
+  return { ok: true };
+}
+
+export async function deletePlanDiscountAction(id: string) {
+  await requireAdminArea("admin.plans");
+  await db.planDiscount.delete({ where: { id } });
+  revalidatePath("/admin/plans");
+}
+
 // ---------- Pipelines ----------
 
 export async function savePipelineStepAction(_prev: ActionState, formData: FormData): Promise<ActionState> {

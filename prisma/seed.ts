@@ -31,6 +31,8 @@ async function seedSettings() {
     ["tickets.sla_first_response_hours", "24", "tickets", "Ticket first-response SLA (hours)", "Open tickets without a staff reply within this window are flagged SLA overdue."],
     ["tickets.inbound_email_secret", "", "tickets", "Inbound email webhook secret", "Set to a long random value to enable email-to-ticket at /api/inbound-email?secret=<value>. Empty disables it."],
     ["tickets.auto_close_days", "7", "tickets", "Ticket auto-close (days)", "Tickets are closed automatically when the customer doesn't respond for this many days after a staff reply. 0 disables."],
+    ["cases.autoclose_completed_days", "14", "cases", "Case auto-close after completion (days)", "Completed cases (every path step done) close automatically with AI closing remarks this many days after the last activity. 0 disables."],
+    ["cases.autoclose_abandoned_days", "60", "cases", "Case auto-close when abandoned (days)", "Cases with no activity for this many days are closed automatically with closing remarks. Documents stay in the customer's account. 0 disables."],
     ["billing.proration_enabled", "true", "billing", "Proration on plan changes", "Credit the unused value of the current plan when a subscriber upgrades (toggle on the Plans page)."],
     ["billing.proration_downgrade_enabled", "false", "billing", "Proration on downgrades", "Also apply the credit when subscribers downgrade (toggle on the Plans page)."],
     ["forms.paid_downloads", "true", "forms", "Paid form downloads", "Whether downloading completed IRS forms requires a plan with the forms.download feature (toggle on the IRS form templates page)."],
@@ -376,6 +378,14 @@ async function seedAiAndPipelines() {
       steps: [
         { provider: "OpenAI GPT-5.6 Sol", role: "analyst", prompt: DEFAULT_PROMPTS.match_reason, order: 0 },
         { provider: "Anthropic Claude Sonnet 5", role: "reviewer", prompt: DEFAULT_PROMPTS.match_reason_review, order: 1 },
+      ],
+    },
+    {
+      key: "closing",
+      name: "Closing remarks & final review",
+      description: "Writes the customer's closing summary when a case completes or is auto-closed: what was covered, what was resolved, and what to keep for their records.",
+      steps: [
+        { provider: "OpenAI GPT-5.6 Sol", role: "presenter", prompt: DEFAULT_PROMPTS.closing, order: 0 },
       ],
     },
   ];

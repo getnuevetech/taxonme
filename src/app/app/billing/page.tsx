@@ -32,6 +32,8 @@ export default async function BillingPage({
     db.paymentGatewayConfig.findFirst({ where: { isActive: true }, orderBy: [{ isDefault: "desc" }] }),
   ]);
   const isTestGateway = !activeGateway || activeGateway.kind === "manual" || activeGateway.mode === "test";
+  const { getPlanDiscounts } = await import("@/lib/discounts");
+  const discounts = await getPlanDiscounts(plans.map((p) => p.id), user.email);
 
   return (
     <div>
@@ -74,6 +76,7 @@ export default async function BillingPage({
       </Card>
 
       <PlanPicker
+        discounts={discounts}
         currentPlanId={currentPlan?.id ?? ""}
         plans={plans.map((p) => ({
           id: p.id,

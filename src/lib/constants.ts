@@ -64,6 +64,7 @@ export const STAGE_KEYS = {
   GUIDE: "guide",
   MATCH: "match",
   MATCH_REASON: "match_reason",
+  CLOSING: "closing",
 } as const;
 export type StageKey = (typeof STAGE_KEYS)[keyof typeof STAGE_KEYS];
 

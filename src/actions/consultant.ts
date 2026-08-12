@@ -11,6 +11,50 @@ import type { ActionState } from "./auth";
 // Full consultant onboarding (IRS-standard): credentials, PTIN/EFIN, document
 // uploads (license proof, photo ID, E&O insurance), business details,
 // specialties, and compliance attestation.
+// Personal profile (photo, contact, address, bio, languages) — separate from
+// the credentials/onboarding flow. Every field counts toward completeness but
+// none is enforced at signup.
+export async function consultantUpdateProfileAction(_prev: ActionState, formData: FormData): Promise<ActionState> {
+  const user = await requireUser();
+  if (user.role !== ROLES.CONSULTANT) return { error: "Consultant account required." };
+
+  let avatarPath: string | undefined;
+  const avatar = formData.get("avatar");
+  if (avatar instanceof File && avatar.size > 0) {
+    if (!avatar.type.startsWith("image/")) return { error: "The profile picture must be an image." };
+    avatarPath = (await saveUpload(avatar)).filePath;
+  }
+
+  await db.user.update({
+    where: { id: user.id },
+    data: {
+      firstName: String(formData.get("firstName") ?? "").trim(),
+      lastName: String(formData.get("lastName") ?? "").trim(),
+      phone: String(formData.get("phone") ?? "").trim(),
+      address: String(formData.get("address") ?? "").trim(),
+      bio: String(formData.get("bio") ?? "").trim(),
+      ...(avatarPath ? { avatarPath } : {}),
+    },
+  });
+  // Languages/website live on the consultant profile (created at onboarding;
+  // upserted here so the fields save even before onboarding is submitted).
+  await db.consultantProfile.upsert({
+    where: { userId: user.id },
+    update: {
+      languages: String(formData.get("languages") ?? "").trim(),
+      website: String(formData.get("website") ?? "").trim(),
+    },
+    create: {
+      userId: user.id,
+      languages: String(formData.get("languages") ?? "").trim(),
+      website: String(formData.get("website") ?? "").trim(),
+    },
+  });
+  revalidatePath("/consultant/profile");
+  revalidatePath("/consultant");
+  return { ok: true };
+}
+
 export async function consultantOnboardingAction(_prev: ActionState, formData: FormData): Promise<ActionState> {
   const user = await requireUser();
   if (user.role !== ROLES.CONSULTANT) return { error: "Only consultant accounts can complete this onboarding." };

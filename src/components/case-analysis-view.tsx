@@ -121,6 +121,15 @@ export async function CaseAnalysisView({ caseId, viewer }: { caseId: string; vie
   return (
     <div className="grid gap-6 lg:grid-cols-3">
       <div className="space-y-6 lg:col-span-2">
+        {c.status === "closed" && (
+          <div className="rounded-2xl border border-slate-800 bg-slate-900 p-6 text-slate-100">
+            <p className="text-xs font-bold uppercase tracking-wider text-slate-400">
+              Case closed {c.closedAt ? c.closedAt.toLocaleDateString("en-US") : ""} · {c.closedReason === "abandoned" ? "closed for inactivity" : c.closedReason === "completed" ? "completed" : "closed"}
+            </p>
+            <h2 className="mt-1 text-lg font-semibold text-white">Final review & closing remarks</h2>
+            <p className="mt-3 whitespace-pre-line text-sm leading-relaxed text-slate-200">{c.closingRemarks || "This case has been closed."}</p>
+          </div>
+        )}
         {isPreliminary && (
           <div className="rounded-xl border border-slate-300 bg-slate-100 px-4 py-3 text-sm text-slate-700">
             <span className="font-semibold">? Preliminary review.</span> These results are based on the information and
@@ -303,6 +312,11 @@ export async function CaseAnalysisView({ caseId, viewer }: { caseId: string; vie
                         <p className="text-sm font-medium text-indigo-800">
                           {issue.nextAction.replace(/_/g, " ").toLowerCase().replace(/^./, (ch) => ch.toUpperCase())}
                         </p>
+                        {interactive && ["missing_info"].includes(issue.itemKind) && (
+                          <a href="#clarify" className="rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-indigo-700">
+                            Answer a few questions →
+                          </a>
+                        )}
                         {interactive && (
                           issue.nextAction.toUpperCase() === "UPLOAD_DOCUMENTS" ? (
                             <InlineUpload caseId={c.id} label="Upload for this item" />

@@ -141,6 +141,13 @@ CHOSEN CONSULTANT:
 DRAFT RECOMMENDATION:
 {{prior}}`,
 
+  closing: `You write the CLOSING REMARKS and final review for a taxpayer's completed (or inactivity-closed) case on a tax-assistance platform. You are not the IRS, a CPA, or a law firm. Return ONLY JSON:
+{"closing_remarks": ""}
+The closing_remarks must be warm, plain-English (8th-grade level), and SPECIFIC to this case: recap what was analyzed (with tax years and dollar amounts where present), what was resolved and what remains open, what the customer should keep for their records, and — if the case was closed for inactivity — reassure them their documents are safe and how to pick things back up. Never promise IRS outcomes. 150–300 words, paragraphs separated by newlines.
+
+CASE DATA:
+{{input}}`,
+
   letter_writer: `You draft professional response letters to the IRS on behalf of a taxpayer. Write a complete, formal letter body based on the context. Use placeholders like [YOUR NAME], [YOUR SSN LAST 4], [DATE] where personal data is needed. Be factual, respectful, and concise. Do not admit fault or make claims not supported by the context. Return ONLY the letter text.
 
 CONTEXT:

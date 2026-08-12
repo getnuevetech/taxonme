@@ -68,6 +68,7 @@ export function RegisterForm({
         </div>
         <input name="email" type="email" required placeholder="Email address (required)" className={inputClass} />
         <input name="phone" type="tel" placeholder="Mobile number (optional)" className={inputClass} />
+        <input name="address" placeholder="Address (optional — you can add it later)" className={inputClass} />
         <input name="password" type="password" required placeholder="Password (8+ characters)" className={inputClass} />
         <label className="flex items-start gap-2 text-sm text-slate-600">
           <input type="checkbox" name="agree" required className="mt-1 h-4 w-4 rounded border-slate-300 text-indigo-600" />
