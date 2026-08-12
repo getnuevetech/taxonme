@@ -656,6 +656,12 @@ export async function saveFormTemplateAction(_prev: ActionState, formData: FormD
   } catch {
     return { error: "Wizard steps must be valid JSON." };
   }
+  const pdfMapJson = String(formData.get("pdfMapJson") ?? "[]");
+  try {
+    JSON.parse(pdfMapJson);
+  } catch {
+    return { error: "PDF field mapping must be valid JSON." };
+  }
   const data = {
     formNumber: String(formData.get("formNumber") ?? "").trim(),
     title: String(formData.get("title") ?? "").trim(),
@@ -663,15 +669,43 @@ export async function saveFormTemplateAction(_prev: ActionState, formData: FormD
     category: String(formData.get("category") ?? "individual"),
     stepsJson,
     outputTemplate: String(formData.get("outputTemplate") ?? ""),
+    pdfSourceUrl: String(formData.get("pdfSourceUrl") ?? "").trim(),
+    pdfMapJson,
     isPublished: formData.get("isPublished") === "on",
     requiredFeature: String(formData.get("requiredFeature") ?? ""),
     sortOrder: Number(formData.get("sortOrder") ?? 0) || 0,
   };
   if (!data.formNumber || !data.title) return { error: "Form number and title are required." };
-  if (id) await db.irsFormTemplate.update({ where: { id }, data });
-  else await db.irsFormTemplate.create({ data });
+  if (id) {
+    // Refetch the official PDF when its source URL changes.
+    const existing = await db.irsFormTemplate.findUnique({ where: { id }, select: { pdfSourceUrl: true } });
+    const clearCache = existing && existing.pdfSourceUrl !== data.pdfSourceUrl;
+    await db.irsFormTemplate.update({ where: { id }, data: clearCache ? { ...data, pdfPath: "" } : data });
+  } else {
+    await db.irsFormTemplate.create({ data });
+  }
   revalidatePath("/admin/forms");
   return { ok: true };
+}
+
+// Force (re)download of the template's official IRS PDF and report its fields.
+export async function refreshFormPdfAction(id: string): Promise<ActionState> {
+  await requireAdminArea("admin.forms");
+  await db.irsFormTemplate.update({ where: { id }, data: { pdfPath: "" } });
+  const template = await db.irsFormTemplate.findUnique({ where: { id } });
+  if (!template) return { error: "Template not found." };
+  if (!template.pdfSourceUrl) return { error: "Set the official IRS PDF URL first, then fetch." };
+  const { ensureOfficialPdf, listPdfFields } = await import("@/lib/pdf-forms");
+  const pdf = await ensureOfficialPdf(template);
+  if (!pdf) return { error: "Could not download the PDF from that URL — see System logs for the exact error." };
+  try {
+    const fields = await listPdfFields(pdf);
+    revalidatePath("/admin/forms");
+    return { ok: true, info: `Official PDF fetched (${Math.round(pdf.length / 1024)} KB) — ${fields.length} fillable fields detected.` };
+  } catch {
+    revalidatePath("/admin/forms");
+    return { ok: true, info: "Official PDF fetched, but its fields couldn't be read — it may not be a fillable PDF." };
+  }
 }
 
 export async function deleteFormTemplateAction(id: string) {

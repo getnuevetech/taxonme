@@ -19,13 +19,41 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
     where: { id },
     include: { template: true },
   });
-  if (!submission || submission.userId !== user.id) return new NextResponse("Not found", { status: 404 });
+  if (!submission) return new NextResponse("Not found", { status: 404 });
+
+  // Access: the owner, an admin, or a consultant with an ACTIVE connection to the owner.
+  const isOwner = submission.userId === user.id;
+  const { isAdmin } = await import("@/lib/auth");
+  let allowed = isOwner || isAdmin(user);
+  if (!allowed && user.role === "consultant") {
+    const assignment = await db.consultantAssignment.findFirst({
+      where: { consultantId: user.id, userId: submission.userId, status: "active" },
+    });
+    allowed = Boolean(assignment);
+  }
+  if (!allowed) return new NextResponse("Not found", { status: 404 });
   if (submission.status !== "completed") return new NextResponse("Form not completed yet", { status: 400 });
 
-  // Admin-controlled fee gate.
+  // Admin-controlled fee gate (applies to the customer; staff and connected
+  // consultants download without the customer's plan gate).
   const paid = await getBoolSetting("forms.paid_downloads", true);
-  if (paid && !(await hasFeature(user.id, FEATURE_KEYS.FORMS_DOWNLOAD))) {
+  if (isOwner && paid && !(await hasFeature(user.id, FEATURE_KEYS.FORMS_DOWNLOAD))) {
     return NextResponse.redirect(new URL("/app/billing?upgrade=forms-download", request.url));
+  }
+
+  // Preferred output: the OFFICIAL IRS PDF with the customer's answers infused
+  // into its real form fields. Falls back to the text worksheet only when the
+  // template has no official PDF + mapping configured.
+  const { fillOfficialPdf } = await import("@/lib/pdf-forms");
+  const data: Record<string, string> = JSON.parse(submission.dataJson || "{}");
+  const filled = await fillOfficialPdf(submission.template, data);
+  if (filled) {
+    return new NextResponse(new Uint8Array(filled), {
+      headers: {
+        "Content-Type": "application/pdf",
+        "Content-Disposition": `attachment; filename="Form-${submission.template.formNumber.replace(/[^\w-]/g, "")}-filled.pdf"`,
+      },
+    });
   }
 
   const appName = await getSetting("app.name", "TaxOnMe");

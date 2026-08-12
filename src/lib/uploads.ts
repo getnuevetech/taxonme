@@ -15,6 +15,14 @@ export async function saveUpload(file: File): Promise<{ filePath: string; sizeBy
   return { filePath: name, sizeBytes: buf.length };
 }
 
+export async function saveUploadBuffer(buf: Buffer, ext: string): Promise<string> {
+  await fs.mkdir(UPLOAD_ROOT, { recursive: true });
+  const safeExt = ext.slice(0, 12).replace(/[^a-zA-Z0-9.]/g, "");
+  const name = `${crypto.randomBytes(16).toString("hex")}${safeExt}`;
+  await fs.writeFile(path.join(UPLOAD_ROOT, name), buf);
+  return name;
+}
+
 export async function readUpload(filePath: string): Promise<Buffer> {
   // filePath is a generated filename; prevent traversal.
   const safe = path.basename(filePath);

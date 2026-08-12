@@ -485,6 +485,11 @@ model IrsFormTemplate {
   category       String           @default("individual")
   stepsJson      String           @default("[]") // wizard step/question definitions
   outputTemplate String           @default("") // text template regenerated into standard form layout
+  // Official IRS PDF infusion: the app downloads the real IRS PDF and fills
+  // its AcroForm fields with the customer's wizard answers.
+  pdfSourceUrl   String           @default("") // e.g. https://www.irs.gov/pub/irs-pdf/f9465.pdf
+  pdfPath        String           @default("") // cached copy in the uploads store
+  pdfMapJson     String           @default("[]") // [{field, source|expr|const, transform?, checkIf?}]
   isPublished    Boolean          @default(false)
   requiredFeature String          @default("") // feature key gating access, empty = free
   sortOrder      Int              @default(0)

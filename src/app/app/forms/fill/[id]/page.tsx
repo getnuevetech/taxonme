@@ -33,18 +33,26 @@ export default async function FillFormPage({
     const { FEATURE_KEYS } = await import("@/lib/constants");
     const paidDownloads = await getBoolSetting("forms.paid_downloads", true);
     const canDownload = !paidDownloads || (await hasFeature(user.id, FEATURE_KEYS.FORMS_DOWNLOAD));
+    const hasOfficialPdf =
+      (submission.template.pdfPath || submission.template.pdfSourceUrl) &&
+      submission.template.pdfMapJson &&
+      submission.template.pdfMapJson !== "[]";
     return (
       <div className="max-w-3xl">
         <PageHeader
           title={`Form ${submission.template.formNumber} — complete`}
-          subtitle="Here's your regenerated form, assembled from your answers. Review it, print it, and use it with your filing."
+          subtitle={
+            hasOfficialPdf
+              ? "Your answers are infused into the official IRS PDF — download it, review it, sign it, and file it."
+              : "Here's your regenerated form, assembled from your answers. Review it, print it, and use it with your filing."
+          }
           actions={
             canDownload ? (
               <a
                 href={`/api/forms/${submission.id}/download`}
                 className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700"
               >
-                ⬇ Download completed form
+                {hasOfficialPdf ? "⬇ Download official IRS PDF" : "⬇ Download completed form"}
               </a>
             ) : (
               <Link

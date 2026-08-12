@@ -1224,6 +1224,50 @@ Compare against the official IRS Form 433-F before submitting.`,
     const exists = await db.irsFormTemplate.findFirst({ where: { formNumber: t.formNumber } });
     if (!exists) await db.irsFormTemplate.create({ data: { ...t, isPublished: true } });
   }
+
+  // Official IRS PDFs: downloads infuse the customer's answers into the real
+  // IRS form. URLs + the 9465 field mapping are applied to existing rows too
+  // (only when the admin hasn't configured their own).
+  const officialPdfs: Record<string, string> = {
+    "9465": "https://www.irs.gov/pub/irs-pdf/f9465.pdf",
+    "W-4": "https://www.irs.gov/pub/irs-pdf/fw4.pdf",
+    "4506-T": "https://www.irs.gov/pub/irs-pdf/f4506t.pdf",
+    "4868": "https://www.irs.gov/pub/irs-pdf/f4868.pdf",
+    "W-9": "https://www.irs.gov/pub/irs-pdf/fw9.pdf",
+    "8822": "https://www.irs.gov/pub/irs-pdf/f8822.pdf",
+    "2848": "https://www.irs.gov/pub/irs-pdf/f2848.pdf",
+    "SS-4": "https://www.irs.gov/pub/irs-pdf/fss4.pdf",
+    "433-F": "https://www.irs.gov/pub/irs-pdf/f433f.pdf",
+  };
+  for (const [formNumber, url] of Object.entries(officialPdfs)) {
+    await db.irsFormTemplate.updateMany({
+      where: { formNumber, pdfSourceUrl: "" },
+      data: { pdfSourceUrl: url },
+    });
+  }
+
+  // Field mapping for Form 9465 (Rev. 9-2020 field names), wizard key → PDF field.
+  const map9465 = JSON.stringify([
+    { field: "topmostSubform[0].Page1[0].f1_1[0]", source: "tax_form" },
+    { field: "topmostSubform[0].Page1[0].f1_2[0]", source: "tax_years" },
+    { field: "topmostSubform[0].Page1[0].f1_3[0]", source: "name", transform: "first_words" },
+    { field: "topmostSubform[0].Page1[0].f1_4[0]", source: "name", transform: "last_word" },
+    { field: "topmostSubform[0].Page1[0].f1_5[0]", source: "ssn" },
+    { field: "topmostSubform[0].Page1[0].f1_9[0]", source: "address", transform: "street" },
+    { field: "topmostSubform[0].Page1[0].f1_11[0]", source: "address", transform: "city_state_zip" },
+    { field: "topmostSubform[0].Page1[0].f1_17[0]", source: "phone" },
+    { field: "topmostSubform[0].Page1[0].f1_22[0]", source: "amount_owed", transform: "money" },
+    { field: "topmostSubform[0].Page1[0].f1_24[0]", source: "amount_owed", transform: "money" },
+    { field: "topmostSubform[0].Page1[0].f1_25[0]", source: "down_payment", transform: "money" },
+    { field: "topmostSubform[0].Page1[0].f1_26[0]", expr: "amount_owed - down_payment" },
+    { field: "topmostSubform[0].Page1[0].f1_27[0]", expr: "(amount_owed - down_payment) / 72" },
+    { field: "topmostSubform[0].Page1[0].f1_28[0]", source: "monthly_payment", transform: "money" },
+    { field: "topmostSubform[0].Page1[0].f1_30[0]", source: "payment_day" },
+  ]);
+  await db.irsFormTemplate.updateMany({
+    where: { formNumber: "9465", pdfMapJson: "[]" },
+    data: { pdfMapJson: map9465 },
+  });
 }
 
 async function seedCannedResponses() {
