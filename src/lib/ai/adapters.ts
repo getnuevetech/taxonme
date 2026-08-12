@@ -13,20 +13,41 @@ const CALL_TIMEOUT_MS = 90_000;
 
 async function callOpenAiCompatible(p: AiProvider, messages: ChatMessage[]): Promise<string> {
   const base = (p.baseUrl || "https://api.openai.com/v1").replace(/\/$/, "");
-  const res = await fetch(`${base}/chat/completions`, {
-    method: "POST",
-    signal: AbortSignal.timeout(CALL_TIMEOUT_MS),
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${p.apiKey}`,
-    },
-    body: JSON.stringify({
-      model: p.model,
-      messages,
-      max_tokens: p.maxTokens,
-      temperature: p.temperature,
-    }),
-  });
+  const post = (payload: Record<string, unknown>) =>
+    fetch(`${base}/chat/completions`, {
+      method: "POST",
+      signal: AbortSignal.timeout(CALL_TIMEOUT_MS),
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${p.apiKey}`,
+      },
+      body: JSON.stringify(payload),
+    });
+
+  const payload: Record<string, unknown> = {
+    model: p.model,
+    messages,
+    max_tokens: p.maxTokens,
+    temperature: p.temperature,
+  };
+  let res = await post(payload);
+  // Newer models reject legacy parameters — adapt instead of failing:
+  // max_tokens → max_completion_tokens, and drop unsupported temperature.
+  if (res.status === 400) {
+    const errText = await res.text();
+    let changed = false;
+    if (/max_tokens/i.test(errText) && !("max_completion_tokens" in payload)) {
+      payload.max_completion_tokens = payload.max_tokens;
+      delete payload.max_tokens;
+      changed = true;
+    }
+    if (/temperature/i.test(errText) && "temperature" in payload) {
+      delete payload.temperature;
+      changed = true;
+    }
+    if (!changed) throw new Error(`${p.name}: HTTP 400 ${errText.slice(0, 300)}`);
+    res = await post(payload);
+  }
   if (!res.ok) throw new Error(`${p.name}: HTTP ${res.status} ${(await res.text()).slice(0, 300)}`);
   const data = await res.json();
   return data.choices?.[0]?.message?.content ?? "";
@@ -36,22 +57,36 @@ async function callAnthropic(p: AiProvider, messages: ChatMessage[]): Promise<st
   const base = (p.baseUrl || "https://api.anthropic.com").replace(/\/$/, "");
   const system = messages.filter((m) => m.role === "system").map((m) => m.content).join("\n");
   const rest = messages.filter((m) => m.role !== "system");
-  const res = await fetch(`${base}/v1/messages`, {
-    method: "POST",
-    signal: AbortSignal.timeout(CALL_TIMEOUT_MS),
-    headers: {
-      "Content-Type": "application/json",
-      "x-api-key": p.apiKey,
-      "anthropic-version": "2023-06-01",
-    },
-    body: JSON.stringify({
-      model: p.model,
-      max_tokens: p.maxTokens,
-      temperature: p.temperature,
-      system: system || undefined,
-      messages: rest.map((m) => ({ role: m.role, content: m.content })),
-    }),
-  });
+  const post = (payload: Record<string, unknown>) =>
+    fetch(`${base}/v1/messages`, {
+      method: "POST",
+      signal: AbortSignal.timeout(CALL_TIMEOUT_MS),
+      headers: {
+        "Content-Type": "application/json",
+        "x-api-key": p.apiKey,
+        "anthropic-version": "2023-06-01",
+      },
+      body: JSON.stringify(payload),
+    });
+
+  const payload: Record<string, unknown> = {
+    model: p.model,
+    max_tokens: p.maxTokens,
+    temperature: p.temperature,
+    system: system || undefined,
+    messages: rest.map((m) => ({ role: m.role, content: m.content })),
+  };
+  let res = await post(payload);
+  // Newer Claude models reject `temperature` — retry without it.
+  if (res.status === 400) {
+    const errText = await res.text();
+    if (/temperature/i.test(errText) && "temperature" in payload) {
+      delete payload.temperature;
+      res = await post(payload);
+    } else {
+      throw new Error(`${p.name}: HTTP 400 ${errText.slice(0, 300)}`);
+    }
+  }
   if (!res.ok) throw new Error(`${p.name}: HTTP ${res.status} ${(await res.text()).slice(0, 300)}`);
   const data = await res.json();
   return (data.content ?? []).map((c: { text?: string }) => c.text ?? "").join("");
@@ -92,6 +127,40 @@ export async function callProvider(p: AiProvider, messages: ChatMessage[]): Prom
       text = await callOpenAiCompatible(p, messages);
   }
   return { text, latencyMs: Date.now() - started };
+}
+
+// Lists the model IDs the provider's endpoint actually offers — used by the
+// admin connectivity tester to suggest valid model names when a test fails.
+export async function listModels(p: AiProvider): Promise<string[]> {
+  const signal = AbortSignal.timeout(30_000);
+  if (p.kind === "anthropic") {
+    const base = (p.baseUrl || "https://api.anthropic.com").replace(/\/$/, "");
+    const res = await fetch(`${base}/v1/models?limit=100`, {
+      signal,
+      headers: { "x-api-key": p.apiKey, "anthropic-version": "2023-06-01" },
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+    return ((data.data ?? []) as { id?: string }[]).map((m) => String(m.id ?? "")).filter(Boolean);
+  }
+  if (p.kind === "google") {
+    const base = (p.baseUrl || "https://generativelanguage.googleapis.com/v1beta").replace(/\/$/, "");
+    const res = await fetch(`${base}/models?key=${p.apiKey}&pageSize=200`, { signal });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+    return ((data.models ?? []) as { name?: string; supportedGenerationMethods?: string[] }[])
+      .filter((m) => (m.supportedGenerationMethods ?? []).includes("generateContent"))
+      .map((m) => String(m.name ?? "").replace(/^models\//, ""))
+      .filter(Boolean);
+  }
+  const base = (p.baseUrl || "https://api.openai.com/v1").replace(/\/$/, "");
+  const res = await fetch(`${base}/models`, {
+    signal,
+    headers: { Authorization: `Bearer ${p.apiKey}` },
+  });
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  const data = await res.json();
+  return ((data.data ?? []) as { id?: string }[]).map((m) => String(m.id ?? "")).filter(Boolean);
 }
 
 // Models are asked to return JSON; this tolerantly extracts the first JSON object.

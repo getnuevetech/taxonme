@@ -92,9 +92,21 @@ export async function testAiProviderAction(id: string): Promise<ActionState> {
     await logSystem("info", "ai_test", `${provider.name} (${provider.model}) responded in ${result.latencyMs}ms`, reply);
     return { ok: true, info: `Responding — ${result.latencyMs}ms. Model replied: "${reply}"` };
   } catch (err) {
-    const detail = String(err instanceof Error ? err.message : err).slice(0, 1000);
+    let detail = String(err instanceof Error ? err.message : err).slice(0, 1000);
+    // If the model name looks wrong (404 / not found), fetch the endpoint's
+    // real model list so the admin can pick a valid name from the message.
+    if (/404|not.?found|does not exist|unknown model|invalid model/i.test(detail)) {
+      try {
+        const { listModels } = await import("@/lib/ai/adapters");
+        const models = await listModels(provider);
+        if (models.length) {
+          const shown = models.slice(0, 15).join(", ");
+          detail += ` — Available models on this endpoint: ${shown}${models.length > 15 ? `, … (${models.length} total)` : ""}`;
+        }
+      } catch { /* the listing endpoint may be unavailable too */ }
+    }
     await logSystem("error", "ai_test", `${provider.name} (${provider.model}) failed the connectivity test`, detail);
-    return { error: `Not responding: ${detail}` };
+    return { error: `Not responding: ${detail.slice(0, 1500)}` };
   }
 }
 
