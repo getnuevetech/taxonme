@@ -249,23 +249,39 @@ export async function runCaseAnalysis(caseId: string): Promise<void> {
   // Persist issues.
   for (const [i, issue] of issues.entries()) {
     const toCents = (v: unknown) => (typeof v === "number" && Number.isFinite(v) ? Math.round(v * 100) : null);
+    const oneOf = (v: unknown, allowed: string[], dflt: string) => (allowed.includes(String(v)) ? String(v) : dflt);
+    // "What's still unclear" — structured list, with graceful fallback to the
+    // legacy single what_we_dont_know sentence for AI outputs.
+    const unclear = Array.isArray(issue.still_unclear)
+      ? (issue.still_unclear as unknown[]).map(String).filter(Boolean)
+      : issue.what_we_dont_know
+        ? [String(issue.what_we_dont_know)]
+        : [];
     await db.issue.create({
       data: {
         caseId,
         issueType: String(issue.issue_type ?? "other"),
         taxYear: typeof issue.tax_year === "number" ? issue.tax_year : null,
         title: String(issue.title ?? issue.issue_identified ?? `Issue ${i + 1}`).slice(0, 200),
-        description: [issue.what_we_know, issue.what_we_dont_know ? `What we don't know yet: ${issue.what_we_dont_know}` : ""].filter(Boolean).join("\n\n"),
+        description: String(issue.what_we_know ?? ""),
         expectedCents: toCents(issue.expected_amount),
         receivedCents: toCents(issue.received_amount),
         differenceCents: toCents(issue.difference_amount),
-        confidence: ["high", "medium", "low"].includes(String(issue.confidence)) ? String(issue.confidence) : "medium",
-        priority: ["urgent", "high", "medium", "low"].includes(String(issue.priority)) ? String(issue.priority) : "medium",
-        state: ["resolved", "review", "action_needed", "urgent", "info_needed"].includes(String(issue.state)) ? String(issue.state) : "review",
+        confidence: oneOf(issue.confidence, ["high", "medium", "low"], "medium"),
+        priority: oneOf(issue.priority, ["urgent", "high", "medium", "low"], "medium"),
+        state: oneOf(issue.state, ["resolved", "review", "action_needed", "urgent", "info_needed"], "review"),
         nextAction: String(issue.next_action ?? ""),
         irsBasis: String(issue.irs_basis ?? ""),
-        // Per-finding analysis outline (what you told us → IRS rules → evidence
-        // → outcomes → tailored next step), rendered under each finding.
+        // Evidence-based taxonomy: item kind + evidence status + strength.
+        itemKind: oneOf(issue.item_kind, ["finding", "issue", "opportunity", "risk", "missing_info"], "issue"),
+        evidenceStatus: oneOf(issue.evidence_status, ["confirmed", "likely", "possible", "needs_verification", "not_supported"], "needs_verification"),
+        evidenceStrength: oneOf(issue.evidence_strength, ["strong", "moderate", "limited"], "limited"),
+        conclusion: String(issue.our_conclusion ?? ""),
+        unclearJson: JSON.stringify(unclear),
+        explanationsJson: JSON.stringify(Array.isArray(issue.explanations) ? issue.explanations : []),
+        altAction: String(issue.alternative_action ?? ""),
+        // Per-item analysis outline (your situation → tax rules → your evidence
+        // → our conclusion → your next move), rendered under each item.
         evidenceJson: JSON.stringify(Array.isArray(issue.analysis_outline) ? issue.analysis_outline : []),
       },
     });
@@ -307,6 +323,17 @@ export async function runCaseAnalysis(caseId: string): Promise<void> {
     unknowns,
   });
 
+  // Information conflicts: contradictions between the customer's narrative and
+  // their documents (fallback engine) or between analysis engines (AI path).
+  // Surfaced to the customer as INFORMATION CONFLICT cards — never guessed away.
+  const displayConflicts = fallback
+    ? fallback.conflicts
+    : allConflicts.map((cf) => ({
+        topic: cf.field.replace(/_/g, " "),
+        description: `Our analysis sources disagree on "${cf.field.replace(/_/g, " ")}": ${cf.values.map((v) => String(v.value)).join(" vs. ")}.`,
+        resolution: "Flagged for verification instead of guessing — your Account Transcript or the underlying document settles it.",
+      }));
+
   // Consultant recommendation → notify admins.
   const needsConsultant =
     presentation?.consultant_recommended === true ||
@@ -316,6 +343,7 @@ export async function runCaseAnalysis(caseId: string): Promise<void> {
     data: {
       status: needsConsultant ? "consultant_recommended" : "analyzed",
       readinessScore: readiness,
+      conflictsJson: JSON.stringify(displayConflicts),
     },
   });
   if (needsConsultant) {

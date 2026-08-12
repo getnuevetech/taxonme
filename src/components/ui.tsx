@@ -131,6 +131,57 @@ export function ConfidenceBadge({ level }: { level: string }) {
   return <Badge color={def.color}>{def.label}</Badge>;
 }
 
+// Evidence-based product statuses — never an AI confidence percentage.
+export const EVIDENCE_STATUSES: Record<string, { label: string; color: string; explain: string }> = {
+  confirmed: { label: "Confirmed", color: "green", explain: "Evidence supports this finding." },
+  likely: { label: "Likely", color: "blue", explain: "Strong indicators, but additional verification needed." },
+  possible: { label: "Possible", color: "amber", explain: "There are indicators, but insufficient evidence." },
+  needs_verification: { label: "Needs verification", color: "red", explain: "Important information is missing or conflicting." },
+  not_supported: { label: "Not supported", color: "slate", explain: "The available evidence doesn't support the concern." },
+};
+
+export function EvidenceStatusBadge({ status }: { status: string }) {
+  const def = EVIDENCE_STATUSES[status] ?? EVIDENCE_STATUSES.needs_verification;
+  return (
+    <span title={def.explain}>
+      <Badge color={def.color}>{def.label}</Badge>
+    </span>
+  );
+}
+
+export const EVIDENCE_STRENGTHS: Record<string, { label: string; explain: string }> = {
+  strong: { label: "Strong", explain: "Supported by multiple independent records." },
+  moderate: { label: "Moderate", explain: "Supported by available evidence but requires confirmation." },
+  limited: { label: "Limited", explain: "Based primarily on your description or incomplete documents." },
+};
+
+export function EvidenceStrengthLine({ strength }: { strength: string }) {
+  const def = EVIDENCE_STRENGTHS[strength] ?? EVIDENCE_STRENGTHS.limited;
+  return (
+    <p className="text-xs text-slate-500">
+      <span className="font-semibold text-slate-700">Evidence strength: {def.label}.</span> {def.explain}
+    </p>
+  );
+}
+
+// Item classification — richer than calling everything a "finding".
+export const ITEM_KINDS: Record<string, { label: string; color: string }> = {
+  finding: { label: "Finding", color: "indigo" },
+  issue: { label: "Issue", color: "amber" },
+  opportunity: { label: "Opportunity", color: "green" },
+  risk: { label: "Risk", color: "red" },
+  missing_info: { label: "Missing information", color: "slate" },
+};
+
+export function ItemKindBadge({ kind }: { kind: string }) {
+  const def = ITEM_KINDS[kind] ?? ITEM_KINDS.issue;
+  return (
+    <span className={`inline-flex items-center rounded-md px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider ${badgeStyles[def.color] ?? badgeStyles.slate}`}>
+      {def.label}
+    </span>
+  );
+}
+
 export function ProgressBar({ value, label }: { value: number; label?: string }) {
   const clamped = Math.max(0, Math.min(100, value));
   return (

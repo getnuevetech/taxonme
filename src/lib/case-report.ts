@@ -106,12 +106,20 @@ export async function buildCaseReportHtml(caseId: string): Promise<{ html: strin
 <h2>3. Issues identified (${c.issues.length})</h2>
 ${c.issues
   .map(
-    (i, n) => `<h3>3.${n + 1} ${i.taxYear ? `${i.taxYear} · ` : ""}${esc(i.title)}</h3>
-<p><span class="badge">${stateLabel[i.state] ?? i.state}</span><span class="badge">Confidence: ${i.confidence}</span><span class="badge">Priority: ${i.priority}</span><span class="badge">Type: ${i.issueType.replace(/_/g, " ")}</span></p>
+    (i, n) => {
+      let unclear: string[] = [];
+      try { const p = JSON.parse(i.unclearJson || "[]"); if (Array.isArray(p)) unclear = p.map(String).filter(Boolean); } catch { /* legacy */ }
+      const statusLabel: Record<string, string> = { confirmed: "Confirmed", likely: "Likely", possible: "Possible", needs_verification: "Needs verification", not_supported: "Not supported" };
+      const kindLabel: Record<string, string> = { finding: "Finding", issue: "Issue", opportunity: "Opportunity", risk: "Risk", missing_info: "Missing information" };
+      return `<h3>3.${n + 1} ${i.taxYear ? `${i.taxYear} · ` : ""}${esc(i.title)}</h3>
+<p><span class="badge">${kindLabel[i.itemKind] ?? "Issue"}</span><span class="badge">${statusLabel[i.evidenceStatus] ?? "Needs verification"}</span><span class="badge">${stateLabel[i.state] ?? i.state}</span><span class="badge">Evidence: ${i.evidenceStrength}</span><span class="badge">Priority: ${i.priority}</span><span class="badge">Type: ${i.issueType.replace(/_/g, " ")}</span></p>
 ${i.expectedCents !== null || i.differenceCents !== null ? `<div class="amounts"><div><div class="muted">Expected</div><div class="n">${usd(i.expectedCents)}</div></div><div><div class="muted">Received/assessed</div><div class="n">${usd(i.receivedCents)}</div></div><div><div class="muted">Difference</div><div class="n">${usd(i.differenceCents)}</div></div></div>` : ""}
 <p>${esc(i.description)}</p>
+${i.conclusion ? `<p><strong>Conclusion:</strong> ${esc(i.conclusion)}</p>` : ""}
+${unclear.length ? `<p><strong>Still unclear:</strong></p><ul>${unclear.map((u) => `<li>${esc(u)}</li>`).join("")}</ul>` : ""}
 ${i.irsBasis ? `<p class="muted">IRS basis: ${esc(i.irsBasis)}</p>` : ""}
-${i.nextAction ? `<p><strong>Recommended action:</strong> ${esc(i.nextAction.replace(/_/g, " ").toLowerCase())}</p>` : ""}`,
+${i.nextAction ? `<p><strong>Recommended action:</strong> ${esc(i.nextAction.replace(/_/g, " ").toLowerCase())}</p>` : ""}`;
+    },
   )
   .join("\n")}
 
