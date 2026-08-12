@@ -23,15 +23,18 @@ export function FormStep({
   stepIndex,
   step,
   savedData,
+  prefilledKeys = [],
   isLast,
 }: {
   submissionId: string;
   stepIndex: number;
   step: WizardStep;
   savedData: Record<string, string>;
+  prefilledKeys?: string[];
   isLast: boolean;
 }) {
   const [state, formAction] = useActionState(saveFormStepAction, null);
+  const prefilled = new Set(prefilledKeys);
 
   return (
     <form action={formAction} className="rounded-2xl border border-slate-200 bg-white p-8 shadow-sm">
@@ -47,9 +50,16 @@ export function FormStep({
           const saved = savedData[field.key] ?? "";
           return (
             <label key={field.key} className="block">
-              <span className="mb-1.5 block text-sm font-semibold text-slate-800">
-                {field.label}
-                {field.required && <span className="text-red-500"> *</span>}
+              <span className="mb-1.5 flex items-center gap-2 text-sm font-semibold text-slate-800">
+                <span>
+                  {field.label}
+                  {field.required && <span className="text-red-500"> *</span>}
+                </span>
+                {prefilled.has(field.key) && (
+                  <span className="rounded-full bg-indigo-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-indigo-700">
+                    Prefilled
+                  </span>
+                )}
               </span>
               {field.type === "textarea" ? (
                 <textarea name={field.key} defaultValue={saved} rows={3} placeholder={field.placeholder} className={inputClass} />

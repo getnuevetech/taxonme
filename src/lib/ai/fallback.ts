@@ -180,6 +180,7 @@ export async function fallbackAnalyze(
     issues.push({
       issue_type: "balance_due",
       tax_year: primaryYear,
+      expected_amount: balanceDue.amount,
       title: `Possible balance due of ${usd(balanceDue.amount)}`,
       what_we_know: `Your information mentions ${usd(balanceDue.amount)} owed to the IRS${primaryYear ? ` for tax year ${primaryYear}` : ""}. If you can't pay in full, payment plans are usually available (short-term up to 180 days, or a monthly installment agreement), and penalties can often be reduced.`,
       what_we_dont_know: hasTranscript
