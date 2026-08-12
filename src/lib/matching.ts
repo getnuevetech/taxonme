@@ -95,6 +95,10 @@ function caseSummaryText(c: { title: string; situation: string; goal: string }, 
   return `Title: ${c.title}\nIssues: ${issueTypes.join(", ") || "unknown"}\nSituation: ${c.situation.slice(0, 800)}\nGoal: ${c.goal.slice(0, 300)}`;
 }
 
+export function credentialLabel(type: string): string {
+  return type === "cpa" ? "CPA" : type === "ea" ? "Enrolled Agent" : "Tax Consultant";
+}
+
 function candidateText(cd: Candidate): string {
   const specialtyName = (k: string) => CONSULTANT_SPECIALTIES.find((s) => s.key === k)?.name ?? k;
   return [
@@ -160,10 +164,11 @@ export async function generateAssignmentReason(
     const matched = candidate.specialties.filter((s) =>
       issueTypes.some((t) => (ISSUE_SPECIALTY_MAP[t] ?? []).includes(s)),
     );
-    const summary = `${candidate.name} (${candidate.credentialType.toUpperCase()}, ${candidate.yearsExperience} yrs) specializes in ${matched.length ? matched.map(specialtyName).join(" and ") : "tax resolution"}, which matches this case.`;
+    const cred = credentialLabel(candidate.credentialType);
+    const summary = `${candidate.name} (${cred}, ${candidate.yearsExperience} yrs) specializes in ${matched.length ? matched.map(specialtyName).join(" and ") : "tax resolution"}, which matches this case.`;
     const detail = [
-      `- Credential: ${candidate.credentialType.toUpperCase()} with ${candidate.yearsExperience} years of professional tax experience.`,
-      matched.length ? `- Specialty match: ${matched.map(specialtyName).join(", ")} — directly relevant to the issues in this case (${issueTypes.join(", ")}).` : `- Broad tax-resolution background relevant to this case.`,
+      `- Credential: ${cred} with ${candidate.yearsExperience} years of professional tax experience.`,
+      matched.length ? `- Specialty match: ${matched.map(specialtyName).join(", ")} — directly relevant to the issues in this case (${issueTypes.map((t) => t.replace(/_/g, " ")).join(", ")}).` : `- Broad tax-resolution background relevant to this case.`,
       candidate.pastCases.length ? `- Track record: ${candidate.pastCases.length} past case(s) recorded, including ${candidate.pastCases[0].title}.` : `- Available capacity: currently handling ${candidate.activeLoad} active client(s).`,
       `- Workload: ${candidate.activeLoad} active client(s) — capacity to take this case now.`,
     ].join("\n");

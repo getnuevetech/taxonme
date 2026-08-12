@@ -26,7 +26,7 @@ export default async function ClientWorkspacePage({ params }: { params: Promise<
     <div>
       <PageHeader
         title={`${client.firstName} ${client.lastName}`}
-        subtitle={`${client.email}${client.phone ? ` · ${client.phone}` : ""} — shared with your under an active connection agreement`}
+        subtitle={`${client.email}${client.phone ? ` · ${client.phone}` : ""} — shared with you under an active connection agreement`}
       />
       {client.bio && (
         <Card className="mb-6"><CardBody><p className="text-sm text-slate-600">{client.bio}</p></CardBody></Card>

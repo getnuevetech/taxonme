@@ -1,8 +1,14 @@
 import Link from "next/link";
 import { db } from "@/lib/db";
 import { requireUser } from "@/lib/auth";
-import { PageHeader, Card, CardBody, Badge, EmptyState, ButtonLink } from "@/components/ui";
+import { PageHeader, Card, CardBody, Badge, EmptyState, ButtonLink, StateMark, ProgressBar } from "@/components/ui";
 import { consultantRespondAssignmentAction } from "@/actions/consultant";
+import { formatCaseNumber } from "@/lib/case-number";
+
+function money(cents: number | null): string | null {
+  if (cents === null || cents === undefined) return null;
+  return `$${(Math.abs(cents) / 100).toLocaleString("en-US", { minimumFractionDigits: 2 })}`;
+}
 
 export const metadata = { title: "Consultant dashboard" };
 
@@ -17,10 +23,25 @@ export default async function ConsultantDashboard({
   const subsEnabled = await consultantSubscriptionsEnabled();
   const needsSubscription = subsEnabled && !(await hasActiveConsultantSubscription(user.id));
   const profile = await db.consultantProfile.findUnique({ where: { userId: user.id } });
+  const caseInclude = {
+    issues: { orderBy: { createdAt: "asc" as const } },
+    pathSteps: { orderBy: { sortOrder: "asc" as const } },
+    _count: { select: { documents: true } },
+  };
   const assignments = await db.consultantAssignment.findMany({
     where: { consultantId: user.id, status: { notIn: ["revoked", "declined"] } },
     orderBy: { createdAt: "desc" },
-    include: { user: { select: { firstName: true, lastName: true, email: true } }, case: { select: { id: true, title: true } } },
+    include: {
+      user: {
+        select: {
+          firstName: true,
+          lastName: true,
+          email: true,
+          cases: { orderBy: { updatedAt: "desc" as const }, take: 1, include: caseInclude },
+        },
+      },
+      case: { include: caseInclude },
+    },
   });
   const agreement = await db.contentPage.findFirst({
     where: { kind: "agreement_connection", isPublished: true },
@@ -87,28 +108,92 @@ export default async function ConsultantDashboard({
         />
       ) : (
         <div className="space-y-4">
-          {assignments.map((a) => (
+          {assignments.map((a) => {
+            const kase = a.case ?? a.user.cases[0] ?? null;
+            const openIssues = kase ? kase.issues.filter((i) => i.state !== "resolved") : [];
+            const doneSteps = kase ? kase.pathSteps.filter((s) => s.status === "done").length : 0;
+            const nextStep = kase ? kase.pathSteps.find((s) => s.status !== "done") : null;
+            return (
             <Card key={a.id}>
               <CardBody>
-                <div className="flex flex-wrap items-center justify-between gap-3">
+                <div className="flex flex-wrap items-start justify-between gap-3">
                   <div>
                     <p className="font-semibold text-slate-900">{a.user.firstName} {a.user.lastName}</p>
                     <p className="text-sm text-slate-500">{a.status === "active" ? a.user.email : "Contact details unlock when the connection is active"}</p>
-                    {(a.reasonSummary || a.note) && (
-                      <p className="mt-1 text-sm text-slate-600">
-                        <span className="font-medium text-slate-700">Why you were matched: </span>
-                        {a.reasonSummary || a.note}
-                      </p>
-                    )}
-                    {a.reasonDetail && (
-                      <details className="mt-1">
-                        <summary className="cursor-pointer text-xs font-medium text-indigo-600">Detailed reasoning</summary>
-                        <p className="mt-1 whitespace-pre-line rounded-lg bg-slate-50 p-3 text-xs text-slate-600">{a.reasonDetail}</p>
-                      </details>
-                    )}
                   </div>
                   <Badge color={a.status === "active" ? "green" : "amber"}>{a.status.replace(/_/g, " ")}</Badge>
                 </div>
+
+                {kase ? (
+                  <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50/60 p-4">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <p className="text-sm font-semibold text-slate-900">
+                        <span className="mr-2 font-mono text-xs text-indigo-600">{formatCaseNumber(kase.number)}</span>
+                        {kase.title}
+                      </p>
+                      <Badge>{kase.status.replace(/_/g, " ")}</Badge>
+                    </div>
+                    {kase.goal && (
+                      <p className="mt-2 text-sm text-slate-600">
+                        <span className="font-medium text-slate-700">Client&apos;s goal: </span>
+                        {kase.goal}
+                      </p>
+                    )}
+
+                    {kase.issues.length > 0 ? (
+                      <div className="mt-3">
+                        <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                          What our analysis found ({kase.issues.length} issue{kase.issues.length === 1 ? "" : "s"})
+                        </p>
+                        <div className="mt-2 space-y-1.5">
+                          {kase.issues.map((i) => (
+                            <div key={i.id} className="flex items-center justify-between gap-2 rounded-lg bg-white px-3 py-2 text-sm ring-1 ring-slate-100">
+                              <span className="text-slate-700">
+                                {i.taxYear ? `${i.taxYear} · ` : ""}{i.title}
+                                {money(i.differenceCents) ? <span className="ml-1.5 font-semibold text-indigo-600">{money(i.differenceCents)}</span> : null}
+                              </span>
+                              <StateMark state={i.state} />
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ) : (
+                      <p className="mt-3 text-sm text-slate-500">Analysis hasn&apos;t surfaced findings yet — the client may still be adding details.</p>
+                    )}
+
+                    <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                      <ProgressBar value={kase.readinessScore} label="Case readiness" />
+                      <div className="text-sm text-slate-600">
+                        <p>
+                          <span className="font-medium text-slate-700">{doneSteps}/{kase.pathSteps.length}</span> path steps done
+                          <span className="mx-1.5 text-slate-300">·</span>
+                          <span className="font-medium text-slate-700">{kase._count.documents}</span> document{kase._count.documents === 1 ? "" : "s"} shared
+                        </p>
+                        {openIssues.length > 0 && (
+                          <p className="mt-0.5 text-xs text-slate-500">{openIssues.length} finding{openIssues.length === 1 ? "" : "s"} awaiting professional review</p>
+                        )}
+                      </div>
+                    </div>
+                    {nextStep && (
+                      <p className="mt-2 text-sm text-slate-600">
+                        <span className="font-medium text-slate-700">Where the case stands: </span>
+                        {nextStep.title}
+                      </p>
+                    )}
+                  </div>
+                ) : (
+                  <p className="mt-3 text-sm text-slate-500">This client hasn&apos;t started a case yet — you&apos;ll see the full analysis briefing here once they do.</p>
+                )}
+
+                {(a.reasonSummary || a.note || a.reasonDetail) && (
+                  <details className="mt-3">
+                    <summary className="cursor-pointer text-xs font-medium text-slate-500 hover:text-slate-700">Why this case was matched to you</summary>
+                    <div className="mt-1 rounded-lg bg-slate-50 p-3 text-xs text-slate-600">
+                      {(a.reasonSummary || a.note) && <p>{a.reasonSummary || a.note}</p>}
+                      {a.reasonDetail && <p className="mt-1 whitespace-pre-line">{a.reasonDetail}</p>}
+                    </div>
+                  </details>
+                )}
 
                 {!a.consultantAgreedAt && a.status !== "active" && (
                   <div className="mt-4 rounded-xl bg-slate-50 p-4">
@@ -141,15 +226,27 @@ export default async function ConsultantDashboard({
                   <p className="mt-3 text-sm text-slate-500">You&apos;ve accepted. Waiting for the client to approve the connection.</p>
                 )}
                 {a.status === "active" && (
-                  <div className="mt-3">
-                    <Link href={`/consultant/clients/${a.id}`} className="text-sm font-semibold text-indigo-600 hover:text-indigo-800">
-                      Open client workspace →
+                  <div className="mt-4 flex flex-wrap gap-2">
+                    {kase && (
+                      <Link
+                        href={`/consultant/clients/${a.id}/cases/${kase.id}`}
+                        className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700"
+                      >
+                        Review full analysis →
+                      </Link>
+                    )}
+                    <Link
+                      href={`/consultant/clients/${a.id}`}
+                      className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+                    >
+                      Client workspace
                     </Link>
                   </div>
                 )}
               </CardBody>
             </Card>
-          ))}
+            );
+          })}
         </div>
       )}
     </div>
