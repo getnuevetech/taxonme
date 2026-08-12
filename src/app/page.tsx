@@ -43,7 +43,7 @@ export default async function HomePage() {
 
   const trust = [
     { icon: <IconShield className="h-5 w-5" />, text: "Your documents stay private — delete anything, anytime" },
-    { icon: <IconSparkle className="h-5 w-5" />, text: "Multiple AI models cross-check every amount" },
+    { icon: <IconSparkle className="h-5 w-5" />, text: "Every amount is cross-checked against your documents" },
     { icon: <IconCheckCircle className="h-5 w-5" />, text: "When something can't be verified, we say so — never guess" },
   ];
 
@@ -147,7 +147,7 @@ export default async function HomePage() {
             </div>
             <div>
               <p className="font-serif text-6xl font-bold italic text-indigo-600">5</p>
-              <p className="mt-2 text-sm text-slate-600">AI models cross-checking your case</p>
+              <p className="mt-2 text-sm text-slate-600">Cross-checking every amount in your case</p>
             </div>
             <div>
               <p className="font-serif text-6xl font-bold italic text-indigo-600">100%</p>

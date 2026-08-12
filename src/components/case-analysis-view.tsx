@@ -134,7 +134,7 @@ export async function CaseAnalysisView({ caseId, viewer }: { caseId: string; vie
             <span className="h-3 w-3 shrink-0 animate-ping rounded-full bg-indigo-500" />
             <span>
               <span className="font-semibold">Analysis in progress…</span> Your findings update on this page automatically —
-              multi-model runs can take a couple of minutes.
+              a detailed review can take a couple of minutes.
             </span>
             <AutoRefresh />
           </div>

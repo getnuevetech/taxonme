@@ -112,9 +112,9 @@ async function seedPlansAndFeatures() {
     ["notice.explain", "Plain-English notice explanations", "notices", 2],
     ["documents.upload", "Document vault storage", "documents", 3],
     ["documents.explain", "Tax document explanations (W-2/1099/1040)", "documents", 4],
-    ["case.analysis", "AI case analysis", "analysis", 5],
+    ["case.analysis", "In-depth case analysis", "analysis", 5],
     ["case.full_results", "Full analysis results & action plan", "analysis", 6],
-    ["qa.chat", "AI tax Q&A", "assistant", 7],
+    ["qa.chat", "Tax Q&A assistant", "assistant", 7],
     ["letters.generate", "Response-letter generator", "letters", 8],
     ["deadlines.reminders", "Deadline tracking & reminders", "deadlines", 9],
     ["vault.storage", "Secure document vault", "documents", 10],
@@ -127,6 +127,14 @@ async function seedPlansAndFeatures() {
   for (const [key, name, category, sortOrder] of features) {
     await db.featureDef.upsert({ where: { key }, update: {}, create: { key, name, category, sortOrder } });
   }
+  // Corrective renames for existing installs: customer-facing copy must never
+  // reference AI models (standard product-language policy).
+  await db.featureDef.updateMany({ where: { key: "case.analysis", name: "AI case analysis" }, data: { name: "In-depth case analysis" } });
+  await db.featureDef.updateMany({ where: { key: "qa.chat", name: "AI tax Q&A" }, data: { name: "Tax Q&A assistant" } });
+  await db.subscriptionPlan.updateMany({
+    where: { description: { contains: "AI-matched client assignments" } },
+    data: { description: "For CPA/EA partners: receive expertly matched client assignments and manage them in your workspace." },
+  });
 
   const plans = [
     {
@@ -207,7 +215,7 @@ async function seedPlansAndFeatures() {
       key: "partner",
       name: "Partner",
       audience: "consultant",
-      description: "For CPA/EA partners: receive AI-matched client assignments and manage them in your workspace.",
+      description: "For CPA/EA partners: receive expertly matched client assignments and manage them in your workspace.",
       priceMonthlyCents: 4900,
       priceYearlyCents: 49900,
       sortOrder: 10,

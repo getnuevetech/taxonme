@@ -33,7 +33,7 @@ export async function buildCaseReportHtml(caseId: string): Promise<{ html: strin
   const appName = await getSetting("app.name", "TaxOnMe");
   const ref = formatCaseNumber(c.number);
   const generatedAt = new Date().toLocaleString("en-US");
-  const engine = c.runs[0]?.stepResults.length ? "AI analysis pipeline" : "Rule-based preliminary analysis";
+  const reviewLevel = c.runs[0]?.stepResults.length ? "Full analysis" : "Preliminary review";
 
   // Merge document copies: images embedded inline, text embedded as content,
   // everything else referenced in the appendix inventory.
@@ -94,7 +94,7 @@ export async function buildCaseReportHtml(caseId: string): Promise<{ html: strin
   <p class="meta">
     <strong>Case reference:</strong> ${ref} &nbsp;·&nbsp; <strong>Generated:</strong> ${generatedAt}<br/>
     <strong>Taxpayer:</strong> ${esc(`${c.user?.firstName ?? ""} ${c.user?.lastName ?? ""}`.trim() || "—")} (${esc(c.user?.email ?? "—")}${c.user?.phone ? `, ${esc(c.user.phone)}` : ""})${c.user?.address ? `<br/><strong>Address:</strong> ${esc(c.user.address)}` : ""}<br/>
-    <strong>Case opened:</strong> ${c.createdAt.toLocaleDateString("en-US")} &nbsp;·&nbsp; <strong>Status:</strong> ${esc(c.status.replace(/_/g, " "))} &nbsp;·&nbsp; <strong>Readiness:</strong> ${c.readinessScore}% &nbsp;·&nbsp; <strong>Engine:</strong> ${engine}
+    <strong>Case opened:</strong> ${c.createdAt.toLocaleDateString("en-US")} &nbsp;·&nbsp; <strong>Status:</strong> ${esc(c.status.replace(/_/g, " "))} &nbsp;·&nbsp; <strong>Readiness:</strong> ${c.readinessScore}% &nbsp;·&nbsp; <strong>Review level:</strong> ${reviewLevel}
   </p>
 </header>
 

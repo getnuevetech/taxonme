@@ -61,7 +61,7 @@ export async function CaseClarify({ caseId }: { caseId: string }) {
       {analyzing ? (
         <div className="mt-4 flex items-center gap-3 rounded-xl bg-white px-4 py-3 text-sm text-slate-600 ring-1 ring-slate-200">
           <span className="h-2.5 w-2.5 shrink-0 animate-ping rounded-full bg-indigo-500" />
-          Re-analyzing with your answer — this usually takes under a minute (multi-model runs can take a few).
+          Re-analyzing with your answer — this usually takes under a minute; a detailed review can take a few.
           <AutoRefresh />
         </div>
       ) : question ? (

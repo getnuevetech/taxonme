@@ -379,7 +379,7 @@ export async function runQaChat(history: { role: string; content: string }[]): P
   const convo = history.map((m) => `${m.role === "user" ? "User" : "Assistant"}: ${m.content}`).join("\n");
   const knowledge = await retrieveKnowledge(history.map((m) => m.content).join(" "));
   if (steps.length === 0) {
-    return "Our AI assistant isn't connected yet — the administrator needs to add an AI provider in the admin backend. Meanwhile, you can upload your documents to your vault and browse the guides, and we'll analyze everything as soon as the assistant is online.";
+    return "The assistant isn't available just yet. Meanwhile, you can upload your documents to your vault and browse the guides — everything you add will be analyzed as soon as the assistant comes online.";
   }
   // Try every configured model in order; log each failure to the system log.
   for (const step of steps) {
@@ -408,7 +408,7 @@ export async function explainNoticeContent(content: string): Promise<Json | null
     notice_type: code || null,
     plain_english_explanation: kb
       ? kb.content.slice(0, 1200)
-      : "We stored your notice safely. Automated explanation requires the administrator to connect an AI provider — or our team's knowledge base doesn't cover this notice type yet.",
+      : "We stored your notice safely. Our reference library doesn't cover this notice type yet — a professional review can explain it, and it will be re-examined automatically on your next analysis.",
     next_steps: [
       { title: "Keep the notice safe", description: "It's stored in your document vault." },
       { title: "Check the deadline", description: "IRS notices usually show a respond-by date near the top right. Add it to your deadlines." },
