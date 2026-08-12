@@ -1,6 +1,6 @@
 import "server-only";
 import { db } from "../db";
-import { callProvider, extractJson, type ChatMessage } from "./adapters";
+import { callProvider, extractJson, type ChatMessage, type MediaAttachment } from "./adapters";
 import { mergeStructured, computeReadiness, type Conflict } from "./consensus";
 import { fallbackAnalyze } from "./fallback";
 import { STAGE_KEYS } from "../constants";
@@ -73,7 +73,7 @@ export type StageOutcome = {
 export async function runStage(
   stageKey: string,
   vars: Record<string, string>,
-  opts?: { runId?: string; sequentialContext?: boolean },
+  opts?: { runId?: string; sequentialContext?: boolean; media?: MediaAttachment[] },
 ): Promise<StageOutcome> {
   const steps = await getRunnableSteps(stageKey);
   const stepOutputs: StageOutcome["stepOutputs"] = [];
@@ -84,7 +84,7 @@ export async function runStage(
     const messages: ChatMessage[] = [{ role: "user", content: prompt }];
     const started = Date.now();
     try {
-      const result = await callProvider(step.provider, messages);
+      const result = await callProvider(step.provider, messages, opts?.media ?? []);
       const data = extractJson(result.text);
       stepOutputs.push({
         source: `${step.provider.name} (${step.role})`,
@@ -133,21 +133,41 @@ export async function runStage(
 
 // ---------- Full case analysis pipeline (Layers 1–5) ----------
 
-// Extract readable text from an uploaded document where possible (plain-text
-// formats). Binary formats (PDF scans, photos) require a vision-capable AI
-// provider; until one is configured we analyze filename + kind + user input.
+// Extract readable text from an uploaded document: plain-text formats
+// directly, and digital PDFs (like IRS transcripts downloaded from the online
+// account) via their embedded text layer. Scanned PDFs and photos have no
+// text layer — they go to vision-capable providers as media instead.
 async function getDocumentText(doc: { filePath: string; fileName: string; mimeType: string }): Promise<string> {
   const textLike =
     doc.mimeType.startsWith("text/") ||
     /\.(txt|csv|md|log)$/i.test(doc.fileName) ||
     doc.mimeType === "application/json";
-  if (!textLike) return "";
+  const isPdf = doc.mimeType === "application/pdf" || /\.pdf$/i.test(doc.fileName);
   try {
     const buf = await readUpload(doc.filePath);
-    return buf.toString("utf-8").slice(0, 12000);
+    if (textLike) return buf.toString("utf-8").slice(0, 12000);
+    if (isPdf) {
+      try {
+        const { PDFParse } = await import("pdf-parse");
+        const parser = new PDFParse({ data: new Uint8Array(buf) });
+        try {
+          const result = await parser.getText();
+          const text = String(result?.text ?? "").replace(/\u0000/g, "").trim();
+          if (text.length > 80) return text.slice(0, 15000);
+        } finally {
+          await parser.destroy().catch(() => null);
+        }
+      } catch (err) {
+        // Scanned PDFs legitimately have no text layer; anything else (like a
+        // broken import) must be visible in the system log, never silent.
+        const { logSystem } = await import("../syslog");
+        await logSystem("warning", "pdf_extract", `Could not extract text from ${doc.fileName}`, String(err));
+      }
+    }
   } catch {
     return "";
   }
+  return "";
 }
 
 export async function runCaseAnalysis(caseId: string): Promise<void> {
@@ -162,27 +182,51 @@ export async function runCaseAnalysis(caseId: string): Promise<void> {
   await db.issue.deleteMany({ where: { caseId } });
   await db.pathStep.deleteMany({ where: { caseId } });
 
-  // Layer 2 input: include actual document content where it can be read.
+  // Layer 2 input: include actual document content where it can be read
+  // (plain text + the text layer of digital PDFs, e.g. IRS transcripts).
   const docParts: string[] = [];
   let rawDocText = "";
+  const readableDocIds = new Set<string>();
   for (const d of c.documents) {
     const content = await getDocumentText(d);
-    if (content && !d.extractedJson) {
-      await db.document.update({
-        where: { id: d.id },
-        data: { extractedJson: JSON.stringify({ raw_text: content.slice(0, 4000) }), status: "extracted" },
-      });
+    if (content) {
+      readableDocIds.add(d.id);
+      if (!d.extractedJson) {
+        await db.document.update({
+          where: { id: d.id },
+          data: { extractedJson: JSON.stringify({ raw_text: content.slice(0, 4000) }), status: "extracted" },
+        });
+      }
     }
     rawDocText += content ? `\n${content}` : "";
     docParts.push(
-      `Document: ${d.fileName} (kind: ${d.docKind})${content ? `\nContent:\n${content}` : d.extractedJson ? `\nExtracted: ${d.extractedJson}` : ""}`,
+      `Document: ${d.fileName} (kind: ${d.docKind})${content ? `\nContent:\n${content}` : d.extractedJson ? `\nExtracted: ${d.extractedJson}` : "\n(scanned/photographed — see the attached file)"}`,
     );
   }
   const docText = docParts.join("\n\n");
 
-  async function stageRun(stageKey: string, vars: Record<string, string>, sequentialContext = false) {
+  // Media for vision-capable providers: PDFs and images (scans/photos) are
+  // attached so the models read the ACTUAL documents, not just filenames.
+  const media: MediaAttachment[] = [];
+  for (const d of c.documents) {
+    if (media.length >= 6) break;
+    const isImage = d.mimeType.startsWith("image/");
+    const isPdf = d.mimeType === "application/pdf" || /\.pdf$/i.test(d.fileName);
+    if (!isImage && !isPdf) continue;
+    try {
+      const buf = await readUpload(d.filePath);
+      if (buf.length > 10 * 1024 * 1024) continue;
+      media.push({
+        mimeType: isPdf ? "application/pdf" : d.mimeType,
+        dataBase64: buf.toString("base64"),
+        name: d.fileName,
+      });
+    } catch { /* file missing — skip */ }
+  }
+
+  async function stageRun(stageKey: string, vars: Record<string, string>, sequentialContext = false, stageMedia?: MediaAttachment[]) {
     const run = await db.analysisRun.create({ data: { caseId, stageKey, status: "running" } });
-    const outcome = await runStage(stageKey, vars, { runId: run.id, sequentialContext });
+    const outcome = await runStage(stageKey, vars, { runId: run.id, sequentialContext, media: stageMedia });
     await db.analysisRun.update({
       where: { id: run.id },
       data: { status: "complete", finishedAt: new Date() },
@@ -202,13 +246,28 @@ export async function runCaseAnalysis(caseId: string): Promise<void> {
   const summaryOut = await stageRun(STAGE_KEYS.SUMMARY, { input: c.situation }, true);
   const goalOut = await stageRun(STAGE_KEYS.GOAL, { input: c.goal }, true);
   const documentOut = c.documents.length
-    ? await stageRun(STAGE_KEYS.DOCUMENT, { input: docText })
+    ? await stageRun(STAGE_KEYS.DOCUMENT, { input: docText }, false, media)
     : null;
+
+  // Documents read by a vision model count as examined evidence.
+  if (documentOut?.usedAi && media.length > 0) {
+    for (const d of c.documents) {
+      if (readableDocIds.has(d.id) || d.extractedJson) continue;
+      const wasSent = media.some((m) => m.name === d.fileName);
+      if (wasSent) {
+        await db.document.update({
+          where: { id: d.id },
+          data: { extractedJson: JSON.stringify({ vision_reviewed: true }), status: "extracted" },
+        });
+      }
+    }
+  }
 
   const usedAi = summaryOut.usedAi || goalOut.usedAi || (documentOut?.usedAi ?? false);
   const docInfos = c.documents.map((d) => ({
     docKind: d.docKind,
     readable:
+      readableDocIds.has(d.id) ||
       d.mimeType.startsWith("text/") ||
       /\.(txt|csv|md|log)$/i.test(d.fileName) ||
       d.extractedJson.length > 0,
@@ -359,13 +418,19 @@ export async function runCaseAnalysis(caseId: string): Promise<void> {
         },
       });
     }
-    // AI auto-assignment (admin-controlled; both parties still consent).
-    const { autoAssignConsultant } = await import("../matching");
-    await autoAssignConsultant(caseId).catch(async (err) => {
-      const { logSystem } = await import("../syslog");
-      await logSystem("error", "matching", "Auto-assignment failed for a flagged case", String(err));
-      return false;
-    });
+    // Auto-assignment (admin-controlled; both parties still consent). A case
+    // is only handed to a consultant when the analysis is grounded enough —
+    // below the readiness threshold, admins are notified but no assignment is
+    // proposed automatically.
+    const minReadiness = await getNumberSetting("consultants.auto_assign_min_readiness", 60);
+    if (readiness >= minReadiness) {
+      const { autoAssignConsultant } = await import("../matching");
+      await autoAssignConsultant(caseId).catch(async (err) => {
+        const { logSystem } = await import("../syslog");
+        await logSystem("error", "matching", "Auto-assignment failed for a flagged case", String(err));
+        return false;
+      });
+    }
   }
 
   // Immediately verify path-step evidence (e.g. documents already uploaded at intake).

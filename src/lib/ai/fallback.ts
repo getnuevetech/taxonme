@@ -58,6 +58,44 @@ function classifyAmounts(text: string) {
   return { balanceDue, receivedRefund, expectedRefund, mentions };
 }
 
+// ---- IRS transcript reader: parses transaction-code rows and the account
+// balance out of transcript text (digital PDFs carry a text layer), turning
+// the IRS's own records into authoritative amounts. ----
+type TranscriptTx = { code: string; description: string; date: string; amount: number };
+type TranscriptData = {
+  transactions: TranscriptTx[];
+  accountBalance: number | null;
+  refundIssued: TranscriptTx | null;
+  offsets: TranscriptTx[];
+  hold: boolean;
+  penalties: TranscriptTx[];
+};
+
+function parseAmount(s: string): number {
+  return Number(s.replace(/[$,\s]/g, ""));
+}
+
+export function parseTranscript(text: string): TranscriptData {
+  const transactions: TranscriptTx[] = [];
+  const rowRe = /\b(\d{3})\s+([A-Za-z][^\n$]{2,80}?)\s+(\d{2}-\d{2}-\d{4})\s+(-?\$?[\d,]+\.\d{2})/g;
+  let m: RegExpExecArray | null;
+  while ((m = rowRe.exec(text))) {
+    const amount = parseAmount(m[4]);
+    if (!Number.isFinite(amount)) continue;
+    transactions.push({ code: m[1], description: m[2].replace(/\s+/g, " ").trim(), date: m[3], amount });
+  }
+  const balMatch = text.match(/ACCOUNT\s+BALANCE:?\s*(-?\$?[\d,]+\.\d{2})/i);
+  const accountBalance = balMatch ? parseAmount(balMatch[1]) : null;
+  return {
+    transactions,
+    accountBalance,
+    refundIssued: transactions.find((t) => t.code === "846") ?? null,
+    offsets: transactions.filter((t) => t.code === "826"),
+    hold: transactions.some((t) => t.code === "570"),
+    penalties: transactions.filter((t) => ["276", "196", "166"].includes(t.code)),
+  };
+}
+
 export type FallbackConflict = { topic: string; description: string; resolution: string };
 
 export type FallbackResult = {
@@ -110,14 +148,58 @@ export async function fallbackAnalyze(
     return null;
   }
 
-  const balanceDue = reconcile("Amount owed", fromNarrative.balanceDue, fromDocs?.balanceDue);
-  const receivedRefund = reconcile("Refund received", fromNarrative.receivedRefund, fromDocs?.receivedRefund);
+  let balanceDue = reconcile("Amount owed", fromNarrative.balanceDue, fromDocs?.balanceDue);
+  let receivedRefund = reconcile("Refund received", fromNarrative.receivedRefund, fromDocs?.receivedRefund);
   const expectedRefund = reconcile("Expected refund", fromNarrative.expectedRefund, fromDocs?.expectedRefund);
 
-  const years = Array.from(new Set(text.match(/\b(19|20)\d{2}\b/g) ?? []))
-    .map(Number)
-    .filter((y) => y > 1990 && y < 2100 && !`${y}`.startsWith("19"))
-    .sort();
+  // The transcript is the IRS's own record — its figures are authoritative.
+  const transcript = parseTranscript(documentsText);
+  if (transcript.refundIssued) {
+    const t = transcript.refundIssued;
+    if (receivedRefund && Math.abs(receivedRefund.amount - t.amount) > 1 && !receivedRefund.fromDocument) {
+      conflicts.push({
+        topic: "Refund received",
+        description: `You reported receiving approximately ${usd(receivedRefund.amount)}, but your IRS transcript shows a refund of ${usd(t.amount)} issued on ${t.date}.`,
+        resolution: `We are using the transcript figure (${usd(t.amount)}) as the current evidence.`,
+      });
+    }
+    receivedRefund = { amount: t.amount, fromDocument: true };
+  }
+  if (transcript.accountBalance !== null && transcript.accountBalance > 0) {
+    if (balanceDue && Math.abs(balanceDue.amount - transcript.accountBalance) > 1 && !balanceDue.fromDocument) {
+      conflicts.push({
+        topic: "Amount owed",
+        description: `You reported owing approximately ${usd(balanceDue.amount)}, but your IRS transcript shows an account balance of ${usd(transcript.accountBalance)}.`,
+        resolution: `We are using the transcript figure (${usd(transcript.accountBalance)}) as the current evidence.`,
+      });
+    }
+    balanceDue = { amount: transcript.accountBalance, fromDocument: true };
+  }
+  const offsetTotal = transcript.offsets.reduce((s, o) => s + Math.abs(o.amount), 0);
+
+  // Tax year detection. Priority: (1) years the customer explicitly calls a
+  // "tax year", (2) the transcript's "Tax Period Ending", (3) other years —
+  // with calendar DATES (e.g. "July 15, 2026", "07-15-2026") stripped first,
+  // because a payment date is not a tax year.
+  const stripDates = (s: string) =>
+    s
+      .replace(/\b\d{1,2}[-/]\d{1,2}[-/]20\d{2}\b/g, " ")
+      .replace(/\b(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\.?\s+\d{1,2}(?:st|nd|rd|th)?,?\s+20\d{2}\b/gi, " ")
+      .replace(/\b(?:as of|on|dated?|issued|received)\s+20\d{2}\b/gi, " ");
+  const yearsFrom = (s: string) =>
+    Array.from(new Set(stripDates(s).match(/\b20\d{2}\b/g) ?? []))
+      .map(Number)
+      .filter((y) => y > 2000 && y < 2100)
+      .sort();
+  const explicitMatch = narrative.match(/tax year\(?s?\)?[^.\n]{0,40}/i);
+  const explicitYears = explicitMatch ? yearsFrom(explicitMatch[0]) : [];
+  const taxPeriodYear = documentsText.match(/Tax Period Ending:[^\n]*?(20\d{2})/i)?.[1];
+  const narrativeYears = explicitYears.length ? explicitYears : yearsFrom(narrative);
+  const years = narrativeYears.length
+    ? narrativeYears
+    : taxPeriodYear
+      ? [Number(taxPeriodYear)]
+      : yearsFrom(text);
   const primaryYear = years.length ? years[years.length - 1] : null;
 
   const noticeCodes = Array.from(
@@ -158,11 +240,23 @@ export async function fallbackAnalyze(
     };
   };
 
+  // What the transcript actually says, code by code (shown as evidence).
+  const transcriptDetail = () => {
+    if (transcript.transactions.length === 0) return "";
+    const parts: string[] = [];
+    if (transcript.refundIssued) parts.push(`refund issued ${usd(Math.abs(transcript.refundIssued.amount))} on ${transcript.refundIssued.date} (TC 846)`);
+    for (const o of transcript.offsets.slice(0, 3)) parts.push(`credit transferred ${usd(Math.abs(o.amount))} on ${o.date} (TC 826)`);
+    if (transcript.hold) parts.push("a review hold (TC 570)");
+    if (transcript.penalties.length) parts.push(`penalties/interest assessed totaling ${usd(transcript.penalties.reduce((s, p) => s + Math.abs(p.amount), 0))}`);
+    if (transcript.accountBalance !== null) parts.push(`account balance ${usd(transcript.accountBalance)}`);
+    return parts.length ? ` Your transcript shows: ${parts.join(" · ")}.` : "";
+  };
+
   const evidenceLine = () =>
     !hasDocs
       ? `No documents are on file yet. Anything you upload is checked against every item in this case automatically.`
-      : hasTranscript
-        ? `${docs.length} document${docs.length === 1 ? "" : "s"} uploaded, including your IRS Account Transcript — the IRS's own record of your account.${unreadableCount > 0 ? ` ${unreadableCount} scanned document${unreadableCount === 1 ? "" : "s"} still require${unreadableCount === 1 ? "s" : ""} verification.` : ""}`
+      : hasTranscript || transcript.transactions.length > 0
+        ? `${docs.length} document${docs.length === 1 ? "" : "s"} uploaded, including your IRS Account Transcript — the IRS's own record of your account.${transcriptDetail()}${unreadableCount > 0 ? ` ${unreadableCount} scanned document${unreadableCount === 1 ? "" : "s"} still require${unreadableCount === 1 ? "s" : ""} verification.` : ""}`
         : `${docs.length} document${docs.length === 1 ? "" : "s"} uploaded${hasReturn ? ", including your tax return" : ""}. The missing keystone is your IRS Account Transcript — it is the IRS's own record and settles amounts definitively.`;
 
   const issues: Json[] = [];
@@ -171,39 +265,62 @@ export async function fallbackAnalyze(
   if (expectedRefund && receivedRefund && expectedRefund.amount > receivedRefund.amount) {
     const diff = Math.round((expectedRefund.amount - receivedRefund.amount) * 100) / 100;
     const documented = expectedRefund.fromDocument || receivedRefund.fromDocument;
+    // Transcript proof: when TC 826 transfers match the gap, the cause is
+    // CONFIRMED from the IRS's own records — no guessing needed.
+    const offsetConfirmed = offsetTotal > 0 && Math.abs(offsetTotal - diff) <= 1;
+    const offsetDates = transcript.offsets.map((o) => o.date).join(", ");
     issues.push({
       issue_type: "refund_discrepancy",
       item_kind: "finding",
-      evidence_status: hasTranscript ? "likely" : documented ? "likely" : "needs_verification",
-      evidence_strength: hasTranscript && documented ? "strong" : hasTranscript || documented ? "moderate" : "limited",
+      evidence_status: offsetConfirmed ? "confirmed" : hasTranscript ? "likely" : documented ? "likely" : "needs_verification",
+      evidence_strength: offsetConfirmed ? "strong" : hasTranscript && documented ? "strong" : hasTranscript || documented ? "moderate" : "limited",
       tax_year: primaryYear,
-      title: `Refund discrepancy — ${usd(diff)} difference`,
-      what_we_know: `Your ${expectedRefund.fromDocument ? "records indicate" : "information indicates"} an expected refund of ${usd(expectedRefund.amount)}, but ${receivedRefund.fromDocument ? "your records show" : "you report"} ${usd(receivedRefund.amount)} was actually issued. Difference: ${usd(diff)}.`,
-      our_conclusion: `${usd(diff)} of your ${yearText} refund is unaccounted for. The pattern matches a refund offset, an IRS adjustment, or a partial hold — your Account Transcript identifies which one within its transaction codes.`,
-      still_unclear: [
-        `Where the ${usd(diff)} was applied (offset, adjustment, or hold)`,
-        hasTranscript ? `Which transaction code on your transcript explains it (e.g. TC 826 credit transferred, TC 570 hold)` : `What your ${yearText} Account Transcript shows — it lists the answer code by code`,
-        `Whether any related IRS notice was issued that you haven't received or uploaded`,
-      ],
-      explanations: [
-        { title: "Refund offset", detail: "Another federal or state debt (a prior tax year, state taxes, child support, or federal student loans) may have been applied against the refund. Shows as TC 826 on your transcript or a Treasury Offset notice.", likelihood: "Possible" },
-        { title: "IRS adjustment", detail: "The IRS may have changed the amount of your refund (math corrections or credit changes). You would normally receive a notice such as a CP12.", likelihood: "Possible" },
-        { title: "Refund hold or review", detail: "Part of the refund may be held pending review (TC 570). The available information does not yet establish whether a hold affected the payment.", likelihood: "Possible" },
-      ],
+      title: offsetConfirmed
+        ? `Refund offset confirmed — ${usd(diff)} applied to another balance`
+        : `Refund discrepancy — ${usd(diff)} difference`,
+      what_we_know: offsetConfirmed
+        ? `Your expected refund was ${usd(expectedRefund.amount)}; the IRS issued ${usd(receivedRefund.amount)} (transcript TC 846${transcript.refundIssued ? ` on ${transcript.refundIssued.date}` : ""}) and transferred ${usd(offsetTotal)} to another balance (TC 826 on ${offsetDates}). The difference is fully accounted for by the offset.`
+        : `Your ${expectedRefund.fromDocument ? "records indicate" : "information indicates"} an expected refund of ${usd(expectedRefund.amount)}, but ${receivedRefund.fromDocument ? "your records show" : "you report"} ${usd(receivedRefund.amount)} was actually issued. Difference: ${usd(diff)}.`,
+      our_conclusion: offsetConfirmed
+        ? `Confirmed from your transcript: the missing ${usd(diff)} wasn't lost — it was applied (offset) to another balance on ${offsetDates}. If that balance is your own back taxes, the money already reduced what you owe. If you dispute the underlying debt, that debt — not the refund — is the thing to challenge.`
+        : `${usd(diff)} of your ${yearText} refund is unaccounted for. The pattern matches a refund offset, an IRS adjustment, or a partial hold — your Account Transcript identifies which one within its transaction codes.`,
+      still_unclear: offsetConfirmed
+        ? [
+            `Which balance the ${usd(offsetTotal)} was applied to (the transcript for that other year/period shows it arriving)`,
+            "Whether you agree with the underlying balance it was applied to",
+          ]
+        : [
+            `Where the ${usd(diff)} was applied (offset, adjustment, or hold)`,
+            hasTranscript ? `Which transaction code on your transcript explains it (e.g. TC 826 credit transferred, TC 570 hold)` : `What your ${yearText} Account Transcript shows — it lists the answer code by code`,
+            `Whether any related IRS notice was issued that you haven't received or uploaded`,
+          ],
+      explanations: offsetConfirmed
+        ? [
+            { title: "Refund offset", detail: `Confirmed by your transcript: TC 826 transferred ${usd(offsetTotal)} on ${offsetDates} — the refund was applied to another balance.`, likelihood: "Confirmed" },
+          ]
+        : [
+            { title: "Refund offset", detail: "Another federal or state debt (a prior tax year, state taxes, child support, or federal student loans) may have been applied against the refund. Shows as TC 826 on your transcript or a Treasury Offset notice.", likelihood: "Possible" },
+            { title: "IRS adjustment", detail: "The IRS may have changed the amount of your refund (math corrections or credit changes). You would normally receive a notice such as a CP12.", likelihood: "Possible" },
+            { title: "Refund hold or review", detail: "Part of the refund may be held pending review (TC 570). The available information does not yet establish whether a hold affected the payment.", likelihood: "Possible" },
+          ],
       expected_amount: expectedRefund.amount,
       received_amount: receivedRefund.amount,
       difference_amount: diff,
-      confidence: "medium",
-      priority: "high",
-      state: hasTranscript ? "review" : "action_needed",
-      next_action: hasTranscript ? "REVIEW" : "GET_TRANSCRIPT",
+      confidence: offsetConfirmed ? "high" : "medium",
+      priority: offsetConfirmed ? "medium" : "high",
+      state: offsetConfirmed || hasTranscript ? "review" : "action_needed",
+      next_action: offsetConfirmed || hasTranscript ? "REVIEW" : "GET_TRANSCRIPT",
       alternative_action: "Have a TaxOnMe professional review the case with you.",
       analysis_outline: [
-        { heading: "Your situation", detail: `You reported that you expected a refund of ${usd(expectedRefund.amount)} for ${yearText} but received ${usd(receivedRefund.amount)} — leaving ${usd(diff)} unaccounted for.${expectedRefund.fromDocument || receivedRefund.fromDocument ? " Part of these figures comes directly from your uploaded records." : " These amounts come from your own words — if either is off, update the summary and re-run."}` },
+        { heading: "Your situation", detail: `You reported that you expected a refund of ${usd(expectedRefund.amount)} for ${yearText} but received ${usd(receivedRefund.amount)} — leaving ${usd(diff)} unaccounted for.${documented ? " Part of these figures comes directly from your uploaded records." : " These amounts come from your own words — if either is off, update the summary and re-run."}` },
         { heading: "Tax rules", detail: `Rule: refunds don't simply shrink — under IRS procedure the difference is an offset (refund applied to another debt), an adjustment (the IRS changed the return), or a hold (payment suspended for review). Why it matters to your case: each explanation has a different remedy, and your Account Transcript distinguishes them by transaction code (TC 826 credit transferred · CP12-type adjustment notices · TC 570 hold).`, source: "IRS Account Transcript transaction codes · Treasury Offset Program · CP12 notice guidance" },
         { heading: "Your evidence", detail: evidenceLine() },
-        { heading: "Our conclusion", detail: `The gap of ${usd(diff)} is real based on the figures available, and it is identifiable — none of the three explanations leaves the money untraceable. ${hasTranscript ? "Your transcript is on file; matching its codes against the gap resolves this finding." : "The single document that resolves this finding is your Account Transcript."}` },
-        { heading: "Your next move", detail: hasTranscript ? `Match the transcript's transaction codes against the missing ${usd(diff)} — or have a professional confirm the reading.` : `Download your ${yearText} Account Transcript (instant from your IRS online account) and add it here — it answers this finding and strengthens every other one in this case.` },
+        { heading: "Our conclusion", detail: offsetConfirmed
+            ? `Confirmed: the transcript's TC 826 transfer${transcript.offsets.length > 1 ? "s" : ""} of ${usd(offsetTotal)} on ${offsetDates} account${transcript.offsets.length > 1 ? "" : "s"} for the entire ${usd(diff)} gap. The refund wasn't lost — it was applied to another balance.`
+            : `The gap of ${usd(diff)} is real based on the figures available, and it is identifiable — none of the three explanations leaves the money untraceable. ${hasTranscript ? "Your transcript is on file; matching its codes against the gap resolves this finding." : "The single document that resolves this finding is your Account Transcript."}` },
+        { heading: "Your next move", detail: offsetConfirmed
+            ? `Check which balance received the ${usd(offsetTotal)}: if it's your own back taxes, verify that balance dropped accordingly; if you dispute that debt, respond to the agency that holds it.`
+            : hasTranscript ? `Match the transcript's transaction codes against the missing ${usd(diff)} — or have a professional confirm the reading.` : `Download your ${yearText} Account Transcript (instant from your IRS online account) and add it here — it answers this finding and strengthens every other one in this case.` },
       ],
     });
   } else if (/refund/.test(lower)) {
@@ -249,15 +366,16 @@ export async function fallbackAnalyze(
 
   // ---------- Balance due ----------
   if (balanceDue) {
+    const balanceFromTranscript = transcript.accountBalance !== null && transcript.accountBalance > 0;
     issues.push({
       issue_type: "balance_due",
       item_kind: "issue",
-      evidence_status: balanceDue.fromDocument ? "likely" : "possible",
-      evidence_strength: balanceDue.fromDocument ? "moderate" : hasTranscript ? "moderate" : "limited",
+      evidence_status: balanceFromTranscript ? "confirmed" : balanceDue.fromDocument ? "likely" : "possible",
+      evidence_strength: balanceFromTranscript ? "strong" : balanceDue.fromDocument ? "moderate" : hasTranscript ? "moderate" : "limited",
       tax_year: primaryYear,
       expected_amount: balanceDue.amount,
-      title: `Possible balance due of ${usd(balanceDue.amount)}`,
-      what_we_know: `${balanceDue.fromDocument ? "Your uploaded records show" : "Your information mentions"} ${usd(balanceDue.amount)} owed to the IRS${primaryYear ? ` for tax year ${primaryYear}` : ""}. Depending on your balance and circumstances, you may have several payment or collection-resolution options, and some penalties may be eligible for relief under applicable IRS rules.`,
+      title: balanceFromTranscript ? `Balance due confirmed — ${usd(balanceDue.amount)}` : `Possible balance due of ${usd(balanceDue.amount)}`,
+      what_we_know: `${balanceFromTranscript ? "Your IRS Account Transcript shows an account balance of" : balanceDue.fromDocument ? "Your uploaded records show" : "Your information mentions"} ${usd(balanceDue.amount)}${balanceFromTranscript ? " — the IRS's own current figure" : " owed to the IRS"}${primaryYear ? ` for tax year ${primaryYear}` : ""}.${transcript.penalties.length ? ` Of that, ${usd(transcript.penalties.reduce((s, p) => s + Math.abs(p.amount), 0))} is penalties/interest per the transcript — some penalties may be eligible for relief depending on the circumstances.` : ""} Depending on your balance and circumstances, you may have several payment or collection-resolution options, and some penalties may be eligible for relief under applicable IRS rules.`,
       our_conclusion: `A balance of about ${usd(balanceDue.amount)} appears to exist, but its composition (tax vs. penalties vs. interest) and current status aren't established yet — and that composition determines which resolution options apply.`,
       still_unclear: [
         "The current confirmed balance (it changes with penalties and interest)",
@@ -500,6 +618,8 @@ export async function fallbackAnalyze(
     received_refund: receivedRefund?.amount ?? null,
     balance_due: balanceDue?.amount ?? null,
     amounts_mentioned: fromNarrative.mentions.map((m) => m.amount),
+    transcript_transactions: transcript.transactions.slice(0, 25),
+    transcript_account_balance: transcript.accountBalance,
     user_goal: goal,
     unknowns: issues.flatMap((i) => (Array.isArray(i.still_unclear) ? (i.still_unclear as string[]).slice(0, 1) : [])),
   };

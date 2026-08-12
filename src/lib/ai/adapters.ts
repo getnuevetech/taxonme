@@ -3,6 +3,8 @@ import type { AiProvider } from "@prisma/client";
 
 export type ChatMessage = { role: "system" | "user" | "assistant"; content: string };
 export type ProviderResult = { text: string; latencyMs: number };
+// Documents/images sent alongside the prompt to vision-capable providers.
+export type MediaAttachment = { mimeType: string; dataBase64: string; name: string };
 
 // All provider details (base URL, key, model, limits) come from the AiProvider
 // row configured in the admin backend. Nothing here is hardcoded to one vendor.
@@ -11,7 +13,7 @@ export type ProviderResult = { text: string; latencyMs: number };
 // admin tester), never silently stuck requests.
 const CALL_TIMEOUT_MS = 90_000;
 
-async function callOpenAiCompatible(p: AiProvider, messages: ChatMessage[]): Promise<string> {
+async function callOpenAiCompatible(p: AiProvider, messages: ChatMessage[], media: MediaAttachment[] = []): Promise<string> {
   const base = (p.baseUrl || "https://api.openai.com/v1").replace(/\/$/, "");
   const post = (payload: Record<string, unknown>) =>
     fetch(`${base}/chat/completions`, {
@@ -24,9 +26,23 @@ async function callOpenAiCompatible(p: AiProvider, messages: ChatMessage[]): Pro
       body: JSON.stringify(payload),
     });
 
+  // Attach documents/images to the last user message as multimodal content.
+  const wire: unknown[] = messages.map((m) => ({ role: m.role, content: m.content }));
+  if (media.length > 0) {
+    const last = wire[wire.length - 1] as { role: string; content: unknown };
+    last.content = [
+      { type: "text", text: String(last.content) },
+      ...media.map((att) =>
+        att.mimeType.startsWith("image/")
+          ? { type: "image_url", image_url: { url: `data:${att.mimeType};base64,${att.dataBase64}` } }
+          : { type: "file", file: { filename: att.name, file_data: `data:${att.mimeType};base64,${att.dataBase64}` } },
+      ),
+    ];
+  }
+
   const payload: Record<string, unknown> = {
     model: p.model,
-    messages,
+    messages: wire,
     max_tokens: p.maxTokens,
     temperature: p.temperature,
   };
@@ -53,7 +69,7 @@ async function callOpenAiCompatible(p: AiProvider, messages: ChatMessage[]): Pro
   return data.choices?.[0]?.message?.content ?? "";
 }
 
-async function callAnthropic(p: AiProvider, messages: ChatMessage[]): Promise<string> {
+async function callAnthropic(p: AiProvider, messages: ChatMessage[], media: MediaAttachment[] = []): Promise<string> {
   const base = (p.baseUrl || "https://api.anthropic.com").replace(/\/$/, "");
   const system = messages.filter((m) => m.role === "system").map((m) => m.content).join("\n");
   const rest = messages.filter((m) => m.role !== "system");
@@ -69,12 +85,25 @@ async function callAnthropic(p: AiProvider, messages: ChatMessage[]): Promise<st
       body: JSON.stringify(payload),
     });
 
+  const wire: unknown[] = rest.map((m) => ({ role: m.role, content: m.content }));
+  if (media.length > 0) {
+    const last = wire[wire.length - 1] as { role: string; content: unknown };
+    last.content = [
+      ...media.map((att) =>
+        att.mimeType.startsWith("image/")
+          ? { type: "image", source: { type: "base64", media_type: att.mimeType, data: att.dataBase64 } }
+          : { type: "document", source: { type: "base64", media_type: "application/pdf", data: att.dataBase64 } },
+      ),
+      { type: "text", text: String(last.content) },
+    ];
+  }
+
   const payload: Record<string, unknown> = {
     model: p.model,
     max_tokens: p.maxTokens,
     temperature: p.temperature,
     system: system || undefined,
-    messages: rest.map((m) => ({ role: m.role, content: m.content })),
+    messages: wire,
   };
   let res = await post(payload);
   // Newer Claude models reject `temperature` — retry without it.
@@ -92,12 +121,17 @@ async function callAnthropic(p: AiProvider, messages: ChatMessage[]): Promise<st
   return (data.content ?? []).map((c: { text?: string }) => c.text ?? "").join("");
 }
 
-async function callGoogle(p: AiProvider, messages: ChatMessage[]): Promise<string> {
+async function callGoogle(p: AiProvider, messages: ChatMessage[], media: MediaAttachment[] = []): Promise<string> {
   const base = (p.baseUrl || "https://generativelanguage.googleapis.com/v1beta").replace(/\/$/, "");
   const system = messages.filter((m) => m.role === "system").map((m) => m.content).join("\n");
   const contents = messages
     .filter((m) => m.role !== "system")
-    .map((m) => ({ role: m.role === "assistant" ? "model" : "user", parts: [{ text: m.content }] }));
+    .map((m) => ({ role: m.role === "assistant" ? "model" : "user", parts: [{ text: m.content }] as unknown[] }));
+  if (media.length > 0 && contents.length > 0) {
+    contents[contents.length - 1].parts.push(
+      ...media.map((att) => ({ inline_data: { mime_type: att.mimeType, data: att.dataBase64 } })),
+    );
+  }
   const res = await fetch(`${base}/models/${p.model}:generateContent?key=${p.apiKey}`, {
     method: "POST",
     signal: AbortSignal.timeout(CALL_TIMEOUT_MS),
@@ -113,18 +147,24 @@ async function callGoogle(p: AiProvider, messages: ChatMessage[]): Promise<strin
   return (data.candidates?.[0]?.content?.parts ?? []).map((x: { text?: string }) => x.text ?? "").join("");
 }
 
-export async function callProvider(p: AiProvider, messages: ChatMessage[]): Promise<ProviderResult> {
+export async function callProvider(
+  p: AiProvider,
+  messages: ChatMessage[],
+  media: MediaAttachment[] = [],
+): Promise<ProviderResult> {
   const started = Date.now();
+  // Media only goes to providers marked vision-capable in the admin backend.
+  const attachments = p.supportsVision ? media : [];
   let text: string;
   switch (p.kind) {
     case "anthropic":
-      text = await callAnthropic(p, messages);
+      text = await callAnthropic(p, messages, attachments);
       break;
     case "google":
-      text = await callGoogle(p, messages);
+      text = await callGoogle(p, messages, attachments);
       break;
     default:
-      text = await callOpenAiCompatible(p, messages);
+      text = await callOpenAiCompatible(p, messages, attachments);
   }
   return { text, latencyMs: Date.now() - started };
 }
