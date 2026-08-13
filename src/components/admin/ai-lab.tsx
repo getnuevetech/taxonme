@@ -22,11 +22,88 @@ type Result = {
   model: string;
   ok: boolean;
   text: string;
-  parsedPretty: string | null;
+  parsed: Record<string, unknown> | null;
   latencyMs: number;
   error: string;
   visionUsed: boolean;
 };
+
+// ---- Presentable rendering of structured model output (no raw JSON) ----
+
+function humanize(key: string): string {
+  return key.replace(/[_-]+/g, " ").replace(/^./, (c) => c.toUpperCase());
+}
+
+function isEmpty(v: unknown): boolean {
+  return v === null || v === undefined || v === "" || (Array.isArray(v) && v.length === 0);
+}
+
+function ValueView({ value, depth = 0 }: { value: unknown; depth?: number }) {
+  if (isEmpty(value)) return <span className="text-slate-300">—</span>;
+  if (typeof value === "boolean") {
+    return (
+      <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${value ? "bg-emerald-100 text-emerald-700" : "bg-slate-100 text-slate-500"}`}>
+        {value ? "Yes" : "No"}
+      </span>
+    );
+  }
+  if (typeof value === "number") return <span className="font-semibold text-slate-900">{value.toLocaleString("en-US")}</span>;
+  if (typeof value === "string") return <span className="whitespace-pre-wrap text-slate-800">{value}</span>;
+  if (Array.isArray(value)) {
+    if (value.every((v) => typeof v !== "object" || v === null)) {
+      return (
+        <ul className="space-y-1">
+          {value.map((v, i) => (
+            <li key={i} className="flex items-start gap-1.5">
+              <span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-indigo-400" />
+              <ValueView value={v} depth={depth + 1} />
+            </li>
+          ))}
+        </ul>
+      );
+    }
+    return (
+      <div className="space-y-2">
+        {value.map((v, i) => (
+          <div key={i} className="rounded-lg bg-white p-2.5 ring-1 ring-slate-200">
+            <p className="mb-1 text-[10px] font-bold uppercase tracking-wider text-indigo-400">#{i + 1}</p>
+            <ValueView value={v} depth={depth + 1} />
+          </div>
+        ))}
+      </div>
+    );
+  }
+  // Plain object → labeled rows.
+  const entries = Object.entries(value as Record<string, unknown>);
+  return (
+    <dl className="space-y-1.5">
+      {entries.map(([k, v]) => (
+        <div key={k}>
+          <dt className="text-[10px] font-bold uppercase tracking-wider text-slate-400">{humanize(k)}</dt>
+          <dd className="text-sm leading-relaxed">
+            <ValueView value={v} depth={depth + 1} />
+          </dd>
+        </div>
+      ))}
+    </dl>
+  );
+}
+
+function StructuredOutput({ data }: { data: Record<string, unknown> }) {
+  const entries = Object.entries(data);
+  return (
+    <div className="space-y-3">
+      {entries.map(([k, v]) => (
+        <div key={k} className={isEmpty(v) ? "opacity-50" : ""}>
+          <p className="mb-1 text-[11px] font-bold uppercase tracking-wider text-slate-500">{humanize(k)}</p>
+          <div className={`text-sm leading-relaxed ${typeof v === "object" && v !== null ? "rounded-xl bg-slate-50 p-3" : ""}`}>
+            <ValueView value={v} />
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
 
 type Round = { message: string; fileNames: string[]; functionName: string; results: Result[] };
 
@@ -193,12 +270,12 @@ export function AiLab({ providers, functions }: { providers: Provider[]; functio
                   </div>
                   <div className="max-h-[32rem] flex-1 overflow-y-auto p-4">
                     {r.ok ? (
-                      r.parsedPretty ? (
+                      r.parsed ? (
                         <>
-                          <pre className="whitespace-pre-wrap rounded-lg bg-slate-50 p-3 font-mono text-[11px] leading-relaxed text-slate-800">{r.parsedPretty}</pre>
-                          <details className="mt-2">
-                            <summary className="cursor-pointer text-[11px] font-medium text-indigo-600">Raw response</summary>
-                            <p className="mt-1 whitespace-pre-wrap text-xs text-slate-500">{r.text}</p>
+                          <StructuredOutput data={r.parsed} />
+                          <details className="mt-3 border-t border-slate-100 pt-2">
+                            <summary className="cursor-pointer text-[11px] font-medium text-slate-400 hover:text-indigo-600">Raw response (technical)</summary>
+                            <p className="mt-1 whitespace-pre-wrap font-mono text-[11px] text-slate-500">{r.text}</p>
                           </details>
                         </>
                       ) : (

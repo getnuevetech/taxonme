@@ -37,7 +37,7 @@ export type LabResult = {
   model: string;
   ok: boolean;
   text: string;
-  parsedPretty: string | null;
+  parsed: Record<string, unknown> | null;
   latencyMs: number;
   error: string;
   visionUsed: boolean;
@@ -67,14 +67,14 @@ export async function runLabTest(args: {
 
   const results = await Promise.all(
     providers.map(async (p): Promise<LabResult> => {
-      const base: Omit<LabResult, "ok" | "text" | "parsedPretty" | "latencyMs" | "error"> = {
+      const base: Omit<LabResult, "ok" | "text" | "parsed" | "latencyMs" | "error"> = {
         providerId: p.id,
         providerName: p.name,
         model: p.model,
         visionUsed: p.supportsVision && args.media.length > 0,
       };
       if (!p.apiKey) {
-        return { ...base, ok: false, text: "", parsedPretty: null, latencyMs: 0, error: "No API key saved for this provider." };
+        return { ...base, ok: false, text: "", parsed: null, latencyMs: 0, error: "No API key saved for this provider." };
       }
       try {
         // Each column keeps its own conversation: prior turns for THIS model
@@ -104,7 +104,7 @@ export async function runLabTest(args: {
           ...base,
           ok: true,
           text: result.text,
-          parsedPretty: parsed ? JSON.stringify(parsed, null, 2) : null,
+          parsed,
           latencyMs: result.latencyMs,
           error: "",
         };
@@ -113,7 +113,7 @@ export async function runLabTest(args: {
           ...base,
           ok: false,
           text: "",
-          parsedPretty: null,
+          parsed: null,
           latencyMs: 0,
           error: String(err instanceof Error ? err.message : err).slice(0, 800),
         };
