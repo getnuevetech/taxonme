@@ -110,6 +110,65 @@ export async function testAiProviderAction(id: string): Promise<ActionState> {
   }
 }
 
+// ---------- AI Test Lab ----------
+
+// Standalone comparison runs: same input, several models, side-by-side output.
+export async function runAiLabAction(formData: FormData) {
+  await requireAdminArea("admin.ai");
+  const message = String(formData.get("message") ?? "").trim();
+  const functionKey = String(formData.get("functionKey") ?? "qa_chat");
+  const customPrompt = String(formData.get("customPrompt") ?? "");
+  let providerIds: string[] = [];
+  let histories: Record<string, { role: string; content: string }[]> = {};
+  try {
+    providerIds = JSON.parse(String(formData.get("providerIds") ?? "[]"));
+    histories = JSON.parse(String(formData.get("histories") ?? "{}"));
+  } catch { /* malformed client state — run with defaults */ }
+  if (!message) return { error: "Type a message or question first." };
+  if (!Array.isArray(providerIds) || providerIds.length === 0) return { error: "Select at least one AI model to test." };
+
+  // Attachments: images/PDFs go to vision-capable models as media; digital
+  // PDF text is extracted so text-only models compete on equal footing.
+  const files = formData.getAll("files").filter((f): f is File => f instanceof File && f.size > 0);
+  const media: { mimeType: string; dataBase64: string; name: string }[] = [];
+  let docText = "";
+  for (const file of files.slice(0, 6)) {
+    if (file.size > 15 * 1024 * 1024) return { error: `${file.name} is larger than 15 MB.` };
+    const buf = Buffer.from(await file.arrayBuffer());
+    const isImage = file.type.startsWith("image/");
+    const isPdf = file.type === "application/pdf" || /\.pdf$/i.test(file.name);
+    if (isImage || isPdf) {
+      media.push({ mimeType: isPdf ? "application/pdf" : file.type, dataBase64: buf.toString("base64"), name: file.name });
+    }
+    if (isPdf) {
+      try {
+        const { PDFParse } = await import("pdf-parse");
+        const parser = new PDFParse({ data: new Uint8Array(buf) });
+        try {
+          const text = String((await parser.getText())?.text ?? "").trim();
+          if (text.length > 40) docText += `\n--- ${file.name} ---\n${text.slice(0, 12000)}`;
+        } finally {
+          await parser.destroy().catch(() => null);
+        }
+      } catch { /* scanned pdf — vision models still get the media */ }
+    } else if (!isImage) {
+      docText += `\n--- ${file.name} ---\n${buf.toString("utf-8").slice(0, 12000)}`;
+    }
+  }
+
+  const { runLabTest } = await import("@/lib/ai/lab");
+  const results = await runLabTest({
+    providerIds: providerIds.map(String).slice(0, 6),
+    functionKey,
+    customPrompt,
+    message,
+    histories,
+    media,
+    docText: docText.trim(),
+  });
+  return { results, fileNames: files.map((f) => f.name) };
+}
+
 // ---------- Plan discounts ----------
 
 export async function savePlanDiscountAction(_prev: ActionState, formData: FormData): Promise<ActionState> {

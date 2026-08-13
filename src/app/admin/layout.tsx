@@ -16,6 +16,7 @@ const NAV: { area: string; href: string; label: string; section: string }[] = [
   { area: "admin.users", href: "/admin/deleted", label: "Deleted accounts", section: "People" },
   { area: "admin.assignments", href: "/admin/assignments", label: "Assignments", section: "People" },
   { area: "admin.ai", href: "/admin/ai-providers", label: "AI providers", section: "Intelligence" },
+  { area: "admin.ai", href: "/admin/lab", label: "AI test lab", section: "Intelligence" },
   { area: "admin.pipelines", href: "/admin/pipelines", label: "AI pipelines", section: "Intelligence" },
   { area: "admin.knowledge", href: "/admin/knowledge", label: "IRS knowledge base", section: "Intelligence" },
   { area: "admin.plans", href: "/admin/plans", label: "Plans & access", section: "Commerce" },
