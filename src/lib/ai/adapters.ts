@@ -203,16 +203,86 @@ export async function listModels(p: AiProvider): Promise<string[]> {
   return ((data.data ?? []) as { id?: string }[]).map((m) => String(m.id ?? "")).filter(Boolean);
 }
 
-// Models are asked to return JSON; this tolerantly extracts the first JSON object.
-export function extractJson(text: string): Record<string, unknown> | null {
-  const fenced = text.match(/```(?:json)?\s*([\s\S]*?)```/);
-  const candidate = fenced ? fenced[1] : text;
-  const start = candidate.indexOf("{");
-  const end = candidate.lastIndexOf("}");
-  if (start === -1 || end === -1 || end <= start) return null;
-  try {
-    return JSON.parse(candidate.slice(start, end + 1));
-  } catch {
-    return null;
+// Models are asked to return JSON, but real-world output is messy: code
+// fences, commentary around the object, trailing commas, smart quotes.
+// This extractor tries progressively harder before giving up.
+
+function balancedJsonSlice(s: string, open: "{" | "["): string | null {
+  const close = open === "{" ? "}" : "]";
+  const start = s.indexOf(open);
+  if (start === -1) return null;
+  let depth = 0;
+  let inString = false;
+  let escaped = false;
+  for (let i = start; i < s.length; i++) {
+    const ch = s[i];
+    if (inString) {
+      if (escaped) escaped = false;
+      else if (ch === "\\") escaped = true;
+      else if (ch === '"') inString = false;
+      continue;
+    }
+    if (ch === '"') inString = true;
+    else if (ch === open) depth++;
+    else if (ch === close) {
+      depth--;
+      if (depth === 0) return s.slice(start, i + 1);
+    }
   }
+  return null;
+}
+
+function cleanupJson(s: string): string {
+  return s
+    .replace(/[\u201C\u201D]/g, '"')
+    .replace(/[\u2018\u2019]/g, "'")
+    .replace(/,\s*([}\]])/g, "$1")
+    .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, " ");
+}
+
+export function extractJson(text: string): Record<string, unknown> | null {
+  const candidates: string[] = [];
+  for (const m of text.matchAll(/```(?:json)?\s*([\s\S]*?)```/gi)) candidates.push(m[1]);
+  candidates.push(text);
+
+  const tryObject = (cand: string): Record<string, unknown> | null => {
+    const slices = [
+      balancedJsonSlice(cand, "{"),
+      (() => {
+        const start = cand.indexOf("{");
+        const end = cand.lastIndexOf("}");
+        return start !== -1 && end > start ? cand.slice(start, end + 1) : null;
+      })(),
+    ].filter((x): x is string => Boolean(x));
+    for (const slice of slices) {
+      for (const attempt of [slice, cleanupJson(slice)]) {
+        try {
+          const parsed = JSON.parse(attempt);
+          if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) return parsed as Record<string, unknown>;
+        } catch { /* try the next strategy */ }
+      }
+    }
+    return null;
+  };
+  // Top-level arrays are valid model output too — wrapped for object consumers.
+  const tryArray = (cand: string): Record<string, unknown> | null => {
+    const arr = balancedJsonSlice(cand, "[");
+    if (!arr) return null;
+    for (const attempt of [arr, cleanupJson(arr)]) {
+      try {
+        const parsed = JSON.parse(attempt);
+        if (Array.isArray(parsed)) return { items: parsed };
+      } catch { /* try the next strategy */ }
+    }
+    return null;
+  };
+
+  for (const cand of candidates) {
+    const objIdx = cand.indexOf("{");
+    const arrIdx = cand.indexOf("[");
+    const arrayFirst = arrIdx !== -1 && (objIdx === -1 || arrIdx < objIdx);
+    const result = arrayFirst ? (tryArray(cand) ?? tryObject(cand)) : (tryObject(cand) ?? tryArray(cand));
+    if (result) return result;
+  }
+  return null;
 }
