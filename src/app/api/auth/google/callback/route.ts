@@ -3,12 +3,23 @@ import { db } from "@/lib/db";
 import { getSetting } from "@/lib/settings";
 import { createSession } from "@/lib/auth";
 import { claimGuestSession } from "@/lib/guest";
+import { cookies } from "next/headers";
 
 export async function GET(request: Request) {
   const url = new URL(request.url);
   const code = url.searchParams.get("code");
   const appUrl = (await getSetting("app.url", "")) || url.origin;
   if (!code) return NextResponse.redirect(`${appUrl}/login`);
+
+  // Verify CSRF state nonce to prevent login CSRF attacks.
+  const returnedState = url.searchParams.get("state") ?? "";
+  const cookieStore = await cookies();
+  const expectedState = cookieStore.get("oauth_state")?.value ?? "";
+  if (!returnedState || returnedState !== expectedState) {
+    const stateFailResponse = NextResponse.redirect(`${appUrl}/login?error=invalid_state`);
+    stateFailResponse.cookies.set("oauth_state", "", { httpOnly: true, maxAge: 0, path: "/" });
+    return stateFailResponse;
+  }
 
   const clientId = await getSetting("auth.google_client_id", "");
   const clientSecret = await getSetting("auth.google_client_secret", "");
@@ -67,5 +78,8 @@ export async function GET(request: Request) {
 
   await claimGuestSession(user.id);
   await createSession(user.id);
-  return NextResponse.redirect(`${appUrl}/app`);
+  const response = NextResponse.redirect(`${appUrl}/app`);
+  // Clear the state cookie after successful use.
+  response.cookies.set("oauth_state", "", { httpOnly: true, maxAge: 0, path: "/" });
+  return response;
 }
