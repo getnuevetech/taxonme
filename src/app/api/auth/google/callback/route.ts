@@ -16,7 +16,9 @@ export async function GET(request: Request) {
   const cookieStore = await cookies();
   const expectedState = cookieStore.get("oauth_state")?.value ?? "";
   if (!returnedState || returnedState !== expectedState) {
-    return NextResponse.redirect(`${appUrl}/login?error=invalid_state`);
+    const stateFailResponse = NextResponse.redirect(`${appUrl}/login?error=invalid_state`);
+    stateFailResponse.cookies.set("oauth_state", "", { httpOnly: true, maxAge: 0, path: "/" });
+    return stateFailResponse;
   }
 
   const clientId = await getSetting("auth.google_client_id", "");
