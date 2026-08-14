@@ -2,7 +2,21 @@ import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { getCurrentUser, isAdmin } from "@/lib/auth";
 import { getGuestSession } from "@/lib/guest";
-import { readUpload } from "@/lib/uploads";
+import { readUpload, ALLOWED_MIME_TYPES } from "@/lib/uploads";
+
+// Access-checked file serving: only the owner, their active consultant, or an
+// admin can read a stored document.
+
+// Map allowed MIME types to the Content-Type the browser should receive.
+// Types not in this map are served as application/octet-stream (forced download).
+// Defined at module scope so it is allocated once, not on every request.
+const INLINE_SAFE_TYPES = new Set(["application/pdf", "image/jpeg", "image/jpg", "image/png", "image/gif", "image/webp"]);
+
+function safeContentType(mimeType: string): string {
+  const normalized = (mimeType || "application/octet-stream").split(";")[0].trim().toLowerCase();
+  // Only serve a recognized MIME type; anything not in the upload allowlist falls back to octet-stream.
+  return ALLOWED_MIME_TYPES.has(normalized) ? normalized : "application/octet-stream";
+}
 
 // Access-checked file serving: only the owner, their active consultant, or an
 // admin can read a stored document.
@@ -28,25 +42,14 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
   if (!allowed) return new NextResponse("Forbidden", { status: 403 });
 
   const buf = await readUpload(doc.filePath);
-
-  // Normalize Content-Type to a known-safe set to prevent stored-XSS via a
-  // user-supplied file.type that the browser might execute inline (e.g. text/html).
-  const SAFE_TYPES: Record<string, string> = {
-    "application/pdf": "application/pdf",
-    "image/jpeg": "image/jpeg",
-    "image/png": "image/png",
-    "image/gif": "image/gif",
-    "image/webp": "image/webp",
-    "text/plain": "text/plain",
-  };
-  const contentType = SAFE_TYPES[doc.mimeType] ?? "application/octet-stream";
+  const contentType = safeContentType(doc.mimeType);
+  // Serve PDFs and images inline; force download for everything else.
+  const disposition = INLINE_SAFE_TYPES.has(contentType) ? "inline" : "attachment";
 
   return new NextResponse(new Uint8Array(buf), {
     headers: {
       "Content-Type": contentType,
-      // Force download for every MIME type that is not an image or PDF so the
-      // browser never renders potentially dangerous content inline.
-      "Content-Disposition": `attachment; filename="${doc.fileName.replace(/[^\w.\- ]/g, "_")}"`,
+      "Content-Disposition": `${disposition}; filename="${doc.fileName.replace(/[^\w.\- ]/g, "_")}"`,
     },
   });
 }

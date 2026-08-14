@@ -19,7 +19,6 @@ export async function uploadDocumentAction(_prev: ActionState, formData: FormDat
 
   const guest = user ? null : await getOrCreateGuestSession();
   for (const file of files.slice(0, 10)) {
-    if (file.size > 20 * 1024 * 1024) return { error: `${file.name} is larger than 20 MB.` };
     const validationError = validateUploadFile(file);
     if (validationError) return { error: validationError };
     const { filePath, sizeBytes } = await saveUpload(file);
