@@ -9,25 +9,35 @@ import { ROLES } from "./constants";
 
 const SESSION_COOKIE = "taxonme_session";
 
+// Module-level cache so getSecret() only hits the database once per process.
+// Stored as a Promise so concurrent cold requests await the same pending fetch
+// rather than each racing to write a (potentially different) resolved value.
+let _secretPromise: Promise<Uint8Array> | null = null;
+
 // The signing secret is admin-manageable: env var wins, otherwise a random
 // secret is generated once and stored in the settings table.
 async function getSecret(): Promise<Uint8Array> {
-  if (process.env.AUTH_SECRET) return new TextEncoder().encode(process.env.AUTH_SECRET);
-  let row = await db.setting.findUnique({ where: { key: "auth.secret" } });
-  if (!row) {
-    row = await db.setting.upsert({
-      where: { key: "auth.secret" },
-      update: {},
-      create: {
-        key: "auth.secret",
-        value: crypto.randomBytes(32).toString("hex"),
-        type: "secret",
-        group: "security",
-        label: "Session signing secret",
-      },
-    });
+  if (!_secretPromise) {
+    _secretPromise = (async () => {
+      if (process.env.AUTH_SECRET) return new TextEncoder().encode(process.env.AUTH_SECRET);
+      let row = await db.setting.findUnique({ where: { key: "auth.secret" } });
+      if (!row) {
+        row = await db.setting.upsert({
+          where: { key: "auth.secret" },
+          update: {},
+          create: {
+            key: "auth.secret",
+            value: crypto.randomBytes(32).toString("hex"),
+            type: "secret",
+            group: "security",
+            label: "Session signing secret",
+          },
+        });
+      }
+      return new TextEncoder().encode(row.value);
+    })();
   }
-  return new TextEncoder().encode(row.value);
+  return _secretPromise;
 }
 
 export async function hashPassword(password: string) {

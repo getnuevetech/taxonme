@@ -94,6 +94,10 @@ export async function subscribeAction(_prev: ActionState, formData: FormData): P
   if (gateway.kind === "stripe") {
     const cfg = JSON.parse(gateway.configJson || "{}");
     if (!cfg.secretKey) return { error: "Payment gateway is not fully configured. Contact support." };
+    // Reject keys that don't match the expected Stripe format to catch mis-configuration early.
+    if (typeof cfg.secretKey !== "string" || !/^sk_(live|test)_/.test(cfg.secretKey)) {
+      return { error: "Payment gateway secret key is invalid. Contact support." };
+    }
 
     // Supersede any other in-flight checkouts: expire them at Stripe and mark
     // the local transactions abandoned, so they can't linger as "pending".

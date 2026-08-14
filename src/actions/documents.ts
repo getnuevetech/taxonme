@@ -5,7 +5,7 @@ import { after } from "next/server";
 import { db } from "@/lib/db";
 import { getCurrentUser, requireUser } from "@/lib/auth";
 import { getOrCreateGuestSession } from "@/lib/guest";
-import { saveUpload, deleteUpload } from "@/lib/uploads";
+import { saveUpload, deleteUpload, validateUploadFile } from "@/lib/uploads";
 import { explainNoticeContent } from "@/lib/ai/orchestrator";
 import { verifyCaseProgress, verifyUserCasesProgress } from "@/lib/case-progress";
 import type { ActionState } from "./auth";
@@ -19,7 +19,8 @@ export async function uploadDocumentAction(_prev: ActionState, formData: FormDat
 
   const guest = user ? null : await getOrCreateGuestSession();
   for (const file of files.slice(0, 10)) {
-    if (file.size > 20 * 1024 * 1024) return { error: `${file.name} is larger than 20 MB.` };
+    const validationError = validateUploadFile(file);
+    if (validationError) return { error: validationError };
     const { filePath, sizeBytes } = await saveUpload(file);
     await db.document.create({
       data: {
@@ -69,8 +70,9 @@ export async function deleteDocumentAction(documentId: string) {
   const user = await requireUser();
   const doc = await db.document.findUnique({ where: { id: documentId } });
   if (!doc || doc.userId !== user.id) return;
-  await deleteUpload(doc.filePath);
+  // Delete the DB record first so a failed file deletion leaves no dangling reference.
   await db.document.delete({ where: { id: documentId } });
+  await deleteUpload(doc.filePath);
   // Removing evidence can un-complete verified steps.
   if (doc.caseId) await verifyCaseProgress(doc.caseId);
   else await verifyUserCasesProgress(user.id);
@@ -91,6 +93,8 @@ export async function uploadNoticeAction(_prev: ActionState, formData: FormData)
   let content = pastedText;
 
   if (file instanceof File && file.size > 0) {
+    const validationError = validateUploadFile(file);
+    if (validationError) return { error: validationError };
     const { filePath, sizeBytes } = await saveUpload(file);
     const doc = await db.document.create({
       data: {

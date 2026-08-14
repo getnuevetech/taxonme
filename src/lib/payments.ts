@@ -14,23 +14,28 @@ export async function activateSubscription(opts: {
   gatewayRef: string;
   extraDays?: number; // proration credit converted to time
 }) {
-  await db.subscription.updateMany({
-    where: { userId: opts.userId, status: { in: ["active", "trialing"] } },
-    data: { status: "canceled", canceledAt: new Date() },
-  });
   const periodEnd = new Date();
   periodEnd.setMonth(periodEnd.getMonth() + (opts.interval === "yearly" ? 12 : 1));
   if (opts.extraDays && opts.extraDays > 0) periodEnd.setDate(periodEnd.getDate() + opts.extraDays);
-  await db.subscription.create({
-    data: {
-      userId: opts.userId,
-      planId: opts.planId,
-      interval: opts.interval,
-      gateway: opts.gateway,
-      gatewayRef: opts.gatewayRef,
-      currentPeriodEnd: periodEnd,
-    },
-  });
+
+  // Cancel existing subscriptions and create the new one atomically so
+  // concurrent webhook + reconciliation calls cannot leave duplicate active rows.
+  await db.$transaction([
+    db.subscription.updateMany({
+      where: { userId: opts.userId, status: { in: ["active", "trialing"] } },
+      data: { status: "canceled", canceledAt: new Date() },
+    }),
+    db.subscription.create({
+      data: {
+        userId: opts.userId,
+        planId: opts.planId,
+        interval: opts.interval,
+        gateway: opts.gateway,
+        gatewayRef: opts.gatewayRef,
+        currentPeriodEnd: periodEnd,
+      },
+    }),
+  ]);
   const [user, plan] = await Promise.all([
     db.user.findUnique({ where: { id: opts.userId } }),
     db.subscriptionPlan.findUnique({ where: { id: opts.planId } }),
@@ -133,7 +138,7 @@ export async function reconcilePendingStripeTransactions(userId: string): Promis
     orderBy: [{ isDefault: "desc" }],
   });
   const cfg = gateway ? JSON.parse(gateway.configJson || "{}") : {};
-  if (!cfg.secretKey) return false;
+  if (!cfg.secretKey || typeof cfg.secretKey !== "string" || !/^sk_(live|test)_/.test(cfg.secretKey)) return false;
 
   let activated = false;
   for (const tx of pending) {

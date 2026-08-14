@@ -132,6 +132,12 @@ export async function resetPasswordAction(_prev: ActionState, formData: FormData
   const userId = await validateResetToken(token);
   if (!userId) return { error: "This reset link is invalid or has expired. Request a new one." };
 
+  // Guard against resetting a soft-deleted or suspended account.
+  const existingUser = await db.user.findUnique({ where: { id: userId }, select: { status: true } });
+  if (!existingUser || existingUser.status !== "active") {
+    return { error: "This account is not active. Contact support if you believe this is a mistake." };
+  }
+
   const user = await db.user.update({ where: { id: userId }, data: { passwordHash: await hashPassword(password) } });
   await consumeResetToken(token);
   await createSession(userId);
