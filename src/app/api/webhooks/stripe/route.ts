@@ -15,7 +15,11 @@ function verifySignature(payload: string, header: string, secret: string): boole
   if (Math.abs(Date.now() / 1000 - Number(timestamp)) > 300) return false;
   const expected = crypto.createHmac("sha256", secret).update(`${timestamp}.${payload}`).digest("hex");
   try {
-    return crypto.timingSafeEqual(Buffer.from(expected, "hex"), Buffer.from(signature, "hex"));
+    const expectedBuf = Buffer.from(expected, "hex");
+    const signatureBuf = Buffer.from(signature, "hex");
+    // timingSafeEqual throws if the buffers differ in length — guard explicitly.
+    if (expectedBuf.length !== signatureBuf.length) return false;
+    return crypto.timingSafeEqual(expectedBuf, signatureBuf);
   } catch {
     return false;
   }

@@ -8,7 +8,7 @@ import { getCurrentUser, requireUser } from "@/lib/auth";
 import { getOrCreateGuestSession } from "@/lib/guest";
 import { runCaseAnalysis } from "@/lib/ai/orchestrator";
 import { verifyCaseProgress, isVerifiable } from "@/lib/case-progress";
-import { saveUpload } from "@/lib/uploads";
+import { saveUpload, validateUploadFile } from "@/lib/uploads";
 import type { ActionState } from "./auth";
 
 // Guest-friendly intake: situation + goal + documents, no account required.
@@ -18,7 +18,16 @@ export async function startIntakeAction(_prev: ActionState, formData: FormData):
   if (situation.length < 20) return { error: "Tell us a bit more about what happened (at least a few sentences)." };
   if (goal.length < 5) return { error: "Tell us what you'd like to achieve." };
 
+  // Validate uploaded files before creating any records.
+  const files = formData.getAll("documents").filter((f): f is File => f instanceof File && f.size > 0);
+  for (const file of files.slice(0, 10)) {
+    const validationError = validateUploadFile(file);
+    if (validationError) return { error: validationError };
+  }
+
   const user = await getCurrentUser();
+  // Capture the guest session once so all documents reference the same session.
+  const guest = user ? null : await getOrCreateGuestSession();
   let caseId: string;
   if (user) {
     const c = await db.case.create({
@@ -26,22 +35,20 @@ export async function startIntakeAction(_prev: ActionState, formData: FormData):
     });
     caseId = c.id;
   } else {
-    const guest = await getOrCreateGuestSession();
-    await db.guestSession.update({ where: { id: guest.id }, data: { situation, goal } });
+    await db.guestSession.update({ where: { id: guest!.id }, data: { situation, goal } });
     const c = await db.case.create({
-      data: { guestSessionId: guest.id, title: situation.slice(0, 80), situation, goal },
+      data: { guestSessionId: guest!.id, title: situation.slice(0, 80), situation, goal },
     });
     caseId = c.id;
   }
 
   // Attach uploaded documents.
-  const files = formData.getAll("documents").filter((f): f is File => f instanceof File && f.size > 0);
   for (const file of files.slice(0, 10)) {
     const { filePath, sizeBytes } = await saveUpload(file);
     await db.document.create({
       data: {
         userId: user?.id ?? null,
-        guestSessionId: user ? null : (await getOrCreateGuestSession()).id,
+        guestSessionId: user ? null : guest!.id,
         caseId,
         fileName: file.name,
         filePath,
@@ -103,7 +110,8 @@ export async function clarifyAnswerAction(_prev: ActionState, formData: FormData
   if (!c || c.userId !== user.id) return { error: "Case not found." };
   if (!answer && files.length === 0) return { error: "Type an answer (or attach a file) first." };
   for (const f of files) {
-    if (f.size > 20 * 1024 * 1024) return { error: `${f.name} is larger than 20 MB.` };
+    const validationError = validateUploadFile(f);
+    if (validationError) return { error: validationError };
   }
 
   const { nextClarifyQuestion, situationLine } = await import("@/lib/clarify");

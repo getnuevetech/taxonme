@@ -9,10 +9,19 @@ import { ROLES } from "./constants";
 
 const SESSION_COOKIE = "taxonme_session";
 
+// Module-level cache so getSecret() only hits the database once per process.
+// The value is stable for the lifetime of the server; restarting the process
+// clears it and the fresh value is fetched from the DB or env var again.
+let _secretCache: Uint8Array | null = null;
+
 // The signing secret is admin-manageable: env var wins, otherwise a random
 // secret is generated once and stored in the settings table.
 async function getSecret(): Promise<Uint8Array> {
-  if (process.env.AUTH_SECRET) return new TextEncoder().encode(process.env.AUTH_SECRET);
+  if (_secretCache) return _secretCache;
+  if (process.env.AUTH_SECRET) {
+    _secretCache = new TextEncoder().encode(process.env.AUTH_SECRET);
+    return _secretCache;
+  }
   let row = await db.setting.findUnique({ where: { key: "auth.secret" } });
   if (!row) {
     row = await db.setting.upsert({
@@ -27,7 +36,8 @@ async function getSecret(): Promise<Uint8Array> {
       },
     });
   }
-  return new TextEncoder().encode(row.value);
+  _secretCache = new TextEncoder().encode(row.value);
+  return _secretCache;
 }
 
 export async function hashPassword(password: string) {

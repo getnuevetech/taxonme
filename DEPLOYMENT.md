@@ -108,4 +108,6 @@ sudo systemctl reload caddy
 
 - **Session secret**: auto-generated on first run and stored in the settings table; set `AUTH_SECRET` to override.
 - **Uploads**: stored on disk (`var/uploads` or the `taxonme_uploads` volume) with access-controlled serving; include them in backups.
+  - **Single-instance only**: the disk-based upload store is not shared between replicas. If you run more than one app instance (e.g. horizontal scaling in Kubernetes), you must back the volume with network storage (NFS, EFS, GCS Filestore, Azure Files, etc.) or migrate to an object-storage provider (S3, R2, GCS). All instances must resolve the same `var/uploads` path.
+- **Rate limiting**: the authentication endpoints (login, registration, password reset) have no built-in brute-force protection. For internet-facing deployments, add rate limiting at your reverse-proxy layer (e.g. Caddy's `rate_limit` directive, nginx's `limit_req_zone`, Cloudflare's WAF) before routing traffic to port 3000.
 - **Reverse proxy / HTTPS**: for LAN-only use, the built-in server is fine. For anything internet-facing put nginx/Caddy in front with TLS and point it at port 3000.

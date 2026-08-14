@@ -28,10 +28,25 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
   if (!allowed) return new NextResponse("Forbidden", { status: 403 });
 
   const buf = await readUpload(doc.filePath);
+
+  // Normalize Content-Type to a known-safe set to prevent stored-XSS via a
+  // user-supplied file.type that the browser might execute inline (e.g. text/html).
+  const SAFE_TYPES: Record<string, string> = {
+    "application/pdf": "application/pdf",
+    "image/jpeg": "image/jpeg",
+    "image/png": "image/png",
+    "image/gif": "image/gif",
+    "image/webp": "image/webp",
+    "text/plain": "text/plain",
+  };
+  const contentType = SAFE_TYPES[doc.mimeType] ?? "application/octet-stream";
+
   return new NextResponse(new Uint8Array(buf), {
     headers: {
-      "Content-Type": doc.mimeType,
-      "Content-Disposition": `inline; filename="${doc.fileName.replace(/[^\w.\- ]/g, "_")}"`,
+      "Content-Type": contentType,
+      // Force download for every MIME type that is not an image or PDF so the
+      // browser never renders potentially dangerous content inline.
+      "Content-Disposition": `attachment; filename="${doc.fileName.replace(/[^\w.\- ]/g, "_")}"`,
     },
   });
 }
