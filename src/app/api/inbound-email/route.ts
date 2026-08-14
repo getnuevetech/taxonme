@@ -4,7 +4,8 @@ import { getSetting } from "@/lib/settings";
 
 // Inbound email → ticket. Point your email provider's inbound webhook here
 // (SendGrid Inbound Parse, Mailgun Routes, Postmark Inbound all work):
-//   POST <app.url>/api/inbound-email?secret=<tickets.inbound_email_secret>
+//   POST <app.url>/api/inbound-email
+//   Header: x-inbound-secret: <tickets.inbound_email_secret>
 // Accepts JSON or form data with fields: from, subject, text.
 // - Subject containing TKT-000123 → reply is appended to that ticket (reopens it).
 // - Otherwise → a new customer-service ticket is created.
@@ -12,7 +13,8 @@ import { getSetting } from "@/lib/settings";
 export async function POST(request: Request) {
   const secret = await getSetting("tickets.inbound_email_secret", "");
   if (!secret) return NextResponse.json({ error: "Inbound email is not enabled" }, { status: 403 });
-  const provided = new URL(request.url).searchParams.get("secret") ?? request.headers.get("x-inbound-secret") ?? "";
+  // Accept the secret only via a header to avoid it appearing in server access logs.
+  const provided = request.headers.get("x-inbound-secret") ?? "";
   if (provided !== secret) {
     const { logSystem } = await import("@/lib/syslog");
     await logSystem("warning", "inbound_email", "Inbound email rejected: invalid secret");
