@@ -40,6 +40,10 @@ type Snapshot = {
   planName: string;
 };
 
+function money(cents: number | null): string {
+  return typeof cents === "number" ? `$${(cents / 100).toLocaleString("en-US", { maximumFractionDigits: 0 })}` : "";
+}
+
 export async function buildAccountSnapshot(userId: string): Promise<Snapshot> {
   const [user, cases, deadlines, plan] = await Promise.all([
     db.user.findUnique({ where: { id: userId }, select: { firstName: true } }),
@@ -50,6 +54,7 @@ export async function buildAccountSnapshot(userId: string): Promise<Snapshot> {
       include: {
         issues: { where: { state: { not: "resolved" } } },
         pathSteps: { orderBy: { sortOrder: "asc" } },
+        documents: { where: { deletedAt: null }, select: { docKind: true } },
       },
     }),
     db.deadline.findMany({
@@ -68,6 +73,23 @@ export async function buildAccountSnapshot(userId: string): Promise<Snapshot> {
     lines.push(
       `Case "${c.title.slice(0, 60)}": status ${c.status}, readiness ${c.readinessScore}%, ${c.issues.length} open issue(s), step ${done + 1}/${c.pathSteps.length}${current ? ` — current step: "${current.title}" (${current.actionKey || "manual"})` : ""}`,
     );
+    for (const issue of c.issues.slice(0, 3)) {
+      const amounts = [
+        issue.expectedCents !== null ? `expected ${money(issue.expectedCents)}` : "",
+        issue.receivedCents !== null ? `received ${money(issue.receivedCents)}` : "",
+        issue.differenceCents !== null ? `difference ${money(issue.differenceCents)}` : "",
+      ].filter(Boolean).join(", ");
+      lines.push(`Finding: ${issue.title}${issue.taxYear ? ` (${issue.taxYear})` : ""}${amounts ? ` — ${amounts}` : ""}.`);
+      try {
+        const unclear = JSON.parse(issue.unclearJson || "[]");
+        if (Array.isArray(unclear) && unclear.length) lines.push(`Still unclear: ${unclear.map(String).slice(0, 2).join("; ")}`);
+      } catch { /* legacy malformed issue data */ }
+    }
+    if (current?.description) lines.push(`Current step detail: ${current.description}`);
+    if (c.documents.length) lines.push(`Documents on file: ${Array.from(new Set(c.documents.map((d) => d.docKind))).join(", ")}`);
+    const { nextClarifyQuestion } = await import("./clarify");
+    const clarify = await nextClarifyQuestion(c.id);
+    if (clarify) lines.push(`Next clarification needed: ${clarify.text}`);
     if (!currentStep && current) currentStep = { title: current.title, actionKey: current.actionKey, caseId: c.id };
   }
   if (cases.length === 0) lines.push("No cases yet — the user hasn't started a case.");

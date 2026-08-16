@@ -440,10 +440,51 @@ export async function runCaseAnalysis(caseId: string): Promise<void> {
 
 // ---------- Single-purpose AI helpers ----------
 
-export async function runQaChat(history: { role: string; content: string }[]): Promise<string> {
+function dollars(cents: number | null): string {
+  return typeof cents === "number" ? `$${(cents / 100).toLocaleString("en-US", { maximumFractionDigits: 0 })}` : "";
+}
+
+async function buildQaUserContext(userId?: string): Promise<string> {
+  if (!userId) return "";
+  const cases = await db.case.findMany({
+    where: { userId, status: { not: "closed" } },
+    orderBy: { updatedAt: "desc" },
+    take: 3,
+    include: {
+      issues: { orderBy: [{ priority: "asc" }, { createdAt: "asc" }] },
+      documents: { where: { deletedAt: null }, select: { docKind: true, fileName: true } },
+      pathSteps: { where: { status: "current" }, orderBy: { sortOrder: "asc" }, take: 1 },
+    },
+  });
+  if (cases.length === 0) return "User has no open cases yet.";
+  const lines: string[] = [];
+  for (const c of cases) {
+    lines.push(`Case: ${c.title} (status: ${c.status}, readiness: ${c.readinessScore}%).`);
+    if (c.goal) lines.push(`Goal: ${c.goal.slice(0, 300)}`);
+    for (const issue of c.issues.slice(0, 4)) {
+      const amounts = [
+        issue.expectedCents !== null ? `expected ${dollars(issue.expectedCents)}` : "",
+        issue.receivedCents !== null ? `received ${dollars(issue.receivedCents)}` : "",
+        issue.differenceCents !== null ? `difference ${dollars(issue.differenceCents)}` : "",
+      ].filter(Boolean).join(", ");
+      lines.push(`Open finding: ${issue.title}${issue.taxYear ? ` (${issue.taxYear})` : ""}${amounts ? ` — ${amounts}` : ""}.`);
+      try {
+        const unclear = JSON.parse(issue.unclearJson || "[]");
+        if (Array.isArray(unclear) && unclear.length) lines.push(`Still unclear: ${unclear.map(String).slice(0, 3).join("; ")}`);
+      } catch { /* ignore malformed legacy data */ }
+    }
+    const current = c.pathSteps[0];
+    if (current) lines.push(`Current step: ${current.title}${current.description ? ` — ${current.description}` : ""}`);
+    if (c.documents.length) lines.push(`Documents on file: ${c.documents.map((d) => `${d.docKind}:${d.fileName}`).slice(0, 5).join(", ")}`);
+  }
+  return lines.join("\n");
+}
+
+export async function runQaChat(history: { role: string; content: string }[], userId?: string): Promise<string> {
   const steps = await getRunnableSteps(STAGE_KEYS.QA);
   const convo = history.map((m) => `${m.role === "user" ? "User" : "Assistant"}: ${m.content}`).join("\n");
-  const knowledge = await retrieveKnowledge(history.map((m) => m.content).join(" "));
+  const userContext = await buildQaUserContext(userId);
+  const knowledge = await retrieveKnowledge(`${userContext}\n${history.map((m) => m.content).join(" ")}`);
   if (steps.length === 0) {
     return "The assistant isn't available just yet. Meanwhile, you can upload your documents to your vault and browse the guides — everything you add will be analyzed as soon as the assistant comes online.";
   }
@@ -451,10 +492,15 @@ export async function runQaChat(history: { role: string; content: string }[]): P
   const candidates: { text: string; source: string }[] = [];
   for (const step of steps) {
     try {
-      const prompt = `${fill(step.promptTemplate, { input: convo, knowledge: knowledge || "(none)" })}
+      const prompt = `${fill(step.promptTemplate, { input: convo, knowledge: knowledge || "(none)", user_context: userContext || "(none)" })}
+
+USER CONTEXT:
+${userContext || "(none)"}
 
 Current response rules:
 - Answer the user's latest question directly.
+- If USER CONTEXT includes an open case related to the question, tie the answer to that case's facts, documents, unclear items, and current step.
+- If the user is describing a new separate tax situation, tell them it should be started as a new case.
 - Do not introduce example dollar amounts, notice codes, deadlines, forms, or IRS topics unless they appear in the conversation or reference material.
 - If the question is unrelated to tax, say so briefly and suggest support.
 - Keep the answer grounded in the provided conversation and reference material.`;

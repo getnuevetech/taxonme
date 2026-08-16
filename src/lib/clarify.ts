@@ -41,7 +41,7 @@ export async function nextClarifyQuestion(caseId: string): Promise<ClarifyQuesti
   const c = await db.case.findUnique({
     where: { id: caseId },
     include: {
-      issues: true,
+      issues: { orderBy: [{ priority: "asc" }, { createdAt: "asc" }] },
       documents: { where: { deletedAt: null } },
       clarifyMessages: { where: { role: "user" } },
     },
@@ -49,6 +49,26 @@ export async function nextClarifyQuestion(caseId: string): Promise<ClarifyQuesti
   if (!c || c.status === "closed") return null;
 
   const answered = new Set(c.clarifyMessages.map((m) => m.questionKey));
+  for (const issue of c.issues) {
+    let unclear: string[] = [];
+    try {
+      const parsed = JSON.parse(issue.unclearJson || "[]");
+      if (Array.isArray(parsed)) unclear = parsed.map(String).filter(Boolean);
+    } catch {
+      unclear = [];
+    }
+    for (const [index, item] of unclear.entries()) {
+      const key = `unclear:${issue.id}:${index}`;
+      if (!answered.has(key)) {
+        const year = issue.taxYear ? ` for ${issue.taxYear}` : "";
+        return {
+          key,
+          text: `About "${issue.title}"${year}: ${item}`,
+          placeholder: "Answer this point with what you know, or say you are not sure...",
+        };
+      }
+    }
+  }
   const hasTranscript = c.documents.some((d) => d.docKind === "transcript");
   const refundIssue = c.issues.find((i) => i.issueType === "refund_discrepancy");
   const balanceIssue = c.issues.find((i) => i.issueType === "balance_due");
