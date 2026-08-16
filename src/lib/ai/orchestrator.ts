@@ -7,6 +7,7 @@ import { STAGE_KEYS } from "../constants";
 import { getNumberSetting } from "../settings";
 import { readUpload } from "../uploads";
 import { verifyCaseProgress } from "../case-progress";
+import { selectBestResponse } from "./response-selection";
 
 type Json = Record<string, unknown>;
 
@@ -446,17 +447,26 @@ export async function runQaChat(history: { role: string; content: string }[]): P
   if (steps.length === 0) {
     return "The assistant isn't available just yet. Meanwhile, you can upload your documents to your vault and browse the guides — everything you add will be analyzed as soon as the assistant comes online.";
   }
-  // Try every configured model in order; log each failure to the system log.
+  // Ask every configured model and choose the strongest grounded answer.
+  const candidates: { text: string; source: string }[] = [];
   for (const step of steps) {
     try {
-      const prompt = fill(step.promptTemplate, { input: convo, knowledge: knowledge || "(none)" });
+      const prompt = `${fill(step.promptTemplate, { input: convo, knowledge: knowledge || "(none)" })}
+
+Current response rules:
+- Answer the user's latest question directly.
+- Do not introduce example dollar amounts, notice codes, deadlines, forms, or IRS topics unless they appear in the conversation or reference material.
+- If the question is unrelated to tax, say so briefly and suggest support.
+- Keep the answer grounded in the provided conversation and reference material.`;
       const result = await callProvider(step.provider, [{ role: "user", content: prompt }]);
-      if (result.text.trim()) return result.text;
+      if (result.text.trim()) candidates.push({ text: result.text.trim(), source: `${step.provider.name} (${step.role})` });
     } catch (err) {
       const { logSystem } = await import("../syslog");
       await logSystem("error", "ai_call", `${step.provider.name} failed answering the tax Q&A chat`, String(err));
     }
   }
+  const best = selectBestResponse(candidates, convo, knowledge);
+  if (best) return best.text;
   return "Our assistant couldn't respond just now — the issue has been reported to our team. Please try again in a moment, or open a support ticket if it keeps happening.";
 }
 

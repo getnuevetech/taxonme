@@ -3,6 +3,7 @@ import { db } from "./db";
 import { hasFeature, getActivePlan } from "./access";
 import { FEATURE_KEYS, STAGE_KEYS } from "./constants";
 import { callProvider } from "./ai/adapters";
+import { selectBestResponse } from "./ai/response-selection";
 
 // The in-account guide chatbot. It always analyzes the user's account state,
 // coaches them through the current step of their case, and routes anything it
@@ -160,7 +161,7 @@ export async function guideRespond(
     };
   }
 
-  // AI coaching: try each configured model in order (up to all five) until one answers.
+  // AI coaching: ask each configured model and choose the strongest grounded answer.
   const stage = await db.pipelineStage.findUnique({
     where: { key: STAGE_KEYS.GUIDE },
     include: {
@@ -169,12 +170,18 @@ export async function guideRespond(
   });
   const steps = (stage?.isEnabled ? stage.steps : []).filter((s) => s.provider.isEnabled && s.provider.apiKey);
   const convo = history.map((m) => `${m.role === "user" ? "User" : "Guide"}: ${m.content}`).join("\n");
+  const candidates: { text: string; source: string }[] = [];
   for (const step of steps) {
     try {
-      const prompt = step.promptTemplate.replace("{{context}}", snapshot.text).replace("{{input}}", convo);
+      const prompt = `${step.promptTemplate.replace("{{context}}", snapshot.text).replace("{{input}}", convo)}
+
+Current response rules:
+- Answer the user's latest message using the account snapshot.
+- Do not drift into generic IRS guidance, example amounts, notice codes, payment topics, or document requests unless the user's message or account snapshot calls for them.
+- If the message is a separate tax problem, technical issue, or support request, follow the routing rules above.`;
       const result = await callProvider(step.provider, [{ role: "user", content: prompt }]);
       if (result.text.trim()) {
-        return { message: result.text.trim(), actions: baseActions() };
+        candidates.push({ text: result.text.trim(), source: `${step.provider.name} (${step.role})` });
       }
     } catch (err) {
       const { logSystem } = await import("./syslog");
@@ -182,6 +189,8 @@ export async function guideRespond(
       // fall through to the next configured model
     }
   }
+  const best = selectBestResponse(candidates, `${snapshot.text}\n\n${convo}`);
+  if (best) return { message: best.text, actions: baseActions() };
 
   // Deterministic fallback when no AI is reachable: coach the current step.
   const tip = snapshot.currentStep

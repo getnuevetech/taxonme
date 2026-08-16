@@ -28,7 +28,7 @@ export async function CaseClarify({ caseId }: { caseId: string }) {
             {analyzing
               ? "Your answer is saved and the analysis is re-running with it — the next question appears here when it finishes."
               : question
-                ? "Your answers feed straight into the analysis: amounts, dates, and details you give here update the findings above automatically."
+                ? "Your answer feeds straight into this case analysis, so focus on the specific fact this question asks for."
                 : "Every answer has been folded into your analysis. Add documents anytime to strengthen it further."}
           </p>
         </div>
@@ -72,7 +72,7 @@ export async function CaseClarify({ caseId }: { caseId: string }) {
             </p>
           </div>
           <div className="mt-3">
-            <ClarifyAnswerForm caseId={caseId} />
+            <ClarifyAnswerForm caseId={caseId} placeholder={question.placeholder} />
           </div>
         </div>
       ) : (

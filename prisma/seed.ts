@@ -341,9 +341,11 @@ async function seedAiAndPipelines() {
     {
       key: "qa",
       name: "AI tax Q&A",
-      description: "Conversational assistant grounded in the IRS knowledge base.",
+      description: "Conversational assistant grounded in the IRS knowledge base. Configured models all answer; the app selects the strongest grounded response.",
       steps: [
         { provider: "OpenAI GPT-5.6 Sol", role: "assistant", prompt: DEFAULT_PROMPTS.assistant, order: 0 },
+        { provider: "Anthropic Claude Sonnet 5", role: "assistant", prompt: DEFAULT_PROMPTS.assistant, order: 1 },
+        { provider: "Google Gemini 3.1 Pro", role: "assistant", prompt: DEFAULT_PROMPTS.assistant, order: 2 },
       ],
     },
     {
@@ -365,7 +367,7 @@ async function seedAiAndPipelines() {
     {
       key: "guide",
       name: "In-account case guide",
-      description: "The floating chatbot that coaches users through their next step. Models are tried in order until one answers — all five providers are chained by default.",
+      description: "The floating chatbot that coaches users through their next step. Configured models all answer; the app selects the strongest grounded response.",
       steps: [
         { provider: "OpenAI GPT-5.6 Sol", role: "assistant", prompt: DEFAULT_PROMPTS.guide, order: 0 },
         { provider: "Anthropic Claude Sonnet 5", role: "assistant", prompt: DEFAULT_PROMPTS.guide, order: 1 },

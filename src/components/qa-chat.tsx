@@ -40,8 +40,8 @@ export function QaChat({
           <div className="py-8 text-center text-sm text-slate-400">
             <p className="font-medium text-slate-500">Try one of these:</p>
             <p className="mt-2">&ldquo;What does a CP2000 notice mean?&rdquo;</p>
-            <p>&ldquo;Can I set up a payment plan if I owe $3,000?&rdquo;</p>
-            <p>&ldquo;What happens if I file my taxes late?&rdquo;</p>
+            <p>&ldquo;What should I check before responding to this notice?&rdquo;</p>
+            <p>&ldquo;Which document would help verify my situation?&rdquo;</p>
           </div>
         )}
         {messages.map((m) => (
@@ -65,7 +65,7 @@ export function QaChat({
         <div className="flex gap-2">
           <input
             name="question"
-            placeholder="Type your tax question…"
+            placeholder="Ask about your notice, deadline, payment options, or documents…"
             autoComplete="off"
             className="flex-1 rounded-xl border border-slate-300 px-4 py-2.5 text-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-100"
           />
