@@ -15,6 +15,14 @@ function fill(template: string, vars: Record<string, string>): string {
   return template.replace(/\{\{(\w+)\}\}/g, (_, k) => vars[k] ?? "");
 }
 
+function hasUnfiledReturnIntent(text: string): boolean {
+  return /(didn'?t file|haven'?t filed|have not file[dn]?|has not file[dn]?|not filed|unfiled|late filing|missed filing|never filed|file taxes for (the )?past)/i.test(text);
+}
+
+function hasRefundIntent(text: string): boolean {
+  return /\b(refund|overpayment|offset|deposit|line 35a)\b/i.test(text);
+}
+
 async function getRunnableSteps(stageKey: string) {
   const stage = await db.pipelineStage.findUnique({
     where: { key: stageKey },
@@ -302,9 +310,18 @@ export async function runCaseAnalysis(caseId: string): Promise<void> {
     const p = presenterOut.stepOutputs.find((o) => o.data)?.data ?? null;
     presentation = p && Array.isArray((p as Json).issues) ? (p as Json) : null;
   }
-  const issues: Json[] = presentation
+  let issues: Json[] = presentation
     ? ((presentation.issues as Json[]) ?? [])
     : (fallback ?? (await fallbackAnalyze(c.situation, c.goal, rawDocText, docInfos))).issues;
+  const narrativeText = `${c.situation}\n${c.goal}`;
+  if (hasUnfiledReturnIntent(narrativeText) && !hasRefundIntent(narrativeText)) {
+    issues = issues.filter((issue) => String(issue.issue_type ?? "") !== "refund_discrepancy");
+    if (!issues.some((issue) => String(issue.issue_type ?? "") === "missing_return")) {
+      const deterministic = fallback ?? (await fallbackAnalyze(c.situation, c.goal, rawDocText, docInfos));
+      const missingReturn = deterministic.issues.find((issue) => String(issue.issue_type ?? "") === "missing_return");
+      if (missingReturn) issues.unshift(missingReturn);
+    }
+  }
 
   // Persist issues.
   for (const [i, issue] of issues.entries()) {

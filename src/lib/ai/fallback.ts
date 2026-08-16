@@ -14,6 +14,10 @@ type Json = Record<string, unknown>;
 
 type MoneyMention = { amount: number; before: string; after: string };
 
+function hasUnfiledReturnIntent(text: string): boolean {
+  return /(didn'?t file|haven'?t filed|have not file[dn]?|has not file[dn]?|not filed|unfiled|late filing|missed filing|never filed|file taxes for (the )?past)/i.test(text);
+}
+
 function moneyMentions(text: string): MoneyMention[] {
   const out: MoneyMention[] = [];
   const re = /\$\s?([\d][\d,]*(?:\.\d{1,2})?)/g;
@@ -507,7 +511,7 @@ export async function fallbackAnalyze(
   }
 
   // ---------- Unfiled returns (a RISK) ----------
-  if (/(didn'?t file|not filed|unfiled|late filing|missed filing|never filed)/.test(lower)) {
+  if (hasUnfiledReturnIntent(lower)) {
     issues.push({
       issue_type: "missing_return",
       item_kind: "risk",
