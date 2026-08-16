@@ -65,7 +65,7 @@ export function IntakeWizard() {
             value={situation}
             onChange={(e) => setSituation(e.target.value)}
             rows={7}
-            placeholder={'For example: "I got a letter from the IRS saying I owe $2,800 for 2024, but I already got a smaller refund than I expected and I don\'t understand why…"'}
+            placeholder={'For example: "I have not filed taxes for the past 4 years and want to catch up before the IRS takes action…"'}
             className="w-full rounded-xl border border-slate-300 p-4 text-base focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-100"
           />
           <p className="mt-2 text-xs text-slate-400">
@@ -79,11 +79,11 @@ export function IntakeWizard() {
             value={goal}
             onChange={(e) => setGoal(e.target.value)}
             rows={4}
-            placeholder={'For example: "Find out where the rest of my refund went, and set up a payment plan I can afford."'}
+            placeholder={'For example: "Identify which years I need to file, gather the right income records, and make a plan for any balance."'}
             className="w-full rounded-xl border border-slate-300 p-4 text-base focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-100"
           />
           <div className="mt-3 flex flex-wrap gap-2">
-            {["Understand an IRS letter", "Find my missing refund", "Set up a payment plan", "Reduce penalties", "Fix an old tax year"].map((g) => (
+            {["Catch up on unfiled returns", "Understand an IRS letter", "Set up a payment plan", "Reduce penalties", "Fix an old tax year"].map((g) => (
               <button
                 key={g}
                 type="button"

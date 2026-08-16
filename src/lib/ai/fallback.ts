@@ -14,6 +14,10 @@ type Json = Record<string, unknown>;
 
 type MoneyMention = { amount: number; before: string; after: string };
 
+function hasUnfiledReturnIntent(text: string): boolean {
+  return /(didn'?t file|haven'?t filed|have not file[dn]?|has not file[dn]?|not filed|unfiled|late filing|missed filing|never filed|file taxes for (the )?past|years behind|behind on (my )?taxes|out of compliance)/i.test(text);
+}
+
 function moneyMentions(text: string): MoneyMention[] {
   const out: MoneyMention[] = [];
   const re = /\$\s?([\d][\d,]*(?:\.\d{1,2})?)/g;
@@ -507,7 +511,7 @@ export async function fallbackAnalyze(
   }
 
   // ---------- Unfiled returns (a RISK) ----------
-  if (/(didn'?t file|not filed|unfiled|late filing|missed filing|never filed)/.test(lower)) {
+  if (hasUnfiledReturnIntent(lower)) {
     issues.push({
       issue_type: "missing_return",
       item_kind: "risk",
@@ -564,18 +568,23 @@ export async function fallbackAnalyze(
   }
 
   // ---------- Path forward ----------
+  const unfiledIntent = hasUnfiledReturnIntent(lower);
   const pathSteps: FallbackResult["pathSteps"] = [];
   pathSteps.push({
     title: hasDocs ? `Add any remaining documents (${docs.length} on file)` : "Add your supporting documents",
     description: hasDocs
       ? "You've started your evidence file — add anything still missing (see the 'Documents we still need' checklist)."
-      : "Upload the IRS notice, your tax return, and any W-2/1099s. Completes automatically when your case has documents.",
+      : unfiledIntent
+        ? "Upload any IRS notices plus W-2, 1099, or income records you still have. Completes automatically when your case has documents."
+        : "Upload the IRS notice, your tax return, and any W-2/1099s. Completes automatically when your case has documents.",
     action_key: "UPLOAD_DOCUMENTS",
   });
   if (!hasTranscript) {
     pathSteps.push({
-      title: "Get your IRS account transcript",
-      description: "Your transcript shows exactly what the IRS has on file — including where any missing refund went. Completes when a transcript is in your case documents.",
+      title: unfiledIntent ? "Get your IRS Wage & Income Transcript" : "Get your IRS account transcript",
+      description: unfiledIntent
+        ? "Your Wage & Income Transcript lists W-2s and 1099s the IRS received, which helps reconstruct unfiled years. Completes when a transcript is in your case documents."
+        : "Your transcript shows exactly what the IRS has on file — account balances, payments, notices, adjustments, and refund transactions. Completes when a transcript is in your case documents.",
       action_key: "GET_TRANSCRIPT",
     });
   }

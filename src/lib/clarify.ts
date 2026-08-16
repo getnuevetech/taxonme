@@ -9,6 +9,14 @@ import { db } from "./db";
 
 export type ClarifyQuestion = { key: string; text: string; placeholder: string };
 
+function hasUnfiledReturnIntent(text: string): boolean {
+  return /(didn'?t file|haven'?t filed|have not file[dn]?|has not file[dn]?|not filed|unfiled|late filing|missed filing|never filed|file taxes for (the )?past|years behind|behind on (my )?taxes|out of compliance)/i.test(text);
+}
+
+function hasRefundIntent(text: string): boolean {
+  return /\b(refund|overpayment|offset|deposit|line 35a)\b/i.test(text);
+}
+
 // How each answer is written back into the case narrative. The phrasing
 // matters: it gives the amount-classifier the context words it needs.
 export function situationLine(key: string, questionText: string, answer: string): string {
@@ -49,7 +57,10 @@ export async function nextClarifyQuestion(caseId: string): Promise<ClarifyQuesti
   if (!c || c.status === "closed") return null;
 
   const answered = new Set(c.clarifyMessages.map((m) => m.questionKey));
+  const narrative = `${c.situation}\n${c.goal}`;
+  const unfiledDominant = hasUnfiledReturnIntent(narrative) && !hasRefundIntent(narrative);
   for (const issue of c.issues) {
+    if (unfiledDominant && issue.issueType === "refund_discrepancy") continue;
     let unclear: string[] = [];
     try {
       const parsed = JSON.parse(issue.unclearJson || "[]");
@@ -84,16 +95,22 @@ export async function nextClarifyQuestion(caseId: string): Promise<ClarifyQuesti
       needed: !hasYear,
     },
     {
+      key: "unfiled_years",
+      text: "Which years haven't been filed yet, and do you still have the income documents (W-2s / 1099s) for those years?",
+      placeholder: "List the unfiled years and which W-2/1099 documents you still have...",
+      needed: Boolean(unfiledIssue),
+    },
+    {
       key: "refund_expected",
       text: "Let's pin down the refund numbers. What refund amount did your tax return say you were getting? It's on Form 1040, line 35a — an approximate dollar amount is fine.",
       placeholder: "Enter the refund shown on your return, or say you are not sure...",
-      needed: Boolean(refundIssue && refundIssue.expectedCents === null),
+      needed: Boolean(!unfiledDominant && refundIssue && refundIssue.expectedCents === null),
     },
     {
       key: "refund_received",
       text: "And how much refund actually arrived by bank deposit or check, and roughly on what date? If nothing arrived, say that.",
       placeholder: "Enter what arrived and when, or say no refund arrived...",
-      needed: Boolean(refundIssue && refundIssue.receivedCents === null),
+      needed: Boolean(!unfiledDominant && refundIssue && refundIssue.receivedCents === null),
     },
     {
       key: "balance_amount",
@@ -106,12 +123,6 @@ export async function nextClarifyQuestion(caseId: string): Promise<ClarifyQuesti
       text: "Look at the top-right corner of your IRS letter: what's the notice code (like CP2000 or LT11), the notice date, and the 'respond by' deadline printed on it?",
       placeholder: "Enter the notice code, notice date, and response deadline...",
       needed: Boolean(noticeIssue),
-    },
-    {
-      key: "unfiled_years",
-      text: "Which years haven't been filed yet, and do you still have the income documents (W-2s / 1099s) for those years?",
-      placeholder: "List the unfiled years and which W-2/1099 documents you still have...",
-      needed: Boolean(unfiledIssue),
     },
     {
       key: "have_transcript",
