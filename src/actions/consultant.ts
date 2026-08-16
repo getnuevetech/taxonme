@@ -4,7 +4,7 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db";
 import { requireUser } from "@/lib/auth";
-import { saveUpload } from "@/lib/uploads";
+import { saveUpload, validateImageUploadFile, validateUploadFile } from "@/lib/uploads";
 import { ROLES } from "@/lib/constants";
 import type { ActionState } from "./auth";
 
@@ -21,7 +21,8 @@ export async function consultantUpdateProfileAction(_prev: ActionState, formData
   let avatarPath: string | undefined;
   const avatar = formData.get("avatar");
   if (avatar instanceof File && avatar.size > 0) {
-    if (!avatar.type.startsWith("image/")) return { error: "The profile picture must be an image." };
+    const validationError = validateImageUploadFile(avatar);
+    if (validationError) return { error: validationError };
     avatarPath = (await saveUpload(avatar)).filePath;
   }
 
@@ -87,14 +88,23 @@ export async function consultantOnboardingAction(_prev: ActionState, formData: F
   async function pickUpload(field: string, previous: string): Promise<string> {
     const file = formData.get(field);
     if (file instanceof File && file.size > 0) {
+      const validationError = validateUploadFile(file);
+      if (validationError) throw new Error(validationError);
       const saved = await saveUpload(file);
       return saved.filePath;
     }
     return previous;
   }
-  const proofDocumentPath = await pickUpload("proof", existing?.proofDocumentPath ?? "");
-  const photoIdPath = await pickUpload("photoId", existing?.photoIdPath ?? "");
-  const insurancePath = await pickUpload("insurance", existing?.insurancePath ?? "");
+  let proofDocumentPath = "";
+  let photoIdPath = "";
+  let insurancePath = "";
+  try {
+    proofDocumentPath = await pickUpload("proof", existing?.proofDocumentPath ?? "");
+    photoIdPath = await pickUpload("photoId", existing?.photoIdPath ?? "");
+    insurancePath = await pickUpload("insurance", existing?.insurancePath ?? "");
+  } catch (err) {
+    return { error: err instanceof Error ? err.message : "One of the uploaded files is not allowed." };
+  }
 
   if ((credentialType === "cpa" || credentialType === "ea") && !proofDocumentPath) {
     return { error: "Please upload proof of your CPA license or EA enrollment." };

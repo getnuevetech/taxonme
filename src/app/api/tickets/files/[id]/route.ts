@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { getCurrentUser, hasAdminArea } from "@/lib/auth";
-import { readUpload } from "@/lib/uploads";
+import { privateFileHeaders, readUpload } from "@/lib/uploads";
 
 // Ticket attachments: visible to the ticket owner and support staff only.
 export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -18,9 +18,6 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
 
   const buf = await readUpload(attachment.filePath);
   return new NextResponse(new Uint8Array(buf), {
-    headers: {
-      "Content-Type": attachment.mimeType,
-      "Content-Disposition": `inline; filename="${attachment.fileName.replace(/[^\w.\- ]/g, "_")}"`,
-    },
+    headers: privateFileHeaders(attachment.fileName, attachment.mimeType),
   });
 }

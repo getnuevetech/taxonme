@@ -576,6 +576,11 @@ export async function proposeAssignmentAction(_prev: ActionState, formData: Form
   const note = String(formData.get("note") ?? "");
   if (!userId || !consultantId) return { error: "Choose both a user and a consultant." };
 
+  const client = await db.user.findUnique({ where: { id: userId }, select: { role: true, status: true } });
+  if (!client || client.role !== "user" || client.status !== "active") {
+    return { error: "Choose an active customer for this assignment." };
+  }
+
   const consultant = await db.consultantProfile.findUnique({ where: { userId: consultantId } });
   if (!consultant || consultant.status !== "approved") return { error: "That consultant is not approved." };
 
@@ -584,6 +589,9 @@ export async function proposeAssignmentAction(_prev: ActionState, formData: Form
   if (!caseId) {
     const latest = await db.case.findFirst({ where: { userId }, orderBy: { updatedAt: "desc" }, select: { id: true } });
     caseId = latest?.id ?? null;
+  } else {
+    const selectedCase = await db.case.findFirst({ where: { id: caseId, userId }, select: { id: true } });
+    if (!selectedCase) return { error: "The selected case does not belong to that customer." };
   }
 
   // Generate the two-model recommendation reason shown to both parties.
@@ -775,6 +783,9 @@ export async function saveFormTemplateAction(_prev: ActionState, formData: FormD
     sortOrder: Number(formData.get("sortOrder") ?? 0) || 0,
   };
   if (!data.formNumber || !data.title) return { error: "Form number and title are required." };
+  const { validateOfficialIrsPdfUrl } = await import("@/lib/url-security");
+  const pdfUrlError = await validateOfficialIrsPdfUrl(data.pdfSourceUrl);
+  if (pdfUrlError) return { error: pdfUrlError };
   if (id) {
     // Refetch the official PDF when its source URL changes.
     const existing = await db.irsFormTemplate.findUnique({ where: { id }, select: { pdfSourceUrl: true } });
@@ -794,6 +805,9 @@ export async function refreshFormPdfAction(id: string): Promise<ActionState> {
   const template = await db.irsFormTemplate.findUnique({ where: { id } });
   if (!template) return { error: "Template not found." };
   if (!template.pdfSourceUrl) return { error: "Set the official IRS PDF URL first, then fetch." };
+  const { validateOfficialIrsPdfUrl } = await import("@/lib/url-security");
+  const pdfUrlError = await validateOfficialIrsPdfUrl(template.pdfSourceUrl);
+  if (pdfUrlError) return { error: pdfUrlError };
   const { ensureOfficialPdf, listPdfFields } = await import("@/lib/pdf-forms");
   const pdf = await ensureOfficialPdf(template);
   if (!pdf) return { error: "Could not download the PDF from that URL — see System logs for the exact error." };

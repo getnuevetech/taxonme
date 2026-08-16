@@ -13,11 +13,23 @@ import type { ActionState } from "./auth";
 export async function uploadDocumentAction(_prev: ActionState, formData: FormData): Promise<ActionState> {
   const user = await getCurrentUser();
   const docKind = String(formData.get("docKind") ?? "other");
-  const caseId = String(formData.get("caseId") ?? "") || null;
+  const submittedCaseId = String(formData.get("caseId") ?? "") || null;
   const files = formData.getAll("files").filter((f): f is File => f instanceof File && f.size > 0);
   if (files.length === 0) return { error: "Choose at least one file." };
 
   const guest = user ? null : await getOrCreateGuestSession();
+  let caseId: string | null = null;
+  if (submittedCaseId) {
+    const c = await db.case.findFirst({
+      where: user
+        ? { id: submittedCaseId, userId: user.id }
+        : { id: submittedCaseId, guestSessionId: guest!.id },
+      select: { id: true },
+    });
+    if (!c) return { error: "Case not found." };
+    caseId = c.id;
+  }
+
   for (const file of files.slice(0, 10)) {
     const validationError = validateUploadFile(file);
     if (validationError) return { error: validationError };
@@ -40,23 +52,21 @@ export async function uploadDocumentAction(_prev: ActionState, formData: FormDat
   // analysis itself re-verifies path-step evidence when it finishes.
   if (user) {
     if (caseId) {
-      const c = await db.case.findFirst({ where: { id: caseId, userId: user.id }, select: { id: true } });
-      if (c) {
-        // Run the (potentially minutes-long) multi-model re-analysis in the
-        // background — the upload returns instantly and the case page
-        // live-refreshes while status is "analyzing".
-        await db.case.update({ where: { id: caseId }, data: { status: "analyzing" } });
-        after(async () => {
-          try {
-            const { runCaseAnalysis } = await import("@/lib/ai/orchestrator");
-            await runCaseAnalysis(caseId);
-          } catch (err) {
-            const { logSystem } = await import("@/lib/syslog");
-            await logSystem("error", "analysis", "Background re-analysis after upload failed", String(err));
-            await db.case.update({ where: { id: caseId }, data: { status: "analyzed" } }).catch(() => null);
-          }
-        });
-      }
+      const ownedCaseId = caseId;
+      // Run the (potentially minutes-long) multi-model re-analysis in the
+      // background — the upload returns instantly and the case page
+      // live-refreshes while status is "analyzing".
+      await db.case.update({ where: { id: ownedCaseId }, data: { status: "analyzing" } });
+      after(async () => {
+        try {
+          const { runCaseAnalysis } = await import("@/lib/ai/orchestrator");
+          await runCaseAnalysis(ownedCaseId);
+        } catch (err) {
+          const { logSystem } = await import("@/lib/syslog");
+          await logSystem("error", "analysis", "Background re-analysis after upload failed", String(err));
+          await db.case.update({ where: { id: ownedCaseId }, data: { status: "analyzed" } }).catch(() => null);
+        }
+      });
     } else {
       await verifyUserCasesProgress(user.id);
     }

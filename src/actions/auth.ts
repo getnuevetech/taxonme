@@ -1,10 +1,12 @@
 "use server";
 
 import { redirect } from "next/navigation";
+import { headers } from "next/headers";
 import { z } from "zod";
 import { db } from "@/lib/db";
 import { createSession, destroySession, hashPassword, verifyPassword, getCurrentUser } from "@/lib/auth";
 import { claimGuestSession } from "@/lib/guest";
+import { checkRateLimit, rateLimitKey } from "@/lib/rate-limit";
 import { ROLES } from "@/lib/constants";
 
 export type ActionState = { error?: string; ok?: boolean; info?: string; link?: string } | null;
@@ -18,6 +20,11 @@ const registerSchema = z.object({
   password: z.string().min(8, "Password must be at least 8 characters"),
   agree: z.literal("on", { message: "You must accept the agreement to continue" }),
 });
+
+async function clientIp(): Promise<string> {
+  const h = await headers();
+  return (h.get("x-forwarded-for")?.split(",")[0] ?? h.get("x-real-ip") ?? "unknown").trim();
+}
 
 export async function registerAction(_prev: ActionState, formData: FormData): Promise<ActionState> {
   const parsed = registerSchema.safeParse(Object.fromEntries(formData));
@@ -63,8 +70,12 @@ export async function registerAction(_prev: ActionState, formData: FormData): Pr
 }
 
 export async function loginAction(_prev: ActionState, formData: FormData): Promise<ActionState> {
-  const email = String(formData.get("email") ?? "").toLowerCase();
+  const email = String(formData.get("email") ?? "").trim().toLowerCase();
   const password = String(formData.get("password") ?? "");
+  const limitedKey = rateLimitKey(["login", email, await clientIp()]);
+  if (!checkRateLimit(limitedKey, 8, 15 * 60 * 1000)) {
+    return { error: "Too many sign-in attempts. Wait a few minutes and try again." };
+  }
   const user = await db.user.findUnique({ where: { email } });
   if (!user || !user.passwordHash || !(await verifyPassword(password, user.passwordHash))) {
     return { error: "Invalid email or password." };
@@ -100,6 +111,10 @@ export async function deleteAccountAction(): Promise<void> {
 export async function requestPasswordResetAction(_prev: ActionState, formData: FormData): Promise<ActionState> {
   const email = String(formData.get("email") ?? "").trim().toLowerCase();
   if (!email) return { error: "Enter your email address." };
+  const limitedKey = rateLimitKey(["password-reset", email, await clientIp()]);
+  if (!checkRateLimit(limitedKey, 3, 60 * 60 * 1000)) {
+    return { error: "Too many reset requests. Wait a while before trying again." };
+  }
   const user = await db.user.findUnique({ where: { email } });
   // Same response whether or not the account exists (no user enumeration).
   if (user && user.status === "active") {
@@ -125,6 +140,10 @@ export async function resetPasswordAction(_prev: ActionState, formData: FormData
   const token = String(formData.get("token") ?? "");
   const password = String(formData.get("password") ?? "");
   const confirm = String(formData.get("confirm") ?? "");
+  const limitedKey = rateLimitKey(["password-reset-submit", await clientIp()]);
+  if (!checkRateLimit(limitedKey, 10, 15 * 60 * 1000)) {
+    return { error: "Too many attempts. Wait a few minutes and try again." };
+  }
   if (password.length < 8) return { error: "Password must be at least 8 characters." };
   if (password !== confirm) return { error: "Passwords don't match." };
 

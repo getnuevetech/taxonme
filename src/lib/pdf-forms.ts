@@ -4,6 +4,7 @@ import type { IrsFormTemplate } from "@prisma/client";
 import { db } from "./db";
 import { readUpload, saveUploadBuffer } from "./uploads";
 import { logSystem } from "./syslog";
+import { validateOfficialIrsPdfUrl } from "./url-security";
 
 // Official IRS PDF infusion. Each form template can carry the URL of the real
 // IRS PDF (e.g. https://www.irs.gov/pub/irs-pdf/f9465.pdf) plus an
@@ -33,6 +34,8 @@ export type PdfMapEntry = {
   checkIf?: string; // makes the entry a checkbox: check when the value equals this
 };
 
+const MAX_OFFICIAL_PDF_BYTES = 25 * 1024 * 1024;
+
 // Download (and cache) the official PDF for a template.
 export async function ensureOfficialPdf(template: IrsFormTemplate): Promise<Buffer | null> {
   if (template.pdfPath) {
@@ -44,9 +47,16 @@ export async function ensureOfficialPdf(template: IrsFormTemplate): Promise<Buff
   }
   if (!template.pdfSourceUrl) return null;
   try {
+    const urlError = await validateOfficialIrsPdfUrl(template.pdfSourceUrl);
+    if (urlError) throw new Error(urlError);
     const res = await fetch(template.pdfSourceUrl, { signal: AbortSignal.timeout(30_000) });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const contentLength = Number(res.headers.get("content-length") ?? 0);
+    if (Number.isFinite(contentLength) && contentLength > MAX_OFFICIAL_PDF_BYTES) {
+      throw new Error("PDF is larger than the 25 MB limit");
+    }
     const buf = Buffer.from(await res.arrayBuffer());
+    if (buf.length > MAX_OFFICIAL_PDF_BYTES) throw new Error("PDF is larger than the 25 MB limit");
     if (!buf.subarray(0, 5).toString("latin1").startsWith("%PDF")) throw new Error("Response is not a PDF");
     const name = await saveUploadBuffer(buf, ".pdf");
     await db.irsFormTemplate.update({ where: { id: template.id }, data: { pdfPath: name } });
@@ -78,12 +88,69 @@ function toNumber(v: string | undefined): number {
 function evalExpr(expr: string, data: Record<string, string>): number | null {
   const substituted = expr.replace(/[a-zA-Z_][a-zA-Z0-9_]*/g, (k) => String(toNumber(data[k])));
   if (!/^[\d\s+\-*/().]+$/.test(substituted)) return null;
-  try {
-    const result = new Function(`"use strict"; return (${substituted});`)() as unknown;
-    return typeof result === "number" && Number.isFinite(result) ? result : null;
-  } catch {
-    return null;
+  let i = 0;
+
+  const skip = () => {
+    while (/\s/.test(substituted[i] ?? "")) i++;
+  };
+  const parseNumber = (): number | null => {
+    skip();
+    const start = i;
+    while (/[\d.]/.test(substituted[i] ?? "")) i++;
+    if (start === i) return null;
+    const value = Number(substituted.slice(start, i));
+    return Number.isFinite(value) ? value : null;
+  };
+  const parseFactor = (): number | null => {
+    skip();
+    const ch = substituted[i];
+    if (ch === "+" || ch === "-") {
+      i++;
+      const value = parseFactor();
+      return value === null ? null : ch === "-" ? -value : value;
+    }
+    if (ch === "(") {
+      i++;
+      const value = parseExpression();
+      skip();
+      if (substituted[i] !== ")") return null;
+      i++;
+      return value;
+    }
+    return parseNumber();
+  };
+  const parseTerm = (): number | null => {
+    let value = parseFactor();
+    if (value === null) return null;
+    while (true) {
+      skip();
+      const op = substituted[i];
+      if (op !== "*" && op !== "/") return value;
+      i++;
+      const rhs = parseFactor();
+      if (rhs === null) return null;
+      value = op === "*" ? value * rhs : value / rhs;
+      if (!Number.isFinite(value)) return null;
+    }
+  };
+  function parseExpression(): number | null {
+    let value = parseTerm();
+    if (value === null) return null;
+    while (true) {
+      skip();
+      const op = substituted[i];
+      if (op !== "+" && op !== "-") return value;
+      i++;
+      const rhs = parseTerm();
+      if (rhs === null) return null;
+      value = op === "+" ? value + rhs : value - rhs;
+      if (!Number.isFinite(value)) return null;
+    }
   }
+
+  const result = parseExpression();
+  skip();
+  return result !== null && i === substituted.length && Number.isFinite(result) ? result : null;
 }
 
 function money(n: number): string {

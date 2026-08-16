@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { verifyPassword, createSession } from "@/lib/auth";
+import { checkRateLimit, rateLimitKey } from "@/lib/rate-limit";
 
 // Programmatic login (also usable with curl for diagnostics):
 //   curl -i -c cookies.txt -X POST -d "email=...&password=..." <url>/api/auth/login
@@ -18,8 +19,14 @@ export async function POST(request: Request) {
     email = String(form?.get("email") ?? "");
     password = String(form?.get("password") ?? "");
   }
+  email = email.toLowerCase().trim();
 
-  const user = await db.user.findUnique({ where: { email: email.toLowerCase().trim() } });
+  const ip = (request.headers.get("x-forwarded-for")?.split(",")[0] ?? request.headers.get("x-real-ip") ?? "unknown").trim();
+  if (!checkRateLimit(rateLimitKey(["api-login", email, ip]), 8, 15 * 60 * 1000)) {
+    return NextResponse.json({ ok: false, error: "Too many sign-in attempts" }, { status: 429 });
+  }
+
+  const user = await db.user.findUnique({ where: { email } });
   if (!user || !user.passwordHash || !(await verifyPassword(password, user.passwordHash))) {
     return NextResponse.json({ ok: false, error: "Invalid email or password" }, { status: 401 });
   }

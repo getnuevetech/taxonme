@@ -1,6 +1,7 @@
 /* eslint-disable no-console */
 import { PrismaClient } from "@prisma/client";
 import bcrypt from "bcryptjs";
+import crypto from "crypto";
 import { DEFAULT_PROMPTS } from "../src/lib/ai/prompts";
 
 const db = new PrismaClient();
@@ -58,7 +59,10 @@ async function seedSettings() {
 
 async function seedAdmin() {
   const email = process.env.SEED_ADMIN_EMAIL ?? "admin@mytaxonme.com";
-  const password = process.env.SEED_ADMIN_PASSWORD ?? "ChangeMe!2026";
+  const password = process.env.SEED_ADMIN_PASSWORD ?? (process.env.NODE_ENV === "production" ? "" : crypto.randomBytes(18).toString("base64url"));
+  if (!password) {
+    throw new Error("SEED_ADMIN_PASSWORD must be set when seeding a production environment.");
+  }
   await db.user.upsert({
     where: { email },
     update: {},
@@ -71,7 +75,7 @@ async function seedAdmin() {
       emailVerifiedAt: new Date(),
     },
   });
-  console.log(`Super admin: ${email} / ${password}`);
+  console.log(`Super admin: ${email}${process.env.SEED_ADMIN_PASSWORD ? "" : ` / generated password: ${password}`}`);
 }
 
 async function seedAdminRoles() {

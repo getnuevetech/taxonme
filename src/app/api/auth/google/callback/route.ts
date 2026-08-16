@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { getSetting } from "@/lib/settings";
-import { createSession } from "@/lib/auth";
+import { createSession, secureCookiesEnabled } from "@/lib/auth";
 import { claimGuestSession } from "@/lib/guest";
 import { cookies } from "next/headers";
 
@@ -17,7 +17,7 @@ export async function GET(request: Request) {
   const expectedState = cookieStore.get("oauth_state")?.value ?? "";
   if (!returnedState || returnedState !== expectedState) {
     const stateFailResponse = NextResponse.redirect(`${appUrl}/login?error=invalid_state`);
-    stateFailResponse.cookies.set("oauth_state", "", { httpOnly: true, maxAge: 0, path: "/" });
+    stateFailResponse.cookies.set("oauth_state", "", { httpOnly: true, secure: await secureCookiesEnabled(), maxAge: 0, path: "/" });
     return stateFailResponse;
   }
 
@@ -80,6 +80,6 @@ export async function GET(request: Request) {
   await createSession(user.id);
   const response = NextResponse.redirect(`${appUrl}/app`);
   // Clear the state cookie after successful use.
-  response.cookies.set("oauth_state", "", { httpOnly: true, maxAge: 0, path: "/" });
+  response.cookies.set("oauth_state", "", { httpOnly: true, secure: await secureCookiesEnabled(), maxAge: 0, path: "/" });
   return response;
 }

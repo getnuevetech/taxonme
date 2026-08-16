@@ -41,6 +41,8 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
   return new NextResponse(report.html, {
     headers: {
       "Content-Type": "text/html; charset=utf-8",
+      "Cache-Control": "private, no-store",
+      "X-Content-Type-Options": "nosniff",
       ...(download ? { "Content-Disposition": `attachment; filename="${report.fileName}"` } : {}),
     },
   });

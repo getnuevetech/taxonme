@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db";
 import { requireUser, hasAdminArea } from "@/lib/auth";
 import { getBoolSetting } from "@/lib/settings";
+import { saveUpload, validateUploadFile } from "@/lib/uploads";
 import type { ActionState } from "./auth";
 
 // Case discussion with visibility rules:
@@ -20,7 +21,8 @@ export async function addCaseCommentAction(_prev: ActionState, formData: FormDat
   if (!body && files.length === 0) return { error: "Write a comment or attach a file." };
   if (body.length > 4000) return { error: "Comments are limited to 4000 characters." };
   for (const f of files) {
-    if (f.size > 20 * 1024 * 1024) return { error: `${f.name} is larger than 20 MB.` };
+    const validationError = validateUploadFile(f);
+    if (validationError) return { error: validationError };
   }
 
   const c = await db.case.findUnique({ where: { id: caseId }, select: { id: true, userId: true, title: true, number: true } });
@@ -59,7 +61,6 @@ export async function addCaseCommentAction(_prev: ActionState, formData: FormDat
   // posts them), so they join the evidence and are analyzed like any upload.
   const attachmentIds: string[] = [];
   if (files.length > 0) {
-    const { saveUpload } = await import("@/lib/uploads");
     for (const file of files.slice(0, 10)) {
       const { filePath, sizeBytes } = await saveUpload(file);
       const doc = await db.document.create({
