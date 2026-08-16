@@ -16,7 +16,7 @@ function fill(template: string, vars: Record<string, string>): string {
 }
 
 function hasUnfiledReturnIntent(text: string): boolean {
-  return /(didn'?t file|haven'?t filed|have not file[dn]?|has not file[dn]?|not filed|unfiled|late filing|missed filing|never filed|file taxes for (the )?past)/i.test(text);
+  return /(didn'?t file|haven'?t filed|have not file[dn]?|has not file[dn]?|not filed|unfiled|late filing|missed filing|never filed|file taxes for (the )?past|years behind|behind on (my )?taxes|out of compliance)/i.test(text);
 }
 
 function hasRefundIntent(text: string): boolean {

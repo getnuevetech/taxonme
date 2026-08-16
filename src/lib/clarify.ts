@@ -10,7 +10,7 @@ import { db } from "./db";
 export type ClarifyQuestion = { key: string; text: string; placeholder: string };
 
 function hasUnfiledReturnIntent(text: string): boolean {
-  return /(didn'?t file|haven'?t filed|have not file[dn]?|has not file[dn]?|not filed|unfiled|late filing|missed filing|never filed|file taxes for (the )?past)/i.test(text);
+  return /(didn'?t file|haven'?t filed|have not file[dn]?|has not file[dn]?|not filed|unfiled|late filing|missed filing|never filed|file taxes for (the )?past|years behind|behind on (my )?taxes|out of compliance)/i.test(text);
 }
 
 function hasRefundIntent(text: string): boolean {
@@ -95,6 +95,12 @@ export async function nextClarifyQuestion(caseId: string): Promise<ClarifyQuesti
       needed: !hasYear,
     },
     {
+      key: "unfiled_years",
+      text: "Which years haven't been filed yet, and do you still have the income documents (W-2s / 1099s) for those years?",
+      placeholder: "List the unfiled years and which W-2/1099 documents you still have...",
+      needed: Boolean(unfiledIssue),
+    },
+    {
       key: "refund_expected",
       text: "Let's pin down the refund numbers. What refund amount did your tax return say you were getting? It's on Form 1040, line 35a — an approximate dollar amount is fine.",
       placeholder: "Enter the refund shown on your return, or say you are not sure...",
@@ -117,12 +123,6 @@ export async function nextClarifyQuestion(caseId: string): Promise<ClarifyQuesti
       text: "Look at the top-right corner of your IRS letter: what's the notice code (like CP2000 or LT11), the notice date, and the 'respond by' deadline printed on it?",
       placeholder: "Enter the notice code, notice date, and response deadline...",
       needed: Boolean(noticeIssue),
-    },
-    {
-      key: "unfiled_years",
-      text: "Which years haven't been filed yet, and do you still have the income documents (W-2s / 1099s) for those years?",
-      placeholder: "List the unfiled years and which W-2/1099 documents you still have...",
-      needed: Boolean(unfiledIssue),
     },
     {
       key: "have_transcript",
