@@ -12,6 +12,8 @@ RUN npm ci
 COPY . .
 # A placeholder is enough at build time; the real DATABASE_URL is injected at runtime.
 ENV DATABASE_URL="postgresql://build:build@localhost:5432/build"
+ENV AUTH_SECRET="build-time-auth-secret-placeholder"
+ENV CRON_SECRET="build-time-cron-secret-placeholder"
 RUN npx prisma generate && npm run build
 
 FROM node:22-alpine AS runner

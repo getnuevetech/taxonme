@@ -1,6 +1,16 @@
 #!/bin/sh
 set -e
 
+if [ -z "$AUTH_SECRET" ]; then
+  echo "AUTH_SECRET is required in production. Set it in .env.deploy or the container environment."
+  exit 1
+fi
+
+if [ -z "$CRON_SECRET" ]; then
+  echo "CRON_SECRET is required for the protected maintenance endpoint. Set it in .env.deploy or the container environment."
+  exit 1
+fi
+
 # Build DATABASE_URL from parts unless one was provided explicitly.
 # Credentials are URL-encoded so passwords may contain any characters.
 if [ -z "$DATABASE_URL" ]; then
