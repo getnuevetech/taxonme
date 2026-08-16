@@ -24,10 +24,11 @@ export async function CaseAnalysisView({ caseId, viewer }: { caseId: string; vie
     },
   });
   if (!c) return null;
+  const nowMs = new Date().getTime();
 
   // Self-heal: if a background analysis was cut off (deploy/restart), don't
   // spin forever — recover to a stable status after 10 minutes.
-  if (c.status === "analyzing" && Date.now() - c.updatedAt.getTime() > 10 * 60000) {
+  if (c.status === "analyzing" && nowMs - c.updatedAt.getTime() > 10 * 60000) {
     c.status = c.issues.length > 0 ? "analyzed" : "needs_info";
     await db.case.update({ where: { id: c.id }, data: { status: c.status } }).catch(() => null);
   }

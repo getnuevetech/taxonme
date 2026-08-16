@@ -1,4 +1,4 @@
-import { NextResponse, type NextRequest } from "next/server";
+import { NextResponse } from "next/server";
 
 const SECURITY_HEADERS: Record<string, string> = {
   "X-Content-Type-Options": "nosniff",
@@ -8,7 +8,7 @@ const SECURITY_HEADERS: Record<string, string> = {
   "Content-Security-Policy": "base-uri 'self'; frame-ancestors 'none'; object-src 'none'",
 };
 
-export function middleware(_request: NextRequest) {
+export function proxy() {
   const response = NextResponse.next();
   for (const [key, value] of Object.entries(SECURITY_HEADERS)) {
     response.headers.set(key, value);

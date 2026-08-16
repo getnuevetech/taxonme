@@ -21,7 +21,7 @@ function Submit() {
 export function ClarifyAnswerForm({ caseId }: { caseId: string }) {
   const [state, formAction] = useActionState(clarifyAnswerAction, null);
   return (
-    <form action={formAction} key={state?.ok ? Date.now() : "form"}>
+    <form action={formAction}>
       <input type="hidden" name="caseId" value={caseId} />
       {state?.error && <p className="mb-2 rounded-lg bg-red-50 px-3 py-2 text-xs text-red-700">{state.error}</p>}
       <div className="flex items-start gap-2">

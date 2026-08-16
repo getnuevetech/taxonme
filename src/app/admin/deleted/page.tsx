@@ -19,10 +19,11 @@ export default async function DeletedAccountsPage() {
     }),
     getRetentionDays(),
   ]);
+  const nowMs = new Date().getTime();
 
   const daysLeft = (deletedAt: Date | null) => {
     if (!deletedAt) return retentionDays;
-    const elapsed = (Date.now() - deletedAt.getTime()) / (24 * 60 * 60 * 1000);
+    const elapsed = (nowMs - deletedAt.getTime()) / (24 * 60 * 60 * 1000);
     return Math.max(0, Math.ceil(retentionDays - elapsed));
   };
 

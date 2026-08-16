@@ -59,7 +59,7 @@ export default async function AdminTicketsPage({
   ]);
   const { getNumberSetting, getSetting } = await import("@/lib/settings");
   const slaHours = await getNumberSetting("tickets.sla_first_response_hours", 24);
-  const slaCutoff = new Date(Date.now() - slaHours * 3600000);
+  const slaCutoff = new Date(new Date().getTime() - slaHours * 3600000);
   const awaitingFirstResponse = await db.ticket.count({
     where: { status: { in: ["open", "in_progress"] }, firstResponseAt: null },
   });
