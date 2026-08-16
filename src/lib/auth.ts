@@ -14,12 +14,19 @@ const SESSION_COOKIE = "taxonme_session";
 // rather than each racing to write a (potentially different) resolved value.
 let _secretPromise: Promise<Uint8Array> | null = null;
 
-// The signing secret is admin-manageable: env var wins, otherwise a random
-// secret is generated once and stored in the settings table.
+function passwordFingerprint(passwordHash: string | null | undefined): string {
+  return crypto.createHash("sha256").update(passwordHash || "no-password").digest("hex");
+}
+
+// The signing secret must come from AUTH_SECRET in production. Local/dev runs
+// can fall back to a generated DB setting so onboarding remains easy.
 async function getSecret(): Promise<Uint8Array> {
   if (!_secretPromise) {
     _secretPromise = (async () => {
       if (process.env.AUTH_SECRET) return new TextEncoder().encode(process.env.AUTH_SECRET);
+      if (process.env.NODE_ENV === "production") {
+        throw new Error("AUTH_SECRET must be set in production.");
+      }
       let row = await db.setting.findUnique({ where: { key: "auth.secret" } });
       if (!row) {
         row = await db.setting.upsert({
@@ -58,7 +65,9 @@ export async function secureCookiesEnabled(): Promise<boolean> {
 
 export async function createSession(userId: string) {
   const secret = await getSecret();
-  const token = await new SignJWT({ sub: userId })
+  const user = await db.user.findUnique({ where: { id: userId }, select: { passwordHash: true } });
+  if (!user) throw new Error("Cannot create a session for a missing user.");
+  const token = await new SignJWT({ sub: userId, pwd: passwordFingerprint(user.passwordHash) })
     .setProtectedHeader({ alg: "HS256" })
     .setIssuedAt()
     .setExpirationTime("30d")
@@ -87,10 +96,11 @@ export const getCurrentUser = cache(async () => {
     const { payload } = await jwtVerify(token, secret);
     if (!payload.sub) return null;
     const user = await db.user.findUnique({
-      where: { id: payload.sub },
+      where: { id: String(payload.sub) },
       include: { adminPermissions: true, adminRole: true, consultantProfile: true },
     });
     if (!user || user.status !== "active") return null;
+    if (payload.pwd !== passwordFingerprint(user.passwordHash)) return null;
     return user;
   } catch {
     return null;

@@ -1,5 +1,6 @@
 import "server-only";
 import type { AiProvider } from "@prisma/client";
+import { validatePublicHttpsUrl } from "../url-security";
 
 export type ChatMessage = { role: "system" | "user" | "assistant"; content: string };
 export type ProviderResult = { text: string; latencyMs: number };
@@ -13,8 +14,15 @@ export type MediaAttachment = { mimeType: string; dataBase64: string; name: stri
 // admin tester), never silently stuck requests.
 const CALL_TIMEOUT_MS = 90_000;
 
+async function providerBaseUrl(p: AiProvider, fallback: string): Promise<string> {
+  const base = (p.baseUrl || fallback).replace(/\/$/, "");
+  const urlError = await validatePublicHttpsUrl(base);
+  if (urlError) throw new Error(`${p.name}: unsafe provider base URL (${urlError})`);
+  return base;
+}
+
 async function callOpenAiCompatible(p: AiProvider, messages: ChatMessage[], media: MediaAttachment[] = []): Promise<string> {
-  const base = (p.baseUrl || "https://api.openai.com/v1").replace(/\/$/, "");
+  const base = await providerBaseUrl(p, "https://api.openai.com/v1");
   const post = (payload: Record<string, unknown>) =>
     fetch(`${base}/chat/completions`, {
       method: "POST",
@@ -70,7 +78,7 @@ async function callOpenAiCompatible(p: AiProvider, messages: ChatMessage[], medi
 }
 
 async function callAnthropic(p: AiProvider, messages: ChatMessage[], media: MediaAttachment[] = []): Promise<string> {
-  const base = (p.baseUrl || "https://api.anthropic.com").replace(/\/$/, "");
+  const base = await providerBaseUrl(p, "https://api.anthropic.com");
   const system = messages.filter((m) => m.role === "system").map((m) => m.content).join("\n");
   const rest = messages.filter((m) => m.role !== "system");
   const post = (payload: Record<string, unknown>) =>
@@ -122,7 +130,7 @@ async function callAnthropic(p: AiProvider, messages: ChatMessage[], media: Medi
 }
 
 async function callGoogle(p: AiProvider, messages: ChatMessage[], media: MediaAttachment[] = []): Promise<string> {
-  const base = (p.baseUrl || "https://generativelanguage.googleapis.com/v1beta").replace(/\/$/, "");
+  const base = await providerBaseUrl(p, "https://generativelanguage.googleapis.com/v1beta");
   const system = messages.filter((m) => m.role === "system").map((m) => m.content).join("\n");
   const contents = messages
     .filter((m) => m.role !== "system")
@@ -174,7 +182,7 @@ export async function callProvider(
 export async function listModels(p: AiProvider): Promise<string[]> {
   const signal = AbortSignal.timeout(30_000);
   if (p.kind === "anthropic") {
-    const base = (p.baseUrl || "https://api.anthropic.com").replace(/\/$/, "");
+    const base = await providerBaseUrl(p, "https://api.anthropic.com");
     const res = await fetch(`${base}/v1/models?limit=100`, {
       signal,
       headers: { "x-api-key": p.apiKey, "anthropic-version": "2023-06-01" },
@@ -184,7 +192,7 @@ export async function listModels(p: AiProvider): Promise<string[]> {
     return ((data.data ?? []) as { id?: string }[]).map((m) => String(m.id ?? "")).filter(Boolean);
   }
   if (p.kind === "google") {
-    const base = (p.baseUrl || "https://generativelanguage.googleapis.com/v1beta").replace(/\/$/, "");
+    const base = await providerBaseUrl(p, "https://generativelanguage.googleapis.com/v1beta");
     const res = await fetch(`${base}/models?key=${p.apiKey}&pageSize=200`, { signal });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const data = await res.json();
@@ -193,7 +201,7 @@ export async function listModels(p: AiProvider): Promise<string[]> {
       .map((m) => String(m.name ?? "").replace(/^models\//, ""))
       .filter(Boolean);
   }
-  const base = (p.baseUrl || "https://api.openai.com/v1").replace(/\/$/, "");
+  const base = await providerBaseUrl(p, "https://api.openai.com/v1");
   const res = await fetch(`${base}/models`, {
     signal,
     headers: { Authorization: `Bearer ${p.apiKey}` },

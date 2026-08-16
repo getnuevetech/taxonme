@@ -20,7 +20,9 @@ async function saveTicketAttachments(
   const files = formData.getAll("files").filter((f): f is File => f instanceof File && f.size > 0);
   for (const file of files.slice(0, 5)) {
     if (file.size > 10 * 1024 * 1024) return `${file.name} is larger than 10 MB.`;
-    const { saveUpload } = await import("@/lib/uploads");
+    const { saveUpload, validateUploadFile } = await import("@/lib/uploads");
+    const validationError = validateUploadFile(file);
+    if (validationError) return validationError;
     const saved = await saveUpload(file);
     await db.ticketAttachment.create({
       data: {

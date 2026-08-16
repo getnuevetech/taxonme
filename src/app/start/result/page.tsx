@@ -24,10 +24,11 @@ export default async function GuestResultPage({
     include: { issues: { orderBy: { createdAt: "asc" } }, documents: { where: { deletedAt: null } } },
   });
   if (!c) redirect("/start");
+  const nowMs = new Date().getTime();
 
   // The analysis runs in the background after intake — show a live-refreshing
   // waiting state until findings are ready.
-  if (c.status === "analyzing" && Date.now() - c.updatedAt.getTime() < 10 * 60000) {
+  if (c.status === "analyzing" && nowMs - c.updatedAt.getTime() < 10 * 60000) {
     const { AutoRefresh } = await import("@/components/auto-refresh");
     return (
       <div className="flex min-h-screen flex-col">

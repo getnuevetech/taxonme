@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { randomBytes } from "crypto";
 import { getSetting } from "@/lib/settings";
+import { secureCookiesEnabled } from "@/lib/auth";
 
 // Google OAuth start. Client ID/secret and redirect URL are configured by the
 // admin in Settings (auth.google_client_id, auth.google_client_secret, app.url).
@@ -27,6 +28,7 @@ export async function GET(request: Request) {
   response.cookies.set("oauth_state", state, {
     httpOnly: true,
     sameSite: "lax",
+    secure: await secureCookiesEnabled(),
     maxAge: 300, // 5 minutes
     path: "/",
   });

@@ -34,6 +34,7 @@ export default async function AdminTicketDetailPage({
     db.cannedResponse.findMany({ orderBy: { title: "asc" } }),
   ]);
   if (!ticket) notFound();
+  const nowMs = new Date().getTime();
 
   const actionButton = (label: string, action: () => Promise<void>, color: string) => (
     <form action={action}>
@@ -106,7 +107,7 @@ export default async function AdminTicketDetailPage({
         <div className="rounded-xl border border-slate-200 bg-white px-4 py-3">
           <p className="text-xs font-medium uppercase tracking-wide text-slate-400">Age</p>
           <p className="text-sm font-semibold text-slate-800">
-            {Math.max(1, Math.round((Date.now() - ticket.createdAt.getTime()) / 3600000))}h
+            {Math.max(1, Math.round((nowMs - ticket.createdAt.getTime()) / 3600000))}h
           </p>
         </div>
       </div>

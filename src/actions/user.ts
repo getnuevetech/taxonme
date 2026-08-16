@@ -5,7 +5,7 @@ import { redirect } from "next/navigation";
 import { db } from "@/lib/db";
 import { getCurrentUser, requireUser } from "@/lib/auth";
 import { getOrCreateGuestSession } from "@/lib/guest";
-import { saveUpload } from "@/lib/uploads";
+import { saveUpload, validateImageUploadFile } from "@/lib/uploads";
 import { runQaChat, generateLetterDraft } from "@/lib/ai/orchestrator";
 import { verifyUserCasesProgress } from "@/lib/case-progress";
 import { hasFeature } from "@/lib/access";
@@ -19,7 +19,8 @@ export async function updateProfileAction(_prev: ActionState, formData: FormData
   const avatar = formData.get("avatar");
   let avatarPath = user.avatarPath;
   if (avatar instanceof File && avatar.size > 0) {
-    if (!avatar.type.startsWith("image/")) return { error: "Profile picture must be an image." };
+    const validationError = validateImageUploadFile(avatar);
+    if (validationError) return { error: validationError };
     const saved = await saveUpload(avatar);
     avatarPath = saved.filePath;
   }
@@ -116,15 +117,17 @@ export async function generateLetterAction(_prev: ActionState, formData: FormDat
   if (context.length < 20) return { error: "Describe what the letter should address (a few sentences)." };
 
   let noticeContext = "";
+  let safeNoticeId: string | null = null;
   if (noticeId) {
     const notice = await db.notice.findUnique({ where: { id: noticeId } });
     if (notice && notice.userId === user.id) {
+      safeNoticeId = notice.id;
       noticeContext = `Notice type: ${notice.noticeType}. Tax year: ${notice.taxYear ?? "unknown"}. Explanation: ${notice.explanation}`;
     }
   }
   const body = await generateLetterDraft([noticeContext, context].filter(Boolean).join("\n\n"));
   const letter = await db.responseLetter.create({
-    data: { userId: user.id, noticeId, title: `Response letter — ${new Date().toLocaleDateString("en-US")}`, body },
+    data: { userId: user.id, noticeId: safeNoticeId, title: `Response letter — ${new Date().toLocaleDateString("en-US")}`, body },
   });
   await verifyUserCasesProgress(user.id);
   redirect(`/app/letters/${letter.id}`);

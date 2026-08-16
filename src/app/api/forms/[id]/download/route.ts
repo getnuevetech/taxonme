@@ -52,6 +52,8 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
       headers: {
         "Content-Type": "application/pdf",
         "Content-Disposition": `attachment; filename="Form-${submission.template.formNumber.replace(/[^\w-]/g, "")}-filled.pdf"`,
+        "Cache-Control": "private, no-store",
+        "X-Content-Type-Options": "nosniff",
       },
     });
   }
@@ -90,6 +92,8 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
   return new NextResponse(html, {
     headers: {
       "Content-Type": "text/html; charset=utf-8",
+      "Cache-Control": "private, no-store",
+      "X-Content-Type-Options": "nosniff",
       ...(download
         ? { "Content-Disposition": `attachment; filename="Form-${submission.template.formNumber.replace(/[^\w-]/g, "")}-completed.html"` }
         : {}),

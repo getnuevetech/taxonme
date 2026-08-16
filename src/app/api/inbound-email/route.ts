@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { getSetting } from "@/lib/settings";
+import { checkRateLimit, rateLimitKey } from "@/lib/rate-limit";
+import { timingSafeStringEqual } from "@/lib/secrets";
 
 // Inbound email → ticket. Point your email provider's inbound webhook here
 // (SendGrid Inbound Parse, Mailgun Routes, Postmark Inbound all work):
@@ -13,9 +15,17 @@ import { getSetting } from "@/lib/settings";
 export async function POST(request: Request) {
   const secret = await getSetting("tickets.inbound_email_secret", "");
   if (!secret) return NextResponse.json({ error: "Inbound email is not enabled" }, { status: 403 });
+  const contentLength = Number(request.headers.get("content-length") ?? 0);
+  if (Number.isFinite(contentLength) && contentLength > 256 * 1024) {
+    return NextResponse.json({ error: "Payload too large" }, { status: 413 });
+  }
   // Accept the secret only via a header to avoid it appearing in server access logs.
   const provided = request.headers.get("x-inbound-secret") ?? "";
-  if (provided !== secret) {
+  const ip = (request.headers.get("x-forwarded-for")?.split(",")[0] ?? request.headers.get("x-real-ip") ?? "unknown").trim();
+  if (!checkRateLimit(rateLimitKey(["inbound-email", ip]), 20, 15 * 60 * 1000)) {
+    return NextResponse.json({ error: "Too many attempts" }, { status: 429 });
+  }
+  if (!timingSafeStringEqual(provided, secret)) {
     const { logSystem } = await import("@/lib/syslog");
     await logSystem("warning", "inbound_email", "Inbound email rejected: invalid secret");
     return NextResponse.json({ error: "Invalid secret" }, { status: 403 });

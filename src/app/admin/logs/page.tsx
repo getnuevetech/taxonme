@@ -26,7 +26,7 @@ export default async function AdminLogsPage({
     ];
   }
 
-  const day = new Date(Date.now() - 24 * 3600000);
+  const day = new Date(new Date().getTime() - 24 * 3600000);
   const [logs, errors24, warnings24, sources] = await Promise.all([
     db.systemLog.findMany({ where, orderBy: { createdAt: "desc" }, take: 200 }),
     db.systemLog.count({ where: { level: "error", createdAt: { gte: day } } }),
