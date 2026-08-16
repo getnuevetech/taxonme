@@ -333,7 +333,7 @@ export async function CaseAnalysisView({ caseId, viewer }: { caseId: string; vie
                         </p>
                         {interactive && ["missing_info"].includes(issue.itemKind) && (
                           <a href="#clarify" className="rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-indigo-700">
-                            Answer a few questions →
+                            {unclear[0] ? `Answer: ${unclear[0].slice(0, 60)}${unclear[0].length > 60 ? "..." : ""}` : "Answer the next question"} →
                           </a>
                         )}
                         {interactive && (

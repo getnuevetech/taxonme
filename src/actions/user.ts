@@ -70,7 +70,7 @@ export async function askQuestionAction(_prev: ActionState, formData: FormData):
 
   await db.qaMessage.create({ data: { threadId: thread.id, role: "user", content: question } });
   const history = [...thread.messages.map((m) => ({ role: m.role, content: m.content })), { role: "user", content: question }];
-  const answer = await runQaChat(history);
+  const answer = await runQaChat(history, user?.id);
   await db.qaMessage.create({ data: { threadId: thread.id, role: "assistant", content: answer } });
 
   if (!threadId) redirect(user ? `/app/qa/${thread.id}` : `/start/qa?thread=${thread.id}`);

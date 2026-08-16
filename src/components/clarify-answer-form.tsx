@@ -18,7 +18,7 @@ function Submit() {
   );
 }
 
-export function ClarifyAnswerForm({ caseId }: { caseId: string }) {
+export function ClarifyAnswerForm({ caseId, placeholder }: { caseId: string; placeholder: string }) {
   const [state, formAction] = useActionState(clarifyAnswerAction, null);
   return (
     <form action={formAction}>
@@ -28,7 +28,7 @@ export function ClarifyAnswerForm({ caseId }: { caseId: string }) {
         <textarea
           name="answer"
           rows={2}
-          placeholder="Type your answer… (amounts like $3,214 and dates help most)"
+          placeholder={placeholder}
           className={`${inputClass} flex-1`}
         />
         <Submit />

@@ -3,23 +3,27 @@ import { db } from "@/lib/db";
 import { requireUser } from "@/lib/auth";
 import { PageHeader, Card, CardBody } from "@/components/ui";
 import { QaChat } from "@/components/qa-chat";
+import { qaSuggestionsForUser } from "@/lib/qa-suggestions";
 
 export const metadata = { title: "Ask the assistant" };
 
 export default async function QaPage() {
   const user = await requireUser();
-  const threads = await db.qaThread.findMany({
-    where: { userId: user.id },
-    orderBy: { createdAt: "desc" },
-    take: 10,
-  });
+  const [threads, suggestions] = await Promise.all([
+    db.qaThread.findMany({
+      where: { userId: user.id, kind: "qa" },
+      orderBy: { createdAt: "desc" },
+      take: 10,
+    }),
+    qaSuggestionsForUser(user.id),
+  ]);
 
   return (
     <div>
-      <PageHeader title="Ask the assistant" subtitle="Plain-English answers about your taxes. Start a new conversation below." />
+      <PageHeader title="Ask the assistant" subtitle="Plain-English answers about your cases, documents, notices, or general tax topics." />
       <div className="grid gap-6 lg:grid-cols-3">
         <div className="lg:col-span-2">
-          <QaChat threadId="" messages={[]} />
+          <QaChat threadId="" messages={[]} suggestions={suggestions} />
         </div>
         <div>
           <h2 className="mb-3 text-sm font-semibold text-slate-900">Recent conversations</h2>

@@ -20,9 +20,15 @@ function Submit() {
 export function QaChat({
   threadId,
   messages,
+  suggestions = [
+    "What should I do before responding to an IRS notice?",
+    "Which document would help verify my situation?",
+    "How do I know if I need professional help?",
+  ],
 }: {
   threadId: string;
   messages: { id: string; role: string; content: string }[];
+  suggestions?: string[];
 }) {
   const [state, formAction] = useActionState(askQuestionAction, null);
   const formRef = useRef<HTMLFormElement>(null);
@@ -39,9 +45,9 @@ export function QaChat({
         {messages.length === 0 && (
           <div className="py-8 text-center text-sm text-slate-400">
             <p className="font-medium text-slate-500">Try one of these:</p>
-            <p className="mt-2">&ldquo;What does a CP2000 notice mean?&rdquo;</p>
-            <p>&ldquo;Can I set up a payment plan if I owe $3,000?&rdquo;</p>
-            <p>&ldquo;What happens if I file my taxes late?&rdquo;</p>
+            {suggestions.map((suggestion, index) => (
+              <p key={suggestion} className={index === 0 ? "mt-2" : ""}>&ldquo;{suggestion}&rdquo;</p>
+            ))}
           </div>
         )}
         {messages.map((m) => (
@@ -65,7 +71,7 @@ export function QaChat({
         <div className="flex gap-2">
           <input
             name="question"
-            placeholder="Type your tax question…"
+            placeholder="Ask about your notice, deadline, payment options, or documents…"
             autoComplete="off"
             className="flex-1 rounded-xl border border-slate-300 px-4 py-2.5 text-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-100"
           />
