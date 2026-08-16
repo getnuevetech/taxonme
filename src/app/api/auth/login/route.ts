@@ -7,6 +7,9 @@ import { checkRateLimit, rateLimitKey } from "@/lib/rate-limit";
 //   curl -i -c cookies.txt -X POST -d "email=...&password=..." <url>/api/auth/login
 // Sets the same session cookie as the login page.
 export async function POST(request: Request) {
+  if (process.env.NODE_ENV === "production") {
+    return NextResponse.json({ ok: false, error: "Not found" }, { status: 404 });
+  }
   let email = "";
   let password = "";
   const contentType = request.headers.get("content-type") ?? "";

@@ -44,25 +44,55 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Invalid signature" }, { status: 400 });
   }
 
-  const event = JSON.parse(payload);
+  let event: {
+    type?: string;
+    data?: { object?: Record<string, unknown> };
+  };
+  try {
+    event = JSON.parse(payload);
+  } catch {
+    return NextResponse.json({ error: "Invalid payload" }, { status: 400 });
+  }
 
   if (event.type === "checkout.session.completed") {
-    const session = event.data.object;
-    const userId: string | undefined = session.client_reference_id;
-    const planId: string | undefined = session.metadata?.planId;
-    const interval: string = session.metadata?.interval === "yearly" ? "yearly" : "monthly";
+    const session = event.data?.object ?? {};
+    const metadata = (session.metadata && typeof session.metadata === "object" ? session.metadata : {}) as Record<string, unknown>;
+    const userId = String(session.client_reference_id ?? "");
+    const planId = String(metadata.planId ?? "");
+    const transactionId = String(metadata.transactionId ?? "");
+    const interval = metadata.interval === "yearly" ? "yearly" : "monthly";
+    const sessionId = String(session.id ?? "");
+    const paid =
+      session.payment_status === "paid" ||
+      (session.status === "complete" && session.payment_status === "no_payment_required");
 
-    if (userId && planId) {
-      // Mark the pending transaction as paid.
-      await db.paymentTransaction.updateMany({
-        where: { gateway: "stripe", gatewayRef: session.id },
-        data: { status: "succeeded" },
+    if (userId && planId && transactionId && sessionId && paid) {
+      const tx = await db.paymentTransaction.findFirst({
+        where: { id: transactionId, userId, planId, gateway: "stripe", gatewayRef: sessionId },
       });
+      if (!tx) {
+        const { logSystem } = await import("@/lib/syslog");
+        await logSystem("warning", "webhook", "Stripe checkout rejected: no matching pending transaction", { sessionId, transactionId, userId, planId });
+        return NextResponse.json({ received: true });
+      }
+      if (tx.status === "succeeded") return NextResponse.json({ received: true });
+      if (tx.status !== "pending") {
+        const { logSystem } = await import("@/lib/syslog");
+        await logSystem("warning", "webhook", "Stripe checkout rejected: transaction is not pending", { sessionId, transactionId, status: tx.status });
+        return NextResponse.json({ received: true });
+      }
+      const amountTotal = typeof session.amount_total === "number" ? session.amount_total : null;
+      if (amountTotal !== null && amountTotal > 0 && amountTotal !== tx.amountCents) {
+        const { logSystem } = await import("@/lib/syslog");
+        await logSystem("warning", "webhook", "Stripe checkout rejected: amount mismatch", { sessionId, transactionId, expected: tx.amountCents, actual: amountTotal });
+        return NextResponse.json({ received: true });
+      }
+      await db.paymentTransaction.update({ where: { id: tx.id }, data: { status: "succeeded" } });
       const { activateSubscription } = await import("@/lib/payments");
       await activateSubscription({
         userId,
-        planId,
-        interval: interval === "yearly" ? "yearly" : "monthly",
+        planId: tx.planId ?? planId,
+        interval,
         gateway: "stripe",
         gatewayRef: String(session.subscription ?? session.id),
       });
@@ -70,7 +100,7 @@ export async function POST(request: Request) {
   }
 
   if (event.type === "invoice.payment_failed") {
-    const invoice = event.data.object;
+    const invoice = event.data?.object ?? {};
     const subRef = String(invoice.subscription ?? "");
     if (subRef) {
       await db.subscription.updateMany({
@@ -81,9 +111,11 @@ export async function POST(request: Request) {
   }
 
   if (event.type === "customer.subscription.deleted") {
-    const sub = event.data.object;
+    const sub = event.data?.object ?? {};
+    const subId = String(sub.id ?? "");
+    if (!subId) return NextResponse.json({ received: true });
     await db.subscription.updateMany({
-      where: { gateway: "stripe", gatewayRef: String(sub.id), status: { in: ["active", "past_due", "trialing"] } },
+      where: { gateway: "stripe", gatewayRef: subId, status: { in: ["active", "past_due", "trialing"] } },
       data: { status: "canceled", canceledAt: new Date() },
     });
   }

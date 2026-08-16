@@ -54,6 +54,11 @@ export async function saveAiProviderAction(_prev: ActionState, formData: FormDat
     notes: String(formData.get("notes") ?? ""),
   };
   if (!data.name || !data.model) return { error: "Name and model are required." };
+  if (data.baseUrl) {
+    const { validatePublicHttpsUrl } = await import("@/lib/url-security");
+    const urlError = await validatePublicHttpsUrl(data.baseUrl);
+    if (urlError) return { error: `AI provider base URL: ${urlError}` };
+  }
   if (id) {
     // Keep the stored key when the masked placeholder is submitted unchanged.
     await db.aiProvider.update({
@@ -419,12 +424,15 @@ export async function adminSendResetLinkAction(_prev: ActionState, formData: For
     "Reset your password",
     `Hi ${target.firstName || ""},\n\nAn administrator sent you this link to reset your password. It expires in 1 hour.\n\n${link}`,
   );
+  const canRevealLink = process.env.NODE_ENV !== "production";
   return {
     ok: true,
     info: mail.sent
       ? `Reset link emailed to ${target.email}. Valid for 1 hour.`
-      : `Email not sent (${mail.error ?? "SMTP not configured"}). Share the link below with the user (valid 1 hour).`,
-    link,
+      : canRevealLink
+        ? `Email not sent (${mail.error ?? "SMTP not configured"}). Share the link below with the user (valid 1 hour).`
+        : `Email not sent (${mail.error ?? "SMTP not configured"}). Configure SMTP before sending reset links in production.`,
+    link: canRevealLink ? link : undefined,
   };
 }
 

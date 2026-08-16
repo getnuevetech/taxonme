@@ -65,11 +65,14 @@ export async function subscribeAction(_prev: ActionState, formData: FormData): P
     { id: plan.id, priceMonthlyCents: plan.priceMonthlyCents, priceYearlyCents: plan.priceYearlyCents },
     interval === "yearly" ? "yearly" : "monthly",
   );
+  const manualCharge = amountCents === 0 ? 0 : proration.applied ? proration.chargeCents : amountCents;
 
   if (!gateway || gateway.kind === "manual" || amountCents === 0) {
+    if (manualCharge > 0 && (!gateway || gateway.kind === "manual") && process.env.NODE_ENV === "production" && process.env.ALLOW_MANUAL_BILLING !== "true") {
+      return { error: "Online payment is required for this plan. Contact support if you need manual billing." };
+    }
     // Manual/dev gateway or free plan: activate immediately, charging only the
     // prorated difference when a credit applies.
-    const charge = amountCents === 0 ? 0 : proration.applied ? proration.chargeCents : amountCents;
     await activateSubscription({
       userId: user.id,
       planId: plan.id,
@@ -77,12 +80,12 @@ export async function subscribeAction(_prev: ActionState, formData: FormData): P
       gateway: gateway?.kind ?? "manual",
       gatewayRef: "",
     });
-    if (charge > 0) {
+    if (manualCharge > 0) {
       await db.paymentTransaction.create({
         data: {
           userId: user.id,
           planId: plan.id,
-          amountCents: charge,
+          amountCents: manualCharge,
           gateway: gateway?.kind ?? "manual",
           status: "succeeded",
         },

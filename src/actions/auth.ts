@@ -157,10 +157,7 @@ export async function resetPasswordAction(_prev: ActionState, formData: FormData
     return { error: "This account is not active. Contact support if you believe this is a mistake." };
   }
 
-  const user = await db.user.update({ where: { id: userId }, data: { passwordHash: await hashPassword(password) } });
+  await db.user.update({ where: { id: userId }, data: { passwordHash: await hashPassword(password) } });
   await consumeResetToken(token);
-  await createSession(userId);
-  if (user.role === ROLES.SUPER_ADMIN || user.role === ROLES.ADMIN) redirect("/admin");
-  if (user.role === ROLES.CONSULTANT) redirect("/consultant");
-  redirect("/app?reset=1");
+  redirect("/login?reset=1");
 }

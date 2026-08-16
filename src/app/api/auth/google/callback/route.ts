@@ -72,7 +72,12 @@ export async function GET(request: Request) {
     const { sendSystemMessage } = await import("@/lib/messaging");
     await sendSystemMessage("account_created", user, { link: "/app" });
   } else if (!user.googleId) {
-    await db.user.update({ where: { id: user.id }, data: { googleId: info.id } });
+    if (user.passwordHash) {
+      const response = NextResponse.redirect(`${appUrl}/login?error=account_exists`);
+      response.cookies.set("oauth_state", "", { httpOnly: true, secure: await secureCookiesEnabled(), maxAge: 0, path: "/" });
+      return response;
+    }
+    user = await db.user.update({ where: { id: user.id }, data: { googleId: info.id } });
   }
   if (user.status !== "active") return NextResponse.redirect(`${appUrl}/login?error=inactive`);
 
