@@ -7,7 +7,7 @@ Two supported paths. Both use PostgreSQL and persist uploads under `var/uploads`
 Requirements: Docker with the Compose plugin.
 
 ```bash
-cp .env.deploy.example .env.deploy      # edit: set POSTGRES_PASSWORD and SEED_ADMIN_PASSWORD
+cp .env.deploy.example .env.deploy      # edit: set POSTGRES_PASSWORD, AUTH_SECRET, CRON_SECRET, and SEED_ADMIN_PASSWORD
 docker compose --env-file .env.deploy up -d --build
 ```
 
@@ -57,7 +57,7 @@ PORT=3000 npm run start
 
 ## After first start
 
-1. Sign in at `/admin` with the seeded super admin (`admin@mytaxonme.com` / `ChangeMe!2026`, or the `SEED_ADMIN_EMAIL` / `SEED_ADMIN_PASSWORD` you provided) and change the password/account.
+1. Sign in at `/admin` with the `SEED_ADMIN_EMAIL` / `SEED_ADMIN_PASSWORD` you provided and change the password/account.
 2. Settings → set **App URL** to the address users will use (needed for OAuth callbacks and payment redirects).
 3. AI providers → paste API keys; review AI pipelines.
 4. Payment gateways → configure Stripe/PayPal (the seeded "Manual / development" gateway activates subscriptions instantly and is for testing only — disable it in production).
@@ -72,7 +72,7 @@ Setting up a second computer as the server:
 curl -fsSL https://get.docker.com | sudo sh
 sudo systemctl enable --now docker
 git clone https://github.com/getnuevetech/taxonme.git && cd taxonme
-cp .env.deploy.example .env.deploy   # set POSTGRES_PASSWORD + SEED_ADMIN_PASSWORD
+cp .env.deploy.example .env.deploy   # set POSTGRES_PASSWORD, AUTH_SECRET, CRON_SECRET + SEED_ADMIN_PASSWORD
 docker compose --env-file .env.deploy up -d --build
 ```
 
@@ -91,7 +91,8 @@ docker compose --env-file .env.deploy restart app
 
 Then on the new server's admin → Settings, set **App URL** to the address users will use
 (e.g. `http://192.168.1.50:3000` for LAN, or your HTTPS domain), and point a daily cron at the
-maintenance endpoint: `crontab -e` → `0 6 * * * curl -s http://localhost:3000/api/health > /dev/null`.
+protected maintenance endpoint: `crontab -e` →
+`0 6 * * * curl -fsS -X POST -H "Authorization: Bearer YOUR_CRON_SECRET" http://localhost:3000/api/cron/maintenance > /dev/null`.
 
 For internet-facing servers, put Caddy in front for automatic HTTPS:
 
@@ -106,8 +107,9 @@ sudo systemctl reload caddy
 
 ## Notes
 
-- **Session secret**: auto-generated on first run and stored in the settings table; set `AUTH_SECRET` to override.
+- **Session secret**: `AUTH_SECRET` is required in production. Generate it with `openssl rand -base64 32`.
+- **Maintenance cron**: `/api/cron/maintenance` requires `CRON_SECRET`; `/api/health` is read-only.
 - **Uploads**: stored on disk (`var/uploads` or the `taxonme_uploads` volume) with access-controlled serving; include them in backups.
   - **Single-instance only**: the disk-based upload store is not shared between replicas. If you run more than one app instance (e.g. horizontal scaling in Kubernetes), you must back the volume with network storage (NFS, EFS, GCS Filestore, Azure Files, etc.) or migrate to an object-storage provider (S3, R2, GCS). All instances must resolve the same `var/uploads` path.
-- **Rate limiting**: the authentication endpoints (login, registration, password reset) have no built-in brute-force protection. For internet-facing deployments, add rate limiting at your reverse-proxy layer (e.g. Caddy's `rate_limit` directive, nginx's `limit_req_zone`, Cloudflare's WAF) before routing traffic to port 3000.
+- **Rate limiting**: basic app-level auth throttling is included. For internet-facing deployments, also add rate limiting at your reverse-proxy layer (e.g. Caddy's `rate_limit` directive, nginx's `limit_req_zone`, Cloudflare's WAF) before routing traffic to port 3000.
 - **Reverse proxy / HTTPS**: for LAN-only use, the built-in server is fine. For anything internet-facing put nginx/Caddy in front with TLS and point it at port 3000.

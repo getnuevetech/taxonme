@@ -36,7 +36,8 @@ services:
       POSTGRES_USER: ${POSTGRES_USER:-taxonme}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       POSTGRES_DB: ${POSTGRES_DB:-taxonme}
-      AUTH_SECRET: ${AUTH_SECRET:-}
+      AUTH_SECRET: ${AUTH_SECRET:?set AUTH_SECRET in .env.deploy}
+      CRON_SECRET: ${CRON_SECRET:?set CRON_SECRET in .env.deploy}
       SEED_ADMIN_EMAIL: ${SEED_ADMIN_EMAIL:-admin@mytaxonme.com}
       SEED_ADMIN_PASSWORD: ${SEED_ADMIN_PASSWORD:?set SEED_ADMIN_PASSWORD in .env.deploy}
     ports:
