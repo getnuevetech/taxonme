@@ -4,6 +4,16 @@ import { V3_PIPELINE_BLUEPRINT, V3_PROMPT_RECORDS } from "../src/lib/ai/v3-promp
 const db = new PrismaClient();
 
 async function main() {
+  if (!process.env.DATABASE_URL) {
+    console.log(JSON.stringify({
+      ok: false,
+      errors: ["DATABASE_URL is not configured; v3 rollout readiness cannot inspect database-backed prompts, pipelines, providers, sources, or queues."],
+      warnings: [],
+      metrics: {},
+    }, null, 2));
+    process.exitCode = 1;
+    return;
+  }
   const errors: string[] = [];
   const warnings: string[] = [];
   const [prompts, stages, providers, knowledgeCount, openReviews, queuedEvents] = await Promise.all([
