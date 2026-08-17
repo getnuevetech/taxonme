@@ -51,7 +51,7 @@ export default async function AiPromptsPage() {
                   <p className="font-semibold">Recent protected-change attempts</p>
                   <ul className="mt-1 list-disc space-y-1 pl-4">
                     {prompt.changes.map((change) => (
-                      <li key={change.id}>{change.createdAt.toLocaleString("en-US")}: {change.changeReason} ({change.fromHash.slice(0, 8)} -> {change.toHash.slice(0, 8)})</li>
+                      <li key={change.id}>{change.createdAt.toLocaleString("en-US")}: {change.changeReason} ({change.fromHash.slice(0, 8)} {"->"} {change.toHash.slice(0, 8)})</li>
                     ))}
                   </ul>
                 </div>
