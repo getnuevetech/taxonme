@@ -3,6 +3,22 @@ import { db } from "./db";
 import { logSystem } from "./syslog";
 import { runCaseAnalysis } from "./ai/orchestrator";
 
+export async function failStaleReanalysisEvents(maxRunningMinutes = 60): Promise<number> {
+  const cutoff = new Date(Date.now() - maxRunningMinutes * 60_000);
+  const stale = await db.caseReanalysisEvent.updateMany({
+    where: { status: "running", createdAt: { lt: cutoff } },
+    data: {
+      status: "failed",
+      finishedAt: new Date(),
+      metadataJson: JSON.stringify({ error: `Marked failed after running for more than ${maxRunningMinutes} minutes.` }),
+    },
+  });
+  if (stale.count > 0) {
+    await logSystem("warning", "analysis", "Marked stale v3 re-analysis events as failed", `${stale.count} event(s) exceeded ${maxRunningMinutes} minutes.`);
+  }
+  return stale.count;
+}
+
 export async function processQueuedReanalysisEvents(limit = 10): Promise<number> {
   const events = await db.caseReanalysisEvent.findMany({
     where: { status: "queued" },
