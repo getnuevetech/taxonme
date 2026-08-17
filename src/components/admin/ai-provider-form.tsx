@@ -15,12 +15,14 @@ type Provider = {
   maxTokens: number;
   temperature: number;
   supportsVision: boolean;
+  supportsStructuredOutput: boolean;
   isEnabled: boolean;
   notes: string;
   dataRetentionProfile: string;
   regionProfile: string;
   costTier: string;
   timeoutMs: number;
+  maxContextTokens: number;
 } | null;
 
 export function AiProviderForm({ provider }: { provider: Provider }) {
@@ -58,6 +60,9 @@ export function AiProviderForm({ provider }: { provider: Provider }) {
         <Field label="Timeout (ms)">
           <input name="timeoutMs" type="number" min="5000" max="180000" defaultValue={provider?.timeoutMs ?? 90000} className={inputClass} />
         </Field>
+        <Field label="Max context tokens">
+          <input name="maxContextTokens" type="number" min="0" defaultValue={provider?.maxContextTokens ?? 0} className={inputClass} />
+        </Field>
         <Field label="Cost tier">
           <select name="costTier" defaultValue={provider?.costTier ?? "medium"} className={inputClass}>
             <option value="low">low</option>
@@ -80,6 +85,10 @@ export function AiProviderForm({ provider }: { provider: Provider }) {
         <label className="flex items-center gap-2 text-sm text-slate-700">
           <input type="checkbox" name="supportsVision" defaultChecked={provider?.supportsVision} className="h-4 w-4 rounded border-slate-300 text-indigo-600" />
           Supports vision / PDF understanding
+        </label>
+        <label className="flex items-center gap-2 text-sm text-slate-700">
+          <input type="checkbox" name="supportsStructuredOutput" defaultChecked={provider?.supportsStructuredOutput} className="h-4 w-4 rounded border-slate-300 text-indigo-600" />
+          Supports structured output
         </label>
       </div>
       <div className="mt-3">

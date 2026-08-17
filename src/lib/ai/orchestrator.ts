@@ -18,6 +18,7 @@ import {
   startCaseAnalysisVersion,
   upsertSourceSnapshot,
 } from "./audit";
+import { providerAllowedForTaxData } from "./provider-policy";
 import { extractUserFacingText, validateAiJson } from "./validation";
 
 type Json = Record<string, unknown>;
@@ -95,7 +96,7 @@ async function getRunnableSteps(stageKey: string) {
     },
   });
   if (!stage?.isEnabled) return [];
-  return stage.steps.filter((s) => s.provider.isEnabled && s.provider.apiKey.length > 0);
+  return stage.steps.filter((s) => providerAllowedForTaxData(s.provider));
 }
 
 // Naive keyword retrieval over the admin-curated IRS knowledge base.
@@ -189,7 +190,7 @@ export async function runStage(
     },
   });
   const steps = stage?.isEnabled
-    ? stage.steps.filter((s) => s.provider.isEnabled && s.provider.apiKey.length > 0)
+    ? stage.steps.filter((s) => providerAllowedForTaxData(s.provider))
     : [];
   const stepOutputs: StageOutcome["stepOutputs"] = [];
   let prior = "";
@@ -236,6 +237,9 @@ export async function runStage(
             providerRoute: step.routeKey,
             modelRoute: step.provider.model,
             qualityGate: validation.qualityGate,
+            inputTokens: result.inputTokens,
+            outputTokens: result.outputTokens,
+            estimatedCostMicros: result.estimatedCostMicros,
           },
         });
       }

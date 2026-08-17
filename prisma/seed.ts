@@ -278,16 +278,33 @@ async function seedGateway() {
 
 async function seedAiAndPipelines() {
   const providerDefs = [
-    { name: "OpenAI GPT-5.6 Sol", kind: "openai_compatible", baseUrl: "https://api.openai.com/v1", model: "gpt-5.6-sol", supportsVision: true, costTier: "high", dataRetentionProfile: "approved_taxpayer_data", regionProfile: "approved", notes: "Flagship reasoning model for complex professional work." },
-    { name: "OpenAI GPT-5.6 Terra", kind: "openai_compatible", baseUrl: "https://api.openai.com/v1", model: "gpt-5.6-terra", supportsVision: false, costTier: "low", dataRetentionProfile: "approved_taxpayer_data", regionProfile: "approved", notes: "Fast model used for presentation-layer structuring." },
-    { name: "Anthropic Claude Sonnet 5", kind: "anthropic", baseUrl: "https://api.anthropic.com", model: "claude-sonnet-5", supportsVision: true, costTier: "medium", dataRetentionProfile: "approved_taxpayer_data", regionProfile: "approved", notes: "Strong document analysis with visual PDF understanding." },
-    { name: "Anthropic Claude Opus 5", kind: "anthropic", baseUrl: "https://api.anthropic.com", model: "claude-opus-5", supportsVision: true, costTier: "high", dataRetentionProfile: "approved_taxpayer_data", regionProfile: "approved", notes: "High-capability independent analysis / review." },
-    { name: "Google Gemini 3.1 Pro", kind: "google", baseUrl: "https://generativelanguage.googleapis.com/v1beta", model: "gemini-3.1-pro", supportsVision: true, costTier: "medium", dataRetentionProfile: "approved_taxpayer_data", regionProfile: "approved", notes: "Long-context document reasoning, native PDF understanding." },
+    { name: "OpenAI GPT-5.6 Sol", kind: "openai_compatible", baseUrl: "https://api.openai.com/v1", model: "gpt-5.6-sol", supportsVision: true, supportsStructuredOutput: true, maxContextTokens: 128000, costTier: "high", dataRetentionProfile: "approved_taxpayer_data", regionProfile: "approved", notes: "Flagship reasoning model for complex professional work." },
+    { name: "OpenAI GPT-5.6 Terra", kind: "openai_compatible", baseUrl: "https://api.openai.com/v1", model: "gpt-5.6-terra", supportsVision: false, supportsStructuredOutput: true, maxContextTokens: 128000, costTier: "low", dataRetentionProfile: "approved_taxpayer_data", regionProfile: "approved", notes: "Fast model used for presentation-layer structuring." },
+    { name: "Anthropic Claude Sonnet 5", kind: "anthropic", baseUrl: "https://api.anthropic.com", model: "claude-sonnet-5", supportsVision: true, supportsStructuredOutput: true, maxContextTokens: 200000, costTier: "medium", dataRetentionProfile: "approved_taxpayer_data", regionProfile: "approved", notes: "Strong document analysis with visual PDF understanding." },
+    { name: "Anthropic Claude Opus 5", kind: "anthropic", baseUrl: "https://api.anthropic.com", model: "claude-opus-5", supportsVision: true, supportsStructuredOutput: true, maxContextTokens: 200000, costTier: "high", dataRetentionProfile: "approved_taxpayer_data", regionProfile: "approved", notes: "High-capability independent analysis / review." },
+    { name: "Google Gemini 3.1 Pro", kind: "google", baseUrl: "https://generativelanguage.googleapis.com/v1beta", model: "gemini-3.1-pro", supportsVision: true, supportsStructuredOutput: true, maxContextTokens: 1000000, costTier: "medium", dataRetentionProfile: "approved_taxpayer_data", regionProfile: "approved", notes: "Long-context document reasoning, native PDF understanding." },
   ];
   const providers: Record<string, string> = {};
   for (const p of providerDefs) {
     const existing = await db.aiProvider.findFirst({ where: { name: p.name } });
     const row = existing ?? (await db.aiProvider.create({ data: { ...p, apiKey: "" } }));
+    if (existing) {
+      await db.aiProvider.update({
+        where: { id: existing.id },
+        data: {
+          kind: p.kind,
+          baseUrl: p.baseUrl,
+          model: p.model,
+          supportsVision: p.supportsVision,
+          supportsStructuredOutput: p.supportsStructuredOutput,
+          maxContextTokens: p.maxContextTokens,
+          costTier: p.costTier,
+          dataRetentionProfile: p.dataRetentionProfile,
+          regionProfile: p.regionProfile,
+          notes: p.notes,
+        },
+      });
+    }
     providers[p.name] = row.id;
   }
 

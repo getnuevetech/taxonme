@@ -50,12 +50,14 @@ export async function saveAiProviderAction(_prev: ActionState, formData: FormDat
     maxTokens: Number(formData.get("maxTokens") ?? 4096) || 4096,
     temperature: Number(formData.get("temperature") ?? 0.2) || 0.2,
     supportsVision: formData.get("supportsVision") === "on",
+    supportsStructuredOutput: formData.get("supportsStructuredOutput") === "on",
     isEnabled: formData.get("isEnabled") === "on",
     notes: String(formData.get("notes") ?? ""),
     dataRetentionProfile: String(formData.get("dataRetentionProfile") ?? "unreviewed"),
     regionProfile: String(formData.get("regionProfile") ?? "unreviewed"),
     costTier: String(formData.get("costTier") ?? "medium"),
     timeoutMs: Math.max(5000, Math.min(180000, Number(formData.get("timeoutMs") ?? 90000) || 90000)),
+    maxContextTokens: Math.max(0, Number(formData.get("maxContextTokens") ?? 0) || 0),
   };
   if (!data.name || !data.model) return { error: "Name and model are required." };
   if (data.baseUrl) {
@@ -263,6 +265,54 @@ export async function toggleStageAction(stageKey: string, enabled: boolean) {
   await requireAdminArea("admin.pipelines");
   await db.pipelineStage.update({ where: { key: stageKey }, data: { isEnabled: enabled } });
   revalidatePath("/admin/pipelines");
+}
+
+export async function toggleAiPromptAction(promptRecordId: string, active: boolean) {
+  await requireAdminArea("admin.pipelines");
+  await db.aiPrompt.update({ where: { id: promptRecordId }, data: { isActive: active } });
+  revalidatePath("/admin/prompts");
+}
+
+export async function resolveHumanReviewItemAction(formData: FormData) {
+  await requireAdminArea("admin.human_review");
+  const id = String(formData.get("id") ?? "");
+  const decision = String(formData.get("decision") ?? "resolved") === "dismissed" ? "dismissed" : "resolved";
+  const professionalFact = String(formData.get("professionalFact") ?? "").trim();
+  const item = await db.humanReviewItem.findUnique({ where: { id }, include: { case: true } });
+  if (!item) return;
+  if (professionalFact) {
+    await db.caseClarifyMessage.create({
+      data: {
+        caseId: item.caseId,
+        role: "assistant",
+        questionKey: "professional_confirmed",
+        content: professionalFact.slice(0, 4000),
+      },
+    });
+    await db.caseReanalysisEvent.create({
+      data: {
+        caseId: item.caseId,
+        trigger: "professional_confirmed_fact",
+        pipelinesJson: JSON.stringify(["situation", "presenter"]),
+        status: "queued",
+        actorType: "admin",
+        metadataJson: JSON.stringify({ humanReviewItemId: id }),
+      },
+    });
+  }
+  await db.humanReviewItem.update({
+    where: { id },
+    data: {
+      status: decision,
+      resolvedAt: new Date(),
+      payloadJson: JSON.stringify({
+        ...JSON.parse(item.payloadJson || "{}"),
+        resolution: decision,
+        professional_confirmed_fact: professionalFact || null,
+      }),
+    },
+  });
+  revalidatePath("/admin/human-review");
 }
 
 // ---------- Plans & feature access control ----------
@@ -765,8 +815,24 @@ export async function saveKnowledgeAction(_prev: ActionState, formData: FormData
     isActive: formData.get("isActive") === "on",
   };
   if (!data.title) return { error: "Title is required." };
-  if (id) await db.knowledgeSource.update({ where: { id }, data });
-  else await db.knowledgeSource.create({ data });
+  if (id) {
+    await db.knowledgeSource.update({ where: { id }, data });
+    const activeCases = await db.case.findMany({
+      where: { status: { in: ["analyzed", "needs_info", "consultant_recommended"] } },
+      select: { id: true },
+      take: 500,
+    });
+    await db.caseReanalysisEvent.createMany({
+      data: activeCases.map((c) => ({
+        caseId: c.id,
+        trigger: "authoritative_source_update",
+        pipelinesJson: JSON.stringify(["situation", "presenter"]),
+        status: "queued",
+        actorType: "admin",
+        metadataJson: JSON.stringify({ knowledgeSourceId: id }),
+      })),
+    });
+  } else await db.knowledgeSource.create({ data });
   revalidatePath("/admin/knowledge");
   return { ok: true };
 }

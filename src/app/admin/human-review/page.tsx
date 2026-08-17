@@ -3,6 +3,7 @@ import { db } from "@/lib/db";
 import { guardAdminPage } from "@/lib/admin-guard";
 import { PageHeader, Card, CardBody, Badge } from "@/components/ui";
 import { formatCaseNumber } from "@/lib/case-number";
+import { resolveHumanReviewItemAction } from "@/actions/admin";
 
 export const metadata = { title: "Human review queue" };
 
@@ -45,6 +46,7 @@ export default async function HumanReviewPage() {
                     <th className="py-2 pr-4">Status</th>
                     <th className="py-2 pr-4">Version</th>
                     <th className="py-2 pr-4">Created</th>
+                    <th className="py-2 pr-4">Resolve</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -64,6 +66,29 @@ export default async function HumanReviewPage() {
                         {item.analysisVersion ? `v${item.analysisVersion.version} (${item.analysisVersion.status})` : "n/a"}
                       </td>
                       <td className="py-3 pr-4 text-slate-500">{item.createdAt.toLocaleString("en-US")}</td>
+                      <td className="min-w-80 py-3 pr-4">
+                        {item.status === "open" || item.status === "assigned" ? (
+                          <form action={resolveHumanReviewItemAction} className="space-y-2">
+                            <input type="hidden" name="id" value={item.id} />
+                            <textarea
+                              name="professionalFact"
+                              rows={2}
+                              placeholder="Optional professional-confirmed fact or resolution note"
+                              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-xs"
+                            />
+                            <div className="flex gap-2">
+                              <button name="decision" value="resolved" className="rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-medium text-white">
+                                Resolve
+                              </button>
+                              <button name="decision" value="dismissed" className="rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-600">
+                                Dismiss
+                              </button>
+                            </div>
+                          </form>
+                        ) : (
+                          <span className="text-xs text-slate-400">Closed {item.resolvedAt?.toLocaleString("en-US") ?? ""}</span>
+                        )}
+                      </td>
                     </tr>
                   ))}
                 </tbody>

@@ -21,6 +21,7 @@ export async function CaseAnalysisView({ caseId, viewer }: { caseId: string; vie
       pathSteps: { orderBy: { sortOrder: "asc" } },
       documents: { where: { deletedAt: null } },
       runs: { orderBy: { startedAt: "desc" }, include: { consensus: true }, take: 10 },
+      presentations: { orderBy: { createdAt: "desc" }, take: 1 },
     },
   });
   if (!c) return null;
@@ -46,6 +47,15 @@ export async function CaseAnalysisView({ caseId, viewer }: { caseId: string; vie
     where: { run: { caseId: c.id }, status: "complete" },
   });
   const isPreliminary = c.runs.length > 0 && aiStepCount === 0;
+  const latestPresentation = c.presentations[0]?.presentationJson
+    ? (() => {
+        try {
+          return JSON.parse(c.presentations[0].presentationJson) as Record<string, unknown>;
+        } catch {
+          return null;
+        }
+      })()
+    : null;
 
   const form9465 = interactive
     ? await db.irsFormTemplate.findFirst({ where: { formNumber: "9465", isPublished: true }, select: { id: true } })
@@ -130,6 +140,27 @@ export async function CaseAnalysisView({ caseId, viewer }: { caseId: string; vie
   return (
     <div className="grid gap-6 lg:grid-cols-3">
       <div className="space-y-6 lg:col-span-2">
+        {latestPresentation?.finding_card && (
+          <Card>
+            <CardBody>
+              <div className="flex flex-wrap items-center gap-2">
+                <Badge color="indigo">v3 presentation</Badge>
+                <Badge>{String((latestPresentation.finding_card as Record<string, unknown>).status ?? "review")}</Badge>
+                <Badge color="amber">{String((latestPresentation.finding_card as Record<string, unknown>).priority ?? "medium")}</Badge>
+              </div>
+              <h2 className="mt-3 text-xl font-semibold text-slate-900">{String((latestPresentation.finding_card as Record<string, unknown>).headline ?? "Case finding")}</h2>
+              <p className="mt-2 text-sm text-slate-600">{String((latestPresentation.finding_card as Record<string, unknown>).summary ?? "")}</p>
+              {Array.isArray(latestPresentation.what_we_found) && latestPresentation.what_we_found.length > 0 && (
+                <div className="mt-4">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">What we found</p>
+                  <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-slate-700">
+                    {latestPresentation.what_we_found.slice(0, 5).map((item, idx) => <li key={idx}>{String(item)}</li>)}
+                  </ul>
+                </div>
+              )}
+            </CardBody>
+          </Card>
+        )}
         {c.status === "analyzing" && (
           <div className="flex items-center gap-3 rounded-xl border border-indigo-200 bg-indigo-50 px-4 py-3 text-sm text-indigo-900">
             <span className="h-3 w-3 shrink-0 animate-ping rounded-full bg-indigo-500" />
