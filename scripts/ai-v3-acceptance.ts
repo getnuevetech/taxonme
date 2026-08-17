@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { validateAiJson } from "../src/lib/ai/validation";
+import { redactSensitiveText, sourceSnapshotId } from "../src/lib/ai/privacy";
 import { STAGE_KEYS, STEP_ROLES } from "../src/lib/constants";
 import { V3_PIPELINE_BLUEPRINT, V3_PROMPT_RECORDS } from "../src/lib/ai/v3-prompts";
 
@@ -56,5 +57,7 @@ assert.ok(documentStage?.steps.some((s) => s.role === STEP_ROLES.REVIEWER && s.i
 assert.equal(validateAiJson(STAGE_KEYS.PRESENTER, { finding_card: { headline: "No invented deadline" } }).ok, true);
 assert.equal(validateAiJson(STAGE_KEYS.PRESENTER, { answer: "not a presenter object" }).ok, false);
 assert.equal(validateAiJson(STAGE_KEYS.GUIDE, { answer: "Please upload the notice.", requires_reanalysis: true }).ok, true);
+assert.equal(redactSensitiveText("SSN 123-45-6789 and account 123456789012"), "SSN [REDACTED_TIN] and account [REDACTED_ACCOUNT_ID]");
+assert.match(sourceSnapshotId("[Pub 594] IRS collection process"), /^[a-f0-9]{24}$/);
 
 console.log("AI v3 acceptance checks passed.");

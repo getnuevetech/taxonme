@@ -1,5 +1,6 @@
 import "server-only";
 import { db } from "../db";
+import { redactPromptVars } from "./privacy";
 import { AI_V3_VERSION, GLOBAL_PROMPT_ID, overlayPromptIdForStage, schemaPromptIdForStage } from "./v3-prompts";
 
 export type PromptStepLike = {
@@ -33,6 +34,7 @@ export async function composePromptForStep(
   step: PromptStepLike,
   vars: Record<string, string>,
 ): Promise<ComposedPrompt> {
+  const safeVars = redactPromptVars(vars);
   const promptId = step.promptId || "";
   const promptVersion = step.promptVersion || AI_V3_VERSION;
   const schemaVersion = step.schemaVersion || AI_V3_VERSION;
@@ -55,7 +57,7 @@ export async function composePromptForStep(
 
   if (!global || !responsibility) {
     return {
-      text: fillPrompt(step.promptTemplate, vars),
+      text: fillPrompt(step.promptTemplate, safeVars),
       promptId,
       promptVersion: step.promptVersion || "",
       schemaVersion: step.schemaVersion || "",
@@ -79,7 +81,7 @@ export async function composePromptForStep(
     overlay ? `PIPELINE OVERLAY:\n${overlay.body}` : "",
     schema ? `OUTPUT CONTRACT:\n${schema.body}` : "",
     `RUN METADATA:\n${metadata}`,
-    `TASK INPUTS:\n${Object.entries(vars)
+    `TASK INPUTS:\n${Object.entries(safeVars)
       .map(([key, value]) => `${key.toUpperCase()}:\n${value || "(none)"}`)
       .join("\n\n")}`,
   ]
@@ -87,7 +89,7 @@ export async function composePromptForStep(
     .join("\n\n---\n\n");
 
   return {
-    text: fillPrompt(text, vars),
+    text: fillPrompt(text, safeVars),
     promptId: responsibility.promptId,
     promptVersion: responsibility.version || promptVersion,
     schemaVersion: schema?.schemaVersion || schemaVersion,

@@ -8,6 +8,7 @@ import { getNumberSetting } from "../settings";
 import { readUpload } from "../uploads";
 import { verifyCaseProgress } from "../case-progress";
 import { composePromptForStep } from "./prompt-composer";
+import { sourceSnapshotId } from "./privacy";
 import { extractUserFacingText, validateAiJson } from "./validation";
 
 type Json = Record<string, unknown>;
@@ -124,6 +125,21 @@ export type StageOutcome = {
   usedAi: boolean;
 };
 
+function outputRequestsGate(data: Json | null): boolean {
+  if (!data) return false;
+  const serialized = JSON.stringify(data).toLowerCase();
+  return (
+    serialized.includes("verification_required") ||
+    serialized.includes("needs_verification") ||
+    serialized.includes("human_review") ||
+    serialized.includes("reanalyze") ||
+    serialized.includes("conflicting") ||
+    serialized.includes('"status":"disagree"') ||
+    serialized.includes('"status":"not_supported"') ||
+    serialized.includes('"source_missing"')
+  );
+}
+
 /**
  * Run one pipeline stage: every enabled step (each an admin-selected provider
  * with an admin-editable prompt and responsibility) runs on the same input,
@@ -149,9 +165,15 @@ export async function runStage(
     : [];
   const stepOutputs: StageOutcome["stepOutputs"] = [];
   let prior = "";
+  let qualityFailure = false;
 
   async function runOneStep(step: (typeof steps)[number], stepPrior: string): Promise<boolean> {
-    if (step.isConditional && !stage?.reviewerRequired && stepOutputs.length > 0) return false;
+    const shouldRunConditional =
+      stage?.reviewerRequired ||
+      qualityFailure ||
+      stepOutputs.length === 0 ||
+      stepOutputs.some((o) => outputRequestsGate(o.data));
+    if (step.isConditional && !shouldRunConditional) return false;
     const composed = await composePromptForStep(step, { ...vars, prior: stepPrior });
     const messages: ChatMessage[] = [{ role: "user", content: composed.text }];
     const started = Date.now();
@@ -160,6 +182,7 @@ export async function runStage(
       const data = extractJson(result.text);
       const validation = validateAiJson(stageKey, data);
       if (!validation.ok && data) {
+        qualityFailure = true;
         throw new Error(`Invalid ${stageKey} JSON from ${step.role}: ${validation.error}`);
       }
       stepOutputs.push({
@@ -190,6 +213,7 @@ export async function runStage(
       }
       return true;
     } catch (err) {
+      qualityFailure = true;
       const { logSystem } = await import("../syslog");
       await logSystem("error", "ai_call", `${step.provider.name} failed in stage "${stageKey}" (${step.role})`, String(err));
       if (opts?.runId) {
@@ -344,6 +368,7 @@ export async function runCaseAnalysis(caseId: string): Promise<void> {
 
   async function stageRun(stageKey: string, vars: Record<string, string>, sequentialContext = false, stageMedia?: MediaAttachment[]) {
     const stage = await db.pipelineStage.findUnique({ where: { key: stageKey } });
+    const sourceId = sourceSnapshotId(vars.irs_sources || vars.knowledge || "");
     const run = await db.analysisRun.create({
       data: {
         caseId,
@@ -352,7 +377,8 @@ export async function runCaseAnalysis(caseId: string): Promise<void> {
         caseAnalysisVersion,
         pipelineVersion: stage?.version ?? "",
         schemaVersion: "3.0",
-        metadataJson: JSON.stringify({ stageKey, caseAnalysisVersion, pipelineVersion: stage?.version ?? "", inputKeys: Object.keys(vars) }),
+        sourceSnapshotId: sourceId,
+        metadataJson: JSON.stringify({ stageKey, caseAnalysisVersion, pipelineVersion: stage?.version ?? "", sourceSnapshotId: sourceId, inputKeys: Object.keys(vars) }),
       },
     });
     const outcome = await runStage(stageKey, vars, { runId: run.id, sequentialContext, media: stageMedia });
