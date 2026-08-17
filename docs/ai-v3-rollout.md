@@ -43,6 +43,8 @@ In Admin -> AI providers:
 
 Unapproved providers are intentionally excluded from taxpayer-data AI calls.
 
+Use `docs/ai-v3-provider-setup.md` as the detailed provider setup checklist.
+
 ## 4. Check AI readiness
 
 Use Admin -> AI readiness or run:
