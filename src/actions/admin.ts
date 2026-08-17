@@ -226,9 +226,22 @@ export async function savePipelineStepAction(_prev: ActionState, formData: FormD
     promptTemplate: String(formData.get("promptTemplate") ?? ""),
     sortOrder: Number(formData.get("sortOrder") ?? 0) || 0,
     isEnabled: formData.get("isEnabled") === "on",
+    mode: String(formData.get("mode") ?? "sequential"),
+    routeKey: String(formData.get("routeKey") ?? "").trim(),
+    promptId: String(formData.get("promptId") ?? "").trim(),
+    promptVersion: String(formData.get("promptVersion") ?? "").trim(),
+    schemaVersion: String(formData.get("schemaVersion") ?? "").trim(),
+    pipelineVersion: String(formData.get("pipelineVersion") ?? "").trim(),
+    isConditional: formData.get("isConditional") === "on",
+    conditionsJson: String(formData.get("conditionsJson") ?? "[]").trim() || "[]",
   };
   if (!data.stageKey || !data.providerId || !data.promptTemplate) {
     return { error: "Stage, provider, and prompt are required." };
+  }
+  try {
+    JSON.parse(data.conditionsJson);
+  } catch {
+    return { error: "Conditions must be valid JSON, for example [\"material_conflict\"]." };
   }
   if (id) await db.pipelineStep.update({ where: { id }, data });
   else await db.pipelineStep.create({ data });

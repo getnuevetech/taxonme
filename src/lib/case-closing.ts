@@ -78,10 +78,18 @@ export async function closeCase(caseId: string, reason: "completed" | "abandoned
         steps_open: c.pathSteps.filter((s) => s.status !== "done").map((s) => s.title),
         documents: c.documents.map((d) => d.docKind),
       }),
+      full_case_history: JSON.stringify({ reason, situation: c.situation, goal: c.goal }),
+      final_issue_states: JSON.stringify(c.issues.map((i) => ({ title: i.title, state: i.state, conclusion: i.conclusion, tax_year: i.taxYear }))),
+      completed_actions: JSON.stringify(c.pathSteps.filter((s) => s.status === "done").map((s) => s.title)),
+      professional_updates: "(none supplied)",
+      documents: JSON.stringify(c.documents.map((d) => d.docKind)),
+      future_obligations: JSON.stringify(c.pathSteps.filter((s) => s.status !== "done").map((s) => s.title)),
     });
     const parsed = outcome.stepOutputs.find((o) => o.data)?.data as Record<string, unknown> | undefined;
     if (parsed && typeof parsed.closing_remarks === "string" && parsed.closing_remarks.trim()) {
       remarks = String(parsed.closing_remarks);
+    } else if (parsed && typeof parsed.customer_summary === "string" && parsed.customer_summary.trim()) {
+      remarks = String(parsed.customer_summary);
     } else if (outcome.usedAi) {
       remarks = outcome.stepOutputs.find((o) => o.rawText.trim())?.rawText ?? "";
     }

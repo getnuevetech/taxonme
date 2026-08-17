@@ -104,12 +104,30 @@ model AiProvider {
   stepResults   AnalysisStepResult[]
 }
 
+model AiPrompt {
+  id             String   @id @default(cuid())
+  promptId       String   @unique
+  kind           String // global | responsibility | overlay | schema
+  responsibility String   @default("")
+  stageKey       String   @default("")
+  version        String   @default("3.0")
+  schemaVersion  String   @default("3.0")
+  title          String   @default("")
+  body           String
+  isActive       Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+}
+
 model PipelineStage {
   key           String         @id // summary | goal | document | situation | presenter | qa | notice | letter
   name          String
   description   String         @default("")
   isEnabled     Boolean        @default(true)
   mergeStrategy String         @default("consensus") // consensus | first | presenter
+  version       String         @default("1.0")
+  reviewerRequired Boolean     @default(false)
+  sourceRequired Boolean       @default(false)
   steps         PipelineStep[]
 }
 
@@ -121,6 +139,14 @@ model PipelineStep {
   promptTemplate String
   sortOrder      Int           @default(0)
   isEnabled      Boolean       @default(true)
+  mode           String        @default("sequential") // sequential | parallel | failover
+  routeKey       String        @default("")
+  promptId       String        @default("")
+  promptVersion  String        @default("")
+  schemaVersion  String        @default("")
+  pipelineVersion String       @default("")
+  isConditional  Boolean       @default(false)
+  conditionsJson String        @default("[]")
   stage          PipelineStage @relation(fields: [stageKey], references: [key], onDelete: Cascade)
   provider       AiProvider    @relation(fields: [providerId], references: [id], onDelete: Cascade)
 }
@@ -357,6 +383,11 @@ model AnalysisRun {
   stageKey   String
   status     String    @default("pending") // pending | running | complete | failed
   error      String    @default("")
+  caseAnalysisVersion Int @default(1)
+  pipelineVersion String @default("")
+  schemaVersion String @default("")
+  sourceSnapshotId String @default("")
+  metadataJson String @default("{}")
   startedAt  DateTime  @default(now())
   finishedAt DateTime?
   case       Case      @relation(fields: [caseId], references: [id], onDelete: Cascade)
@@ -373,6 +404,13 @@ model AnalysisStepResult {
   rawText    String      @default("")
   parsedJson String      @default("")
   latencyMs  Int         @default(0)
+  promptId   String      @default("")
+  promptVersion String   @default("")
+  schemaVersion String   @default("")
+  providerRoute String   @default("")
+  modelRoute String      @default("")
+  qualityGate String     @default("")
+  errorCode String       @default("")
   run        AnalysisRun @relation(fields: [runId], references: [id], onDelete: Cascade)
   provider   AiProvider? @relation(fields: [providerId], references: [id], onDelete: SetNull)
 }

@@ -14,7 +14,7 @@ export default async function PipelinesPage() {
     }),
     db.aiProvider.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true } }),
   ]);
-  const order = ["summary", "goal", "document", "situation", "presenter", "qa", "notice", "letter"];
+  const order = ["summary", "goal", "document", "situation", "presenter", "qa", "notice", "letter", "guide", "match", "match_reason", "closing"];
   stages.sort((a, b) => order.indexOf(a.key) - order.indexOf(b.key));
 
   return (
@@ -48,8 +48,12 @@ export default async function PipelinesPage() {
                     <summary className="flex cursor-pointer flex-wrap items-center gap-2 px-4 py-3 text-sm">
                       <span className="font-semibold text-slate-800">#{step.sortOrder}</span>
                       <Badge color="indigo">{step.role.replace(/_/g, " ")}</Badge>
+                      {step.mode !== "sequential" && <Badge color="amber">{step.mode}</Badge>}
+                      {step.routeKey && <Badge>{step.routeKey}</Badge>}
+                      {step.promptId && <span className="font-mono text-xs text-slate-500">{step.promptId}</span>}
                       <span className="text-slate-600">{step.provider.name}</span>
                       {!step.isEnabled && <Badge>disabled</Badge>}
+                      {step.isConditional && <Badge color="slate">conditional</Badge>}
                     </summary>
                     <div className="border-t border-slate-100 p-4">
                       <PipelineStepForm
@@ -62,6 +66,14 @@ export default async function PipelinesPage() {
                           promptTemplate: step.promptTemplate,
                           sortOrder: step.sortOrder,
                           isEnabled: step.isEnabled,
+                          mode: step.mode,
+                          routeKey: step.routeKey,
+                          promptId: step.promptId,
+                          promptVersion: step.promptVersion,
+                          schemaVersion: step.schemaVersion,
+                          pipelineVersion: step.pipelineVersion,
+                          isConditional: step.isConditional,
+                          conditionsJson: step.conditionsJson,
                         }}
                       />
                       <form action={deletePipelineStepAction.bind(null, step.id)} className="mt-2 text-right">
