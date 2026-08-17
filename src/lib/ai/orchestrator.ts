@@ -342,20 +342,21 @@ async function getDocumentText(doc: { filePath: string; fileName: string; mimeTy
   return "";
 }
 
-export async function runCaseAnalysis(caseId: string): Promise<void> {
+export async function runCaseAnalysis(caseId: string, opts?: { trigger?: string; reanalysisEventId?: string }): Promise<void> {
   const c = await db.case.findUnique({
     where: { id: caseId },
     include: { documents: { where: { deletedAt: null } } },
   });
   if (!c) return;
-  const reanalysisEventId = await recordReanalysisEvent(caseId, "case_analysis", [
+  const trigger = opts?.trigger ?? "case_analysis";
+  const reanalysisEventId = opts?.reanalysisEventId ?? await recordReanalysisEvent(caseId, trigger, [
     STAGE_KEYS.SUMMARY,
     STAGE_KEYS.GOAL,
     STAGE_KEYS.DOCUMENT,
     STAGE_KEYS.SITUATION,
     STAGE_KEYS.PRESENTER,
   ]);
-  const analysisVersion = await startCaseAnalysisVersion(caseId, "case_analysis");
+  const analysisVersion = await startCaseAnalysisVersion(caseId, trigger);
   const caseAnalysisVersion = analysisVersion.version;
   const sourceSnapshotIds: string[] = [];
   await db.case.update({ where: { id: caseId }, data: { status: "analyzing" } });

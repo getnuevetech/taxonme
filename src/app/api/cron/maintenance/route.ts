@@ -21,10 +21,13 @@ export async function POST(request: Request) {
   const { purgeExpiredDeletedAccounts } = await import("@/lib/deleted-accounts");
   const { purgeOldSystemLogs } = await import("@/lib/syslog");
   const { autoCloseCases } = await import("@/lib/case-closing");
+  const { failStaleReanalysisEvents, processQueuedReanalysisEvents } = await import("@/lib/reanalysis-events");
 
   const maintenance = {
     scheduledMessagesSent: await processScheduledMessages(),
     ticketsAutoClosed: await autoCloseInactiveTickets(),
+    staleReanalysisEventsFailed: await failStaleReanalysisEvents(),
+    reanalysisEventsProcessed: await processQueuedReanalysisEvents(),
     casesAutoClosed: await autoCloseCases(),
     accountsExpunged: await purgeExpiredDeletedAccounts(),
     oldLogsPurged: await purgeOldSystemLogs(30),
