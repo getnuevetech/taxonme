@@ -46,6 +46,34 @@ Every business variable is managed from the admin backend (`/admin`):
 - **App settings** — branding, hero copy, disclaimer, OAuth keys, URLs, analysis parameters, consultant auto-approval rules.
 - **Admin roles** — the super admin can create sub-admins scoped to specific admin areas.
 
+### AI pipeline responsibilities
+
+An AI pipeline is made of stages, and each stage contains one or more **steps**. A step is:
+
+```text
+AI provider + responsibility + prompt template + sort order
+```
+
+The **responsibility** is the job that model is being asked to do. It is not a permission level and it does not mean every responsibility must be filled for every stage. Only enabled steps with an enabled provider and saved API key run.
+
+| Responsibility | Used for | What it should do |
+| --- | --- | --- |
+| `fact_extractor` | Summary / goal stages | Extract stated facts only: tax years, balances, refunds, notices, deadlines, goals, and unknowns. No advice. |
+| `interpreter` | Summary / goal stages | Classify the situation into issue types such as missing return, balance due, notice response, penalty, refund discrepancy, or other. |
+| `skeptic` | Summary review | Look for assumptions, contradictions, unsupported conclusions, and material unknowns. |
+| `extractor_a` / `extractor_b` | Document stage | Independently extract document facts into the standard schema. Two extractors let the consensus engine flag disagreements. |
+| `analyst` | Situation analysis, matching, recommendations | Apply verified facts and IRS knowledge to structured analysis or ranking. |
+| `reviewer` | Situation analysis, matching review | Independently review or refine another model's analysis; remove unsupported claims. |
+| `presenter` | Results / closing | Convert internal analysis into structured, customer-facing JSON that the UI renders deterministically. |
+| `assistant` | Q&A, guide, letters | Produce conversational help or drafts, grounded in the provided case/user context and knowledge. |
+
+Recommended configuration:
+
+- **Full case analysis** works best with multiple complementary responsibilities. For example: `fact_extractor` + `interpreter` + `skeptic`, then document `extractor_a` + `extractor_b`, then `analyst` + `reviewer`, then one `presenter`.
+- **In-account case guide** does **not** need every responsibility. Its steps usually all use the `assistant` responsibility. The app builds a case snapshot, asks each configured guide model, and selects the strongest grounded answer. One strong model works; two or three gives better redundancy. More models cost more and may be slower.
+- **AI tax Q&A** also uses `assistant` steps. Logged-in Q&A receives recent case context; guest Q&A is general tax help.
+- **If no provider is configured**, deterministic fallbacks keep the app usable, but results are less conversational and less complete.
+
 ### User types
 
 - **Admin** — super admin + granular sub-admin roles.
@@ -54,7 +82,7 @@ Every business variable is managed from the admin backend (`/admin`):
 
 ## Stack
 
-Next.js 15 (App Router, server actions) · TypeScript · Tailwind CSS 4 · Prisma + PostgreSQL · JWT sessions (jose) · bcryptjs.
+Next.js 16 (App Router, server actions) · TypeScript · Tailwind CSS 4 · Prisma + PostgreSQL · JWT sessions (jose) · bcryptjs.
 
 ## Getting started (development)
 
@@ -73,6 +101,6 @@ npm run dev
 See **[DEPLOYMENT.md](./DEPLOYMENT.md)** — one-command Docker Compose stack (app + PostgreSQL + persistent volumes), or a bare-metal script (`sudo bash scripts/deploy-local.sh`) that installs PostgreSQL, migrates, seeds, builds, and sets up a systemd service.
 
 - App: http://localhost:3000
-- Admin: http://localhost:3000/admin — seeded super admin: `admin@mytaxonme.com` / `ChangeMe!2026` (override with `SEED_ADMIN_EMAIL` / `SEED_ADMIN_PASSWORD`; change immediately).
+- Admin: http://localhost:3000/admin — seeded super admin uses `SEED_ADMIN_EMAIL` / `SEED_ADMIN_PASSWORD` from your environment. Change it immediately after first login.
 
 To enable real AI analysis, sign in as admin → **AI providers** → paste API keys for the seeded provider slots (or add your own), then review **AI pipelines**.
