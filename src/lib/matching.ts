@@ -4,6 +4,7 @@ import { getBoolSetting } from "./settings";
 import { STAGE_KEYS, CONSULTANT_SPECIALTIES } from "./constants";
 import { callProvider, extractJson } from "./ai/adapters";
 import { composePromptForStep } from "./ai/prompt-composer";
+import { providerAllowedForTaxData } from "./ai/provider-policy";
 
 // Consultant matching engine: deterministic scoring over specialty fit,
 // experience, and past cases handled, optionally re-ranked by an AI model,
@@ -89,7 +90,7 @@ async function getStageSteps(stageKey: string) {
     where: { key: stageKey },
     include: { steps: { where: { isEnabled: true }, orderBy: { sortOrder: "asc" }, include: { provider: true } } },
   });
-  return (stage?.isEnabled ? stage.steps : []).filter((s) => s.provider.isEnabled && s.provider.apiKey);
+  return (stage?.isEnabled ? stage.steps : []).filter((s) => providerAllowedForTaxData(s.provider));
 }
 
 function caseSummaryText(c: { title: string; situation: string; goal: string }, issueTypes: string[]): string {

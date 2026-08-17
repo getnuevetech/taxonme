@@ -3,9 +3,10 @@ import type { AiProvider } from "@prisma/client";
 import { validatePublicHttpsUrl } from "../url-security";
 
 export type ChatMessage = { role: "system" | "user" | "assistant"; content: string };
-export type ProviderResult = { text: string; latencyMs: number };
+export type ProviderResult = { text: string; latencyMs: number; inputTokens: number; outputTokens: number; estimatedCostMicros: number };
 // Documents/images sent alongside the prompt to vision-capable providers.
 export type MediaAttachment = { mimeType: string; dataBase64: string; name: string };
+type ProviderTextResult = { text: string; inputTokens: number; outputTokens: number };
 
 // All provider details (base URL, key, model, limits) come from the AiProvider
 // row configured in the admin backend. Nothing here is hardcoded to one vendor.
@@ -25,7 +26,16 @@ async function providerBaseUrl(p: AiProvider, fallback: string): Promise<string>
   return base;
 }
 
-async function callOpenAiCompatible(p: AiProvider, messages: ChatMessage[], media: MediaAttachment[] = []): Promise<string> {
+function estimateCostMicros(p: AiProvider, inputTokens: number, outputTokens: number): number {
+  const perMillion = p.costTier === "high"
+    ? { input: 5_000_000, output: 15_000_000 }
+    : p.costTier === "low"
+      ? { input: 200_000, output: 800_000 }
+      : { input: 1_000_000, output: 4_000_000 };
+  return Math.round((inputTokens / 1_000_000) * perMillion.input + (outputTokens / 1_000_000) * perMillion.output);
+}
+
+async function callOpenAiCompatible(p: AiProvider, messages: ChatMessage[], media: MediaAttachment[] = []): Promise<ProviderTextResult> {
   const base = await providerBaseUrl(p, "https://api.openai.com/v1");
   const post = (payload: Record<string, unknown>) =>
     fetch(`${base}/chat/completions`, {
@@ -78,10 +88,14 @@ async function callOpenAiCompatible(p: AiProvider, messages: ChatMessage[], medi
   }
   if (!res.ok) throw new Error(`${p.name}: HTTP ${res.status} ${(await res.text()).slice(0, 300)}`);
   const data = await res.json();
-  return data.choices?.[0]?.message?.content ?? "";
+  return {
+    text: data.choices?.[0]?.message?.content ?? "",
+    inputTokens: Number(data.usage?.prompt_tokens ?? data.usage?.input_tokens ?? 0) || 0,
+    outputTokens: Number(data.usage?.completion_tokens ?? data.usage?.output_tokens ?? 0) || 0,
+  };
 }
 
-async function callAnthropic(p: AiProvider, messages: ChatMessage[], media: MediaAttachment[] = []): Promise<string> {
+async function callAnthropic(p: AiProvider, messages: ChatMessage[], media: MediaAttachment[] = []): Promise<ProviderTextResult> {
   const base = await providerBaseUrl(p, "https://api.anthropic.com");
   const system = messages.filter((m) => m.role === "system").map((m) => m.content).join("\n");
   const rest = messages.filter((m) => m.role !== "system");
@@ -130,10 +144,14 @@ async function callAnthropic(p: AiProvider, messages: ChatMessage[], media: Medi
   }
   if (!res.ok) throw new Error(`${p.name}: HTTP ${res.status} ${(await res.text()).slice(0, 300)}`);
   const data = await res.json();
-  return (data.content ?? []).map((c: { text?: string }) => c.text ?? "").join("");
+  return {
+    text: (data.content ?? []).map((c: { text?: string }) => c.text ?? "").join(""),
+    inputTokens: Number(data.usage?.input_tokens ?? 0) || 0,
+    outputTokens: Number(data.usage?.output_tokens ?? 0) || 0,
+  };
 }
 
-async function callGoogle(p: AiProvider, messages: ChatMessage[], media: MediaAttachment[] = []): Promise<string> {
+async function callGoogle(p: AiProvider, messages: ChatMessage[], media: MediaAttachment[] = []): Promise<ProviderTextResult> {
   const base = await providerBaseUrl(p, "https://generativelanguage.googleapis.com/v1beta");
   const system = messages.filter((m) => m.role === "system").map((m) => m.content).join("\n");
   const contents = messages
@@ -156,7 +174,11 @@ async function callGoogle(p: AiProvider, messages: ChatMessage[], media: MediaAt
   });
   if (!res.ok) throw new Error(`${p.name}: HTTP ${res.status} ${(await res.text()).slice(0, 300)}`);
   const data = await res.json();
-  return (data.candidates?.[0]?.content?.parts ?? []).map((x: { text?: string }) => x.text ?? "").join("");
+  return {
+    text: (data.candidates?.[0]?.content?.parts ?? []).map((x: { text?: string }) => x.text ?? "").join(""),
+    inputTokens: Number(data.usageMetadata?.promptTokenCount ?? 0) || 0,
+    outputTokens: Number(data.usageMetadata?.candidatesTokenCount ?? 0) || 0,
+  };
 }
 
 export async function callProvider(
@@ -167,18 +189,22 @@ export async function callProvider(
   const started = Date.now();
   // Media only goes to providers marked vision-capable in the admin backend.
   const attachments = p.supportsVision ? media : [];
-  let text: string;
+  let response: ProviderTextResult;
   switch (p.kind) {
     case "anthropic":
-      text = await callAnthropic(p, messages, attachments);
+      response = await callAnthropic(p, messages, attachments);
       break;
     case "google":
-      text = await callGoogle(p, messages, attachments);
+      response = await callGoogle(p, messages, attachments);
       break;
     default:
-      text = await callOpenAiCompatible(p, messages, attachments);
+      response = await callOpenAiCompatible(p, messages, attachments);
   }
-  return { text, latencyMs: Date.now() - started };
+  return {
+    ...response,
+    latencyMs: Date.now() - started,
+    estimatedCostMicros: estimateCostMicros(p, response.inputTokens, response.outputTokens),
+  };
 }
 
 // Lists the model IDs the provider's endpoint actually offers — used by the

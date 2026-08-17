@@ -1,9 +1,11 @@
 import "server-only";
+import { after } from "next/server";
 import { db } from "./db";
 import { hasFeature, getActivePlan } from "./access";
 import { FEATURE_KEYS, STAGE_KEYS } from "./constants";
 import { callProvider, extractJson } from "./ai/adapters";
 import { composePromptForStep } from "./ai/prompt-composer";
+import { providerAllowedForTaxData } from "./ai/provider-policy";
 import { extractUserFacingText } from "./ai/validation";
 
 // The in-account guide chatbot. It always analyzes the user's account state,
@@ -191,7 +193,7 @@ export async function guideRespond(
       steps: { where: { isEnabled: true }, orderBy: { sortOrder: "asc" }, include: { provider: true } },
     },
   });
-  const steps = (stage?.isEnabled ? stage.steps : []).filter((s) => s.provider.isEnabled && s.provider.apiKey);
+  const steps = (stage?.isEnabled ? stage.steps : []).filter((s) => providerAllowedForTaxData(s.provider));
   const convo = history.map((m) => `${m.role === "user" ? "User" : "Guide"}: ${m.content}`).join("\n");
   for (const step of steps) {
     if (step.isConditional) continue;
@@ -206,7 +208,26 @@ export async function guideRespond(
         irs_sources: "(none supplied)",
       });
       const result = await callProvider(step.provider, [{ role: "user", content: composed.text }]);
-      if (result.text.trim()) return { message: extractUserFacingText(extractJson(result.text), result.text), actions: baseActions() };
+      const parsed = extractJson(result.text);
+      if (parsed?.requires_reanalysis === true && snapshot.currentStep) {
+        const captured = typeof parsed.captured_fact === "string"
+          ? parsed.captured_fact
+          : JSON.stringify(parsed.captured_fact ?? { message: lastQuestion });
+        await db.caseClarifyMessage.create({
+          data: {
+            caseId: snapshot.currentStep.caseId,
+            role: "user",
+            questionKey: "guide_material_fact",
+            content: captured.slice(0, 4000),
+          },
+        });
+        await db.case.update({ where: { id: snapshot.currentStep.caseId }, data: { status: "analyzing" } });
+        after(async () => {
+          const { runCaseAnalysis } = await import("./ai/orchestrator");
+          await runCaseAnalysis(snapshot.currentStep!.caseId);
+        });
+      }
+      if (result.text.trim()) return { message: extractUserFacingText(parsed, result.text), actions: baseActions() };
     } catch (err) {
       const { logSystem } = await import("./syslog");
       await logSystem("error", "guide", `${step.provider.name} failed answering the guide chat`, String(err), userId);

@@ -103,6 +103,8 @@ model AiProvider {
   regionProfile String         @default("unreviewed")
   costTier      String         @default("medium") // high | medium | low
   timeoutMs     Int            @default(90000)
+  supportsStructuredOutput Boolean @default(false)
+  maxContextTokens Int        @default(0)
   createdAt     DateTime       @default(now())
   steps         PipelineStep[]
   stepResults   AnalysisStepResult[]
@@ -518,6 +520,9 @@ model AnalysisStepResult {
   modelRoute String      @default("")
   qualityGate String     @default("")
   errorCode String       @default("")
+  inputTokens Int        @default(0)
+  outputTokens Int       @default(0)
+  estimatedCostMicros Int @default(0)
   run        AnalysisRun @relation(fields: [runId], references: [id], onDelete: Cascade)
   provider   AiProvider? @relation(fields: [providerId], references: [id], onDelete: SetNull)
 }

@@ -8,6 +8,7 @@
     "start": "next start",
     "lint": "eslint",
     "test": "tsx scripts/ai-v3-acceptance.ts",
+    "ai:v3:backfill": "tsx scripts/ai-v3-backfill.ts",
     "db:push": "prisma db push",
     "db:seed": "prisma db seed",
     "db:migrate": "prisma migrate deploy"
