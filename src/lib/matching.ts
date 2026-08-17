@@ -3,6 +3,7 @@ import { db } from "./db";
 import { getBoolSetting } from "./settings";
 import { STAGE_KEYS, CONSULTANT_SPECIALTIES } from "./constants";
 import { callProvider, extractJson } from "./ai/adapters";
+import { composePromptForStep } from "./ai/prompt-composer";
 
 // Consultant matching engine: deterministic scoring over specialty fit,
 // experience, and past cases handled, optionally re-ranked by an AI model,
@@ -157,12 +158,21 @@ export async function pickConsultantForCase(caseId: string): Promise<Candidate |
     const top = ranked.slice(0, 5);
     for (const step of steps) {
       try {
-        const prompt = step.promptTemplate
-          .replace("{{case}}", caseSummaryText(c, issueTypes))
-          .replace("{{candidates}}", top.map(candidateText).join("\n\n---\n\n"));
-        const result = await callProvider(step.provider, [{ role: "user", content: prompt }]);
+        const caseText = caseSummaryText(c, issueTypes);
+        const candidateList = top.map(candidateText).join("\n\n---\n\n");
+        const composed = await composePromptForStep(step, {
+          case: caseText,
+          case_requirements: caseText,
+          candidates: candidateList,
+          eligible_candidates: candidateList,
+          base_scores: top.map((t) => `${t.userId}: ${t.score}`).join("\n"),
+          approved_profile_fields: candidateList,
+        });
+        const result = await callProvider(step.provider, [{ role: "user", content: composed.text }]);
         const parsed = extractJson(result.text);
-        const chosen = parsed && top.find((t) => t.userId === String(parsed.consultant_id));
+        const firstRanked = Array.isArray(parsed?.ranked_candidates) ? parsed.ranked_candidates[0] as Record<string, unknown> : null;
+        const consultantId = String(parsed?.consultant_id ?? firstRanked?.candidate_id ?? "");
+        const chosen = parsed && top.find((t) => t.userId === consultantId);
         if (chosen) return chosen;
       } catch (err) {
         const { logSystem } = await import("./syslog");
@@ -212,14 +222,22 @@ export async function generateAssignmentReason(
 
   for (const step of steps) {
     try {
-      const prompt = step.promptTemplate
-        .replace("{{case}}", caseText)
-        .replace("{{consultant}}", consultantText)
-        .replace("{{prior}}", draft || "(no draft yet — write the first version)");
-      const result = await callProvider(step.provider, [{ role: "user", content: prompt }]);
+      const composed = await composePromptForStep(step, {
+        case: caseText,
+        case_requirements: caseText,
+        consultant: consultantText,
+        selected_candidate: consultantText,
+        match_factors_used: consultantText,
+        prior: draft || "(no draft yet - write the first version)",
+      });
+      const result = await callProvider(step.provider, [{ role: "user", content: composed.text }]);
       const parsed = extractJson(result.text);
-      if (parsed && typeof parsed.summary === "string" && parsed.summary) {
-        best = { summary: String(parsed.summary).slice(0, 300), detail: String(parsed.detailed_reason ?? "").slice(0, 2000) };
+      const summary = String(parsed?.summary ?? parsed?.customer_summary ?? "");
+      const detail = Array.isArray(parsed?.detailed_fit_reasons)
+        ? parsed.detailed_fit_reasons.map(String).join("\n")
+        : String(parsed?.detailed_reason ?? parsed?.consultant_summary ?? "");
+      if (parsed && summary) {
+        best = { summary: summary.slice(0, 300), detail: detail.slice(0, 2000) };
         draft = result.text;
       }
     } catch (err) {

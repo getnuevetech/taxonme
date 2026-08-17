@@ -70,14 +70,29 @@ export type StageKey = (typeof STAGE_KEYS)[keyof typeof STAGE_KEYS];
 
 export const STEP_ROLES = {
   FACT_EXTRACTOR: "fact_extractor",
+  GOAL_EXTRACTOR: "goal_extractor",
   INTERPRETER: "interpreter",
+  GOAL_INTERPRETER: "goal_interpreter",
+  FEASIBILITY_ANALYST: "feasibility_analyst",
   SKEPTIC: "skeptic",
   EXTRACTOR_A: "extractor_a",
   EXTRACTOR_B: "extractor_b",
+  RECONCILER: "reconciler",
+  NOTICE_CLASSIFIER: "notice_classifier",
   ANALYST: "analyst",
+  NOTICE_ANALYST: "notice_analyst",
+  SOURCE_VERIFIER: "source_verifier",
   REVIEWER: "reviewer",
   PRESENTER: "presenter",
   ASSISTANT: "assistant",
+  CASE_ASSISTANT: "case_assistant",
+  MATCH_ANALYST: "match_analyst",
+  MATCH_REVIEWER: "match_reviewer",
+  RECOMMENDATION_DRAFTER: "recommendation_drafter",
+  LETTER_DRAFTER: "letter_drafter",
+  FINAL_EDITOR: "final_editor",
+  CLOSURE_SUMMARIZER: "closure_summarizer",
+  CLOSURE_REVIEWER: "closure_reviewer",
 } as const;
 
 export const AI_KINDS = [

@@ -7,13 +7,10 @@ import { STAGE_KEYS } from "../constants";
 import { getNumberSetting } from "../settings";
 import { readUpload } from "../uploads";
 import { verifyCaseProgress } from "../case-progress";
-import { selectBestResponse } from "./response-selection";
+import { composePromptForStep } from "./prompt-composer";
+import { extractUserFacingText, validateAiJson } from "./validation";
 
 type Json = Record<string, unknown>;
-
-function fill(template: string, vars: Record<string, string>): string {
-  return template.replace(/\{\{(\w+)\}\}/g, (_, k) => vars[k] ?? "");
-}
 
 function hasUnfiledReturnIntent(text: string): boolean {
   return /(didn'?t file|haven'?t filed|have not file[dn]?|has not file[dn]?|not filed|unfiled|late filing|missed filing|never filed|file taxes for (the )?past|years behind|behind on (my )?taxes|out of compliance)/i.test(text);
@@ -21,6 +18,59 @@ function hasUnfiledReturnIntent(text: string): boolean {
 
 function hasRefundIntent(text: string): boolean {
   return /\b(refund|overpayment|offset|deposit|line 35a)\b/i.test(text);
+}
+
+function normalizePresentation(data: Json | null): Json | null {
+  if (!data) return null;
+  if (Array.isArray(data.issues)) return data;
+  const card = typeof data.finding_card === "object" && data.finding_card !== null
+    ? data.finding_card as Json
+    : null;
+  if (!card) return null;
+  const nextStep = typeof data.next_step === "object" && data.next_step !== null
+    ? data.next_step as Json
+    : {};
+  const professionalHelp = typeof data.professional_help === "object" && data.professional_help !== null
+    ? data.professional_help as Json
+    : {};
+  const how = typeof data.how_we_reached_this === "object" && data.how_we_reached_this !== null
+    ? data.how_we_reached_this as Record<string, unknown>
+    : {};
+  const outline = [
+    ["Your situation", how.your_situation],
+    ["Tax rules", how.tax_rules],
+    ["Your evidence", how.your_evidence],
+    ["Our conclusion", how.our_conclusion],
+  ].map(([heading, value]) => ({ heading, detail: Array.isArray(value) ? value.map(String).join(" ") : String(value ?? "") }));
+  return {
+    headline: String(card.headline ?? ""),
+    issues: [
+      {
+        issue_type: String(card.category ?? "other"),
+        item_kind: "issue",
+        evidence_status: String(card.status ?? "needs_verification").toLowerCase(),
+        evidence_strength: String(data.evidence_strength ?? "LIMITED").toLowerCase(),
+        title: String(card.headline ?? "Tax finding"),
+        what_we_know: Array.isArray(data.what_we_found) ? data.what_we_found.map(String).join(" ") : String(card.summary ?? ""),
+        our_conclusion: outline.find((x) => x.heading === "Our conclusion")?.detail ?? "",
+        still_unclear: Array.isArray(data.what_is_still_unclear) ? data.what_is_still_unclear.map(String) : [],
+        priority: String(card.priority ?? "MEDIUM").toLowerCase(),
+        state: String(card.status ?? "").toUpperCase() === "NEEDS_VERIFICATION" ? "info_needed" : "review",
+        next_action: String(nextStep.action_label ?? nextStep.title ?? ""),
+        alternative_action: Array.isArray(data.alternative_actions) ? data.alternative_actions.map(String).join("; ") : "",
+        analysis_outline: outline,
+      },
+    ],
+    path_steps: [
+      {
+        title: String(nextStep.title ?? "Review the finding"),
+        description: String(nextStep.description ?? ""),
+        action_key: String(nextStep.action_label ?? "review_analysis").toLowerCase().replace(/[^a-z0-9]+/g, "_"),
+      },
+    ],
+    consultant_recommended: professionalHelp.recommended === true,
+    consultant_reason: String(professionalHelp.message ?? ""),
+  };
 }
 
 async function getRunnableSteps(stageKey: string) {
@@ -84,17 +134,34 @@ export async function runStage(
   vars: Record<string, string>,
   opts?: { runId?: string; sequentialContext?: boolean; media?: MediaAttachment[] },
 ): Promise<StageOutcome> {
-  const steps = await getRunnableSteps(stageKey);
+  const stage = await db.pipelineStage.findUnique({
+    where: { key: stageKey },
+    include: {
+      steps: {
+        where: { isEnabled: true },
+        orderBy: { sortOrder: "asc" },
+        include: { provider: true },
+      },
+    },
+  });
+  const steps = stage?.isEnabled
+    ? stage.steps.filter((s) => s.provider.isEnabled && s.provider.apiKey.length > 0)
+    : [];
   const stepOutputs: StageOutcome["stepOutputs"] = [];
   let prior = "";
 
-  for (const step of steps) {
-    const prompt = fill(step.promptTemplate, { ...vars, prior });
-    const messages: ChatMessage[] = [{ role: "user", content: prompt }];
+  async function runOneStep(step: (typeof steps)[number], stepPrior: string): Promise<boolean> {
+    if (step.isConditional && !stage?.reviewerRequired && stepOutputs.length > 0) return false;
+    const composed = await composePromptForStep(step, { ...vars, prior: stepPrior });
+    const messages: ChatMessage[] = [{ role: "user", content: composed.text }];
     const started = Date.now();
     try {
       const result = await callProvider(step.provider, messages, opts?.media ?? []);
       const data = extractJson(result.text);
+      const validation = validateAiJson(stageKey, data);
+      if (!validation.ok && data) {
+        throw new Error(`Invalid ${stageKey} JSON from ${step.role}: ${validation.error}`);
+      }
       stepOutputs.push({
         source: `${step.provider.name} (${step.role})`,
         role: step.role,
@@ -112,9 +179,16 @@ export async function runStage(
             rawText: result.text.slice(0, 20000),
             parsedJson: data ? JSON.stringify(data) : "",
             latencyMs: result.latencyMs,
+            promptId: composed.promptId,
+            promptVersion: composed.promptVersion,
+            schemaVersion: composed.schemaVersion,
+            providerRoute: step.routeKey,
+            modelRoute: step.provider.model,
+            qualityGate: validation.qualityGate,
           },
         });
       }
+      return true;
     } catch (err) {
       const { logSystem } = await import("../syslog");
       await logSystem("error", "ai_call", `${step.provider.name} failed in stage "${stageKey}" (${step.role})`, String(err));
@@ -127,16 +201,49 @@ export async function runStage(
             status: "failed",
             rawText: String(err).slice(0, 2000),
             latencyMs: Date.now() - started,
+            promptId: step.promptId,
+            promptVersion: step.promptVersion,
+            schemaVersion: step.schemaVersion,
+            providerRoute: step.routeKey,
+            modelRoute: step.provider.model,
+            qualityGate: "FAIL",
+            errorCode: /invalid|schema/i.test(String(err)) ? "invalid_schema" : "provider_error",
           },
         });
       }
+      return false;
     }
   }
 
+  for (let i = 0; i < steps.length; i++) {
+    const step = steps[i];
+    if (step.mode === "parallel") {
+      const group = [step];
+      while (steps[i + 1]?.mode === "parallel") {
+        group.push(steps[i + 1]);
+        i++;
+      }
+      await Promise.all(group.map((parallelStep) => runOneStep(parallelStep, "")));
+      continue;
+    }
+    if (step.mode === "failover") {
+      const group = [step];
+      while (steps[i + 1]?.mode === "failover") {
+        group.push(steps[i + 1]);
+        i++;
+      }
+      for (const candidate of group) {
+        if (await runOneStep(candidate, prior)) break;
+      }
+      continue;
+    }
+    await runOneStep(step, prior);
+  }
+
   const structured = stepOutputs.filter((o) => o.data);
-  const { merged, conflicts } = mergeStructured(
-    structured.map((o) => ({ source: o.source, data: o.data as Json })),
-  );
+  const { merged, conflicts } = stage?.mergeStrategy === "consensus"
+    ? mergeStructured(structured.map((o) => ({ source: o.source, data: o.data as Json })))
+    : { merged: (structured.at(-1)?.data as Json | undefined) ?? {}, conflicts: [] };
   return { stepOutputs, merged, conflicts, usedAi: stepOutputs.length > 0 };
 }
 
@@ -185,6 +292,8 @@ export async function runCaseAnalysis(caseId: string): Promise<void> {
     include: { documents: { where: { deletedAt: null } } },
   });
   if (!c) return;
+  const caseAnalysisVersion =
+    (await db.analysisRun.count({ where: { caseId, stageKey: STAGE_KEYS.PRESENTER } })) + 1;
   await db.case.update({ where: { id: caseId }, data: { status: "analyzing" } });
 
   // Clear previous results for a clean re-run.
@@ -234,7 +343,18 @@ export async function runCaseAnalysis(caseId: string): Promise<void> {
   }
 
   async function stageRun(stageKey: string, vars: Record<string, string>, sequentialContext = false, stageMedia?: MediaAttachment[]) {
-    const run = await db.analysisRun.create({ data: { caseId, stageKey, status: "running" } });
+    const stage = await db.pipelineStage.findUnique({ where: { key: stageKey } });
+    const run = await db.analysisRun.create({
+      data: {
+        caseId,
+        stageKey,
+        status: "running",
+        caseAnalysisVersion,
+        pipelineVersion: stage?.version ?? "",
+        schemaVersion: "3.0",
+        metadataJson: JSON.stringify({ stageKey, caseAnalysisVersion, pipelineVersion: stage?.version ?? "", inputKeys: Object.keys(vars) }),
+      },
+    });
     const outcome = await runStage(stageKey, vars, { runId: run.id, sequentialContext, media: stageMedia });
     await db.analysisRun.update({
       where: { id: run.id },
@@ -252,10 +372,20 @@ export async function runCaseAnalysis(caseId: string): Promise<void> {
   }
 
   // Layer 2/3: summary, goal, and document analysis (multi-model, admin-selected).
-  const summaryOut = await stageRun(STAGE_KEYS.SUMMARY, { input: c.situation }, true);
-  const goalOut = await stageRun(STAGE_KEYS.GOAL, { input: c.goal }, true);
+  const summaryOut = await stageRun(STAGE_KEYS.SUMMARY, { input: c.situation, goal: c.goal }, true);
+  const goalOut = await stageRun(STAGE_KEYS.GOAL, {
+    input: c.goal,
+    goal: c.goal,
+    summary_analysis: JSON.stringify(summaryOut.merged),
+    verified_case_facts: JSON.stringify(summaryOut.merged),
+  }, true);
   const documentOut = c.documents.length
-    ? await stageRun(STAGE_KEYS.DOCUMENT, { input: docText }, false, media)
+    ? await stageRun(STAGE_KEYS.DOCUMENT, {
+        input: docText,
+        documents: docText,
+        document_id: c.documents.map((d) => d.id).join(","),
+        existing_verified_documents: "(none)",
+      }, false, media)
     : null;
 
   // Documents read by a vision model count as examined evidence.
@@ -293,8 +423,11 @@ export async function runCaseAnalysis(caseId: string): Promise<void> {
     const situationOut = await stageRun(STAGE_KEYS.SITUATION, {
       facts: JSON.stringify(facts),
       documents: documentOut ? JSON.stringify(documentOut.merged) : "(no documents uploaded)",
+      document_findings: documentOut ? JSON.stringify(documentOut.merged) : "(no documents uploaded)",
       knowledge: knowledge || "(no matching reference material)",
+      irs_sources: knowledge || "(no matching reference material)",
       goal: JSON.stringify(goalFacts),
+      system_calculations: "(none supplied)",
     });
     situationMerged = situationOut.merged;
     situationConflicts = situationOut.conflicts;
@@ -308,7 +441,7 @@ export async function runCaseAnalysis(caseId: string): Promise<void> {
       input: JSON.stringify({ facts, goal: goalFacts, documents: documentOut?.merged ?? null, analysis: situationMerged }),
     });
     const p = presenterOut.stepOutputs.find((o) => o.data)?.data ?? null;
-    presentation = p && Array.isArray((p as Json).issues) ? (p as Json) : null;
+    presentation = normalizePresentation(p);
   }
   let issues: Json[] = presentation
     ? ((presentation.issues as Json[]) ?? [])
@@ -505,37 +638,37 @@ export async function runQaChat(history: { role: string; content: string }[], us
   if (steps.length === 0) {
     return "The assistant isn't available just yet. Meanwhile, you can upload your documents to your vault and browse the guides — everything you add will be analyzed as soon as the assistant comes online.";
   }
-  // Ask every configured model and choose the strongest grounded answer.
-  const candidates: { text: string; source: string }[] = [];
-  for (const step of steps) {
-    try {
-      const prompt = `${fill(step.promptTemplate, { input: convo, knowledge: knowledge || "(none)", user_context: userContext || "(none)" })}
-
-USER CONTEXT:
-${userContext || "(none)"}
-
-Current response rules:
-- Answer the user's latest question directly.
-- If USER CONTEXT includes an open case related to the question, tie the answer to that case's facts, documents, unclear items, and current step.
-- If the user is describing a new separate tax situation, tell them it should be started as a new case.
-- Do not introduce example dollar amounts, notice codes, deadlines, forms, or IRS topics unless they appear in the conversation or reference material.
-- If the question is unrelated to tax, say so briefly and suggest support.
-- Keep the answer grounded in the provided conversation and reference material.`;
-      const result = await callProvider(step.provider, [{ role: "user", content: prompt }]);
-      if (result.text.trim()) candidates.push({ text: result.text.trim(), source: `${step.provider.name} (${step.role})` });
-    } catch (err) {
-      const { logSystem } = await import("../syslog");
-      await logSystem("error", "ai_call", `${step.provider.name} failed answering the tax Q&A chat`, String(err));
-    }
+  try {
+    const outcome = await runStage(STAGE_KEYS.QA, {
+      input: convo,
+      question: history.filter((m) => m.role === "user").at(-1)?.content ?? "",
+      knowledge: knowledge || "(none)",
+      irs_sources: knowledge || "(none)",
+      user_context: userContext || "(none)",
+      tax_year_or_context: "unknown unless stated by the user",
+      claims: convo,
+      verified_answer: "(use prior source verification output when present)",
+    }, { sequentialContext: true });
+    const final = outcome.stepOutputs.at(-1);
+    if (final) return extractUserFacingText(final.data, final.rawText);
+  } catch (err) {
+    const { logSystem } = await import("../syslog");
+    await logSystem("error", "ai_call", "AI tax Q&A pipeline failed", String(err));
   }
-  const best = selectBestResponse(candidates, convo, knowledge);
-  if (best) return best.text;
   return "Our assistant couldn't respond just now — the issue has been reported to our team. Please try again in a moment, or open a support ticket if it keeps happening.";
 }
 
 export async function explainNoticeContent(content: string): Promise<Json | null> {
-  const outcome = await runStage(STAGE_KEYS.NOTICE, { input: content });
-  const parsed = outcome.stepOutputs.find((o) => o.data)?.data ?? null;
+  const knowledge = await retrieveKnowledge(content);
+  const outcome = await runStage(STAGE_KEYS.NOTICE, {
+    input: content,
+    notice_document: content,
+    case_context: "(no linked case context supplied)",
+    irs_sources: knowledge || "(no matching notice-specific reference material)",
+    claims: content,
+    review: "(use prior reviewer output when present)",
+  }, { sequentialContext: true });
+  const parsed = outcome.stepOutputs.at(-1)?.data ?? outcome.stepOutputs.find((o) => o.data)?.data ?? null;
   if (parsed) return parsed;
   // Deterministic fallback: identify notice code and match knowledge base.
   const code = (content.toUpperCase().match(/\b(CP|LT|LTR)\s?-?\d{2,4}\b/) ?? [])[0]?.replace(/\s|-/g, "") ?? "";
@@ -561,7 +694,17 @@ export async function generateLetterDraft(context: string): Promise<string> {
   // Try every configured model; log failures; fall back to the template letter.
   for (const step of steps) {
     try {
-      const prompt = fill(step.promptTemplate, { input: context });
+      const composed = await composePromptForStep(step, {
+        input: context,
+        facts: context,
+        notice: context,
+        position: context,
+        supporting_documents: "(use only documents described in the approved context)",
+        irs_sources: "(none supplied)",
+        draft: "",
+        required_changes: "",
+      });
+      const prompt = composed.text;
       const result = await callProvider(step.provider, [{ role: "user", content: prompt }]);
       if (result.text.trim()) return result.text;
     } catch (err) {

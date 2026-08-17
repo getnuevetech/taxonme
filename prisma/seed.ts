@@ -1,7 +1,7 @@
 import { PrismaClient } from "@prisma/client";
 import bcrypt from "bcryptjs";
 import crypto from "crypto";
-import { DEFAULT_PROMPTS } from "../src/lib/ai/prompts";
+import { AI_V3_VERSION, V3_PIPELINE_BLUEPRINT, V3_PROMPT_RECORDS } from "../src/lib/ai/v3-prompts";
 
 const db = new PrismaClient();
 
@@ -291,135 +291,96 @@ async function seedAiAndPipelines() {
     providers[p.name] = row.id;
   }
 
-  const stages: { key: string; name: string; description: string; steps: { provider: string; role: string; prompt: string; order: number }[] }[] = [
-    {
-      key: "summary",
-      name: "1 · Summary analysis",
-      description: "Analyzes the user's situation summary with 2–3 models (fact extractor, case interpreter, skeptic) and merges results into one simple result.",
-      steps: [
-        { provider: "OpenAI GPT-5.6 Sol", role: "fact_extractor", prompt: DEFAULT_PROMPTS.fact_extractor, order: 0 },
-        { provider: "Anthropic Claude Sonnet 5", role: "interpreter", prompt: DEFAULT_PROMPTS.interpreter, order: 1 },
-        { provider: "Google Gemini 3.1 Pro", role: "skeptic", prompt: DEFAULT_PROMPTS.skeptic, order: 2 },
-      ],
-    },
-    {
-      key: "goal",
-      name: "2 · Goal analysis",
-      description: "Analyzes what the user wants to achieve and merges model outputs into a single result.",
-      steps: [
-        { provider: "OpenAI GPT-5.6 Sol", role: "fact_extractor", prompt: DEFAULT_PROMPTS.fact_extractor, order: 0 },
-        { provider: "Anthropic Claude Sonnet 5", role: "interpreter", prompt: DEFAULT_PROMPTS.interpreter, order: 1 },
-      ],
-    },
-    {
-      key: "document",
-      name: "3 · Document analysis",
-      description: "Two models independently extract each document into the standardized TaxOnMe schema; disagreements are marked 'verification required' — never guessed.",
-      steps: [
-        { provider: "Anthropic Claude Sonnet 5", role: "extractor_a", prompt: DEFAULT_PROMPTS.extractor_a, order: 0 },
-        { provider: "Google Gemini 3.1 Pro", role: "extractor_b", prompt: DEFAULT_PROMPTS.extractor_b, order: 1 },
-      ],
-    },
-    {
-      key: "situation",
-      name: "4 · Tax situation analysis",
-      description: "Grounded in the IRS knowledge base: each model answers the same structured questions (issue, evidence, IRS basis, conditions, confidence, professional review).",
-      steps: [
-        { provider: "OpenAI GPT-5.6 Sol", role: "analyst", prompt: DEFAULT_PROMPTS.analyst, order: 0 },
-        { provider: "Anthropic Claude Opus 5", role: "reviewer", prompt: DEFAULT_PROMPTS.reviewer, order: 1 },
-        { provider: "Google Gemini 3.1 Pro", role: "reviewer", prompt: DEFAULT_PROMPTS.reviewer, order: 2 },
-      ],
-    },
-    {
-      key: "presenter",
-      name: "5 · Results presentation",
-      description: "A single model converts internal analysis into structured JSON. The UI renders it deterministically — the AI never writes the customer's screen.",
-      steps: [
-        { provider: "OpenAI GPT-5.6 Terra", role: "presenter", prompt: DEFAULT_PROMPTS.presenter, order: 0 },
-      ],
-    },
-    {
-      key: "qa",
-      name: "AI tax Q&A",
-      description: "Conversational assistant grounded in the IRS knowledge base. Configured models all answer; the app selects the strongest grounded response.",
-      steps: [
-        { provider: "OpenAI GPT-5.6 Sol", role: "assistant", prompt: DEFAULT_PROMPTS.assistant, order: 0 },
-        { provider: "Anthropic Claude Sonnet 5", role: "assistant", prompt: DEFAULT_PROMPTS.assistant, order: 1 },
-        { provider: "Google Gemini 3.1 Pro", role: "assistant", prompt: DEFAULT_PROMPTS.assistant, order: 2 },
-      ],
-    },
-    {
-      key: "notice",
-      name: "IRS notice explanation",
-      description: "Identifies notice type, tax year, amount, and deadline; produces a plain-English explanation and next steps.",
-      steps: [
-        { provider: "Anthropic Claude Sonnet 5", role: "analyst", prompt: DEFAULT_PROMPTS.notice_explainer, order: 0 },
-      ],
-    },
-    {
-      key: "letter",
-      name: "Response letter drafting",
-      description: "Drafts a professional IRS response letter the user reviews and edits.",
-      steps: [
-        { provider: "OpenAI GPT-5.6 Sol", role: "assistant", prompt: DEFAULT_PROMPTS.letter_writer, order: 0 },
-      ],
-    },
-    {
-      key: "guide",
-      name: "In-account case guide",
-      description: "The floating chatbot that coaches users through their next step. Configured models all answer; the app selects the strongest grounded response.",
-      steps: [
-        { provider: "OpenAI GPT-5.6 Sol", role: "assistant", prompt: DEFAULT_PROMPTS.guide, order: 0 },
-        { provider: "Anthropic Claude Sonnet 5", role: "assistant", prompt: DEFAULT_PROMPTS.guide, order: 1 },
-        { provider: "Google Gemini 3.1 Pro", role: "assistant", prompt: DEFAULT_PROMPTS.guide, order: 2 },
-        { provider: "Anthropic Claude Opus 5", role: "assistant", prompt: DEFAULT_PROMPTS.guide, order: 3 },
-        { provider: "OpenAI GPT-5.6 Terra", role: "assistant", prompt: DEFAULT_PROMPTS.guide, order: 4 },
-      ],
-    },
-    {
-      key: "match",
-      name: "Consultant matching",
-      description: "Ranks candidate consultants for a case (specialty fit, experience, past cases, workload) on top of the deterministic score.",
-      steps: [
-        { provider: "OpenAI GPT-5.6 Sol", role: "analyst", prompt: DEFAULT_PROMPTS.match_rank, order: 0 },
-        { provider: "Anthropic Claude Sonnet 5", role: "reviewer", prompt: DEFAULT_PROMPTS.match_rank, order: 1 },
-      ],
-    },
-    {
-      key: "match_reason",
-      name: "Assignment recommendation reason",
-      description: "Two models produce the recommendation shown to both parties: the first drafts a summary + detailed outline, the second reviews and refines it.",
-      steps: [
-        { provider: "OpenAI GPT-5.6 Sol", role: "analyst", prompt: DEFAULT_PROMPTS.match_reason, order: 0 },
-        { provider: "Anthropic Claude Sonnet 5", role: "reviewer", prompt: DEFAULT_PROMPTS.match_reason_review, order: 1 },
-      ],
-    },
-    {
-      key: "closing",
-      name: "Closing remarks & final review",
-      description: "Writes the customer's closing summary when a case completes or is auto-closed: what was covered, what was resolved, and what to keep for their records.",
-      steps: [
-        { provider: "OpenAI GPT-5.6 Sol", role: "presenter", prompt: DEFAULT_PROMPTS.closing, order: 0 },
-      ],
-    },
-  ];
+  for (const prompt of V3_PROMPT_RECORDS) {
+    await db.aiPrompt.upsert({
+      where: { promptId: prompt.promptId },
+      update: {
+        kind: prompt.kind,
+        responsibility: prompt.responsibility ?? "",
+        stageKey: prompt.stageKey ?? "",
+        version: prompt.version ?? AI_V3_VERSION,
+        schemaVersion: prompt.schemaVersion ?? AI_V3_VERSION,
+        title: prompt.title,
+        body: prompt.body,
+        isActive: true,
+      },
+      create: {
+        promptId: prompt.promptId,
+        kind: prompt.kind,
+        responsibility: prompt.responsibility ?? "",
+        stageKey: prompt.stageKey ?? "",
+        version: prompt.version ?? AI_V3_VERSION,
+        schemaVersion: prompt.schemaVersion ?? AI_V3_VERSION,
+        title: prompt.title,
+        body: prompt.body,
+        isActive: true,
+      },
+    });
+  }
+
+  const stages = V3_PIPELINE_BLUEPRINT;
 
   for (const s of stages) {
     const stage = await db.pipelineStage.upsert({
       where: { key: s.key },
-      update: {},
-      create: { key: s.key, name: s.name, description: s.description },
+      update: {
+        name: s.name,
+        description: s.description,
+        mergeStrategy: s.mergeStrategy,
+        version: AI_V3_VERSION,
+        reviewerRequired: s.reviewerRequired,
+        sourceRequired: s.sourceRequired,
+      },
+      create: {
+        key: s.key,
+        name: s.name,
+        description: s.description,
+        mergeStrategy: s.mergeStrategy,
+        version: AI_V3_VERSION,
+        reviewerRequired: s.reviewerRequired,
+        sourceRequired: s.sourceRequired,
+      },
     });
     const stepCount = await db.pipelineStep.count({ where: { stageKey: stage.key } });
     if (stepCount === 0) {
       for (const step of s.steps) {
+        const prompt = V3_PROMPT_RECORDS.find((p) => p.promptId === step.promptId);
         await db.pipelineStep.create({
           data: {
             stageKey: stage.key,
             providerId: providers[step.provider],
             role: step.role,
-            promptTemplate: step.prompt,
+            promptTemplate: prompt?.body ?? step.promptId,
             sortOrder: step.order,
+            mode: step.mode,
+            routeKey: step.routeKey,
+            promptId: step.promptId,
+            promptVersion: AI_V3_VERSION,
+            schemaVersion: AI_V3_VERSION,
+            pipelineVersion: AI_V3_VERSION,
+            isConditional: step.isConditional ?? false,
+            conditionsJson: JSON.stringify(step.conditions ?? []),
+          },
+        });
+      }
+    } else {
+      for (const step of s.steps) {
+        const existing = await db.pipelineStep.findFirst({
+          where: { stageKey: stage.key, sortOrder: step.order },
+        });
+        if (!existing) continue;
+        await db.pipelineStep.update({
+          where: { id: existing.id },
+          data: {
+            role: step.role,
+            mode: step.mode,
+            routeKey: step.routeKey,
+            promptId: existing.promptId || step.promptId,
+            promptVersion: existing.promptVersion || AI_V3_VERSION,
+            schemaVersion: existing.schemaVersion || AI_V3_VERSION,
+            pipelineVersion: existing.pipelineVersion || AI_V3_VERSION,
+            isConditional: step.isConditional ?? false,
+            conditionsJson: existing.conditionsJson === "[]" ? JSON.stringify(step.conditions ?? []) : existing.conditionsJson,
           },
         });
       }

@@ -130,25 +130,45 @@ export async function uploadNoticeAction(_prev: ActionState, formData: FormData)
 
   const result = await explainNoticeContent(content);
   if (result) {
-    const deadlineStr = typeof result.deadline === "string" ? result.deadline : "";
+    const noticeIdentity = typeof result.notice_identity === "object" && result.notice_identity !== null
+      ? result.notice_identity as Record<string, unknown>
+      : {};
+    const amounts = Array.isArray(result.amounts) ? result.amounts as Record<string, unknown>[] : [];
+    const firstAmount = amounts.find((a) => typeof a.amount === "number" || typeof a.value === "number");
+    const amount = typeof result.amount === "number"
+      ? result.amount
+      : typeof firstAmount?.amount === "number"
+        ? firstAmount.amount
+        : typeof firstAmount?.value === "number"
+          ? firstAmount.value
+          : null;
+    const deadlineValue = result.deadline ?? (Array.isArray(result.printed_deadlines) ? result.printed_deadlines[0] : null);
+    const deadlineStr = typeof deadlineValue === "string" ? deadlineValue : "";
     const deadline = deadlineStr && !Number.isNaN(Date.parse(deadlineStr)) ? new Date(deadlineStr) : null;
+    const noticeType = String(result.notice_type ?? noticeIdentity.notice_type ?? "") || "";
+    const explanation = String(result.plain_english_explanation ?? result.what_it_means ?? "");
+    const nextSteps = result.next_steps ?? result.available_response_categories ?? result.what_irs_wants ?? [];
     await db.notice.update({
       where: { id: notice.id },
       data: {
-        noticeType: String(result.notice_type ?? "") || "",
-        taxYear: typeof result.tax_year === "number" ? result.tax_year : null,
-        amountCents: typeof result.amount === "number" ? Math.round(result.amount * 100) : null,
+        noticeType,
+        taxYear: typeof result.tax_year === "number"
+          ? result.tax_year
+          : typeof noticeIdentity.tax_year === "number"
+            ? noticeIdentity.tax_year
+            : null,
+        amountCents: typeof amount === "number" ? Math.round(amount * 100) : null,
         deadline,
-        explanation: String(result.plain_english_explanation ?? ""),
-        nextStepsJson: JSON.stringify(result.next_steps ?? []),
-        status: result.fallback ? "verification_required" : "explained",
+        explanation,
+        nextStepsJson: JSON.stringify(nextSteps),
+        status: result.fallback || result.certainty === "NEEDS_VERIFICATION" ? "verification_required" : "explained",
       },
     });
     if (deadline && user) {
       await db.deadline.create({
         data: {
           userId: user.id,
-          title: `Respond to IRS notice ${String(result.notice_type ?? "")}`.trim(),
+          title: `Respond to IRS notice ${noticeType}`.trim(),
           dueDate: deadline,
           source: "notice",
         },
