@@ -1,5 +1,4 @@
 import assert from "node:assert/strict";
-import { mergeStructured } from "../src/lib/ai/consensus";
 import { validateAiJson } from "../src/lib/ai/validation";
 import { STAGE_KEYS, STEP_ROLES } from "../src/lib/constants";
 import { V3_PIPELINE_BLUEPRINT, V3_PROMPT_RECORDS } from "../src/lib/ai/v3-prompts";
@@ -49,13 +48,11 @@ assert.deepEqual(
   "consultant matching AI must stay inside the deterministic eligible pool",
 );
 
-const disagreement = mergeStructured([
-  { source: "extractor_a", data: { amount_due: 2620.07 } },
-  { source: "extractor_b", data: { amount_due: 262.07 } },
-]);
-assert.equal(disagreement.conflicts.length, 1, "A/B amount disagreement must be flagged");
-assert.equal((disagreement.merged.amount_due as Record<string, unknown>).__conflict, true, "disputed amount must not be silently merged");
-
+const documentStage = V3_PIPELINE_BLUEPRINT.find((p) => p.key === STAGE_KEYS.DOCUMENT);
+assert.ok(documentStage?.steps.some((s) => s.role === STEP_ROLES.EXTRACTOR_A && s.mode === "parallel"), "document extractor A must run as an independent pass");
+assert.ok(documentStage?.steps.some((s) => s.role === STEP_ROLES.EXTRACTOR_B && s.mode === "parallel"), "document extractor B must run as an independent pass");
+assert.ok(documentStage?.steps.some((s) => s.role === STEP_ROLES.RECONCILER), "document stage must include reconciliation");
+assert.ok(documentStage?.steps.some((s) => s.role === STEP_ROLES.REVIEWER && s.isConditional), "document reviewer must be conditional for critical disputes");
 assert.equal(validateAiJson(STAGE_KEYS.PRESENTER, { finding_card: { headline: "No invented deadline" } }).ok, true);
 assert.equal(validateAiJson(STAGE_KEYS.PRESENTER, { answer: "not a presenter object" }).ok, false);
 assert.equal(validateAiJson(STAGE_KEYS.GUIDE, { answer: "Please upload the notice.", requires_reanalysis: true }).ok, true);

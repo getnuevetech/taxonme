@@ -200,7 +200,7 @@ export async function guideRespond(
         input: convo,
         context: snapshot.text,
         case: snapshot.text,
-        current_step: snapshot.currentStep ? `${snapshot.currentStep.title}: ${snapshot.currentStep.description}` : "(no active step)",
+        current_step: snapshot.currentStep ? `${snapshot.currentStep.title} (${snapshot.currentStep.actionKey})` : "(no active step)",
         allowed_actions: baseActions().map((a) => `${a.type}:${a.label}`).join(", "),
         verified_documents: snapshot.text,
         irs_sources: "(none supplied)",
