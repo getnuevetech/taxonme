@@ -44,6 +44,10 @@ export default async function AiProvidersPage() {
                   supportsVision: p.supportsVision,
                   isEnabled: p.isEnabled,
                   notes: p.notes,
+                  dataRetentionProfile: p.dataRetentionProfile,
+                  regionProfile: p.regionProfile,
+                  costTier: p.costTier,
+                  timeoutMs: p.timeoutMs,
                 }}
               />
               <form action={deleteAiProviderAction.bind(null, p.id)} className="mt-2 text-right">

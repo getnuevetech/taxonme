@@ -8,7 +8,16 @@ import { getNumberSetting } from "../settings";
 import { readUpload } from "../uploads";
 import { verifyCaseProgress } from "../case-progress";
 import { composePromptForStep } from "./prompt-composer";
-import { sourceSnapshotId } from "./privacy";
+import {
+  completeCaseAnalysisVersion,
+  finishReanalysisEvent,
+  queueHumanReview,
+  recordDocumentFieldVerifications,
+  recordPresentationSnapshot,
+  recordReanalysisEvent,
+  startCaseAnalysisVersion,
+  upsertSourceSnapshot,
+} from "./audit";
 import { extractUserFacingText, validateAiJson } from "./validation";
 
 type Json = Record<string, unknown>;
@@ -138,6 +147,25 @@ function outputRequestsGate(data: Json | null): boolean {
     serialized.includes('"status":"not_supported"') ||
     serialized.includes('"source_missing"')
   );
+}
+
+function humanReviewReasons(input: {
+  narrative: string;
+  issues: Json[];
+  conflicts: Conflict[];
+  needsConsultant: boolean;
+}): { reason: string; severity: string }[] {
+  const reasons: { reason: string; severity: string }[] = [];
+  if (/(criminal|fraud|summons|tax court|levy|lien|seizure|bankruptcy|international|trust fund|payroll tax)/i.test(input.narrative)) {
+    reasons.push({ reason: "Configured high-risk tax category detected", severity: "urgent" });
+  }
+  if (input.conflicts.length > 0 || input.issues.some((i) => String(i.evidence_status ?? i.status ?? "").toLowerCase().includes("verification"))) {
+    reasons.push({ reason: "Material facts or model outputs require verification", severity: "high" });
+  }
+  if (input.needsConsultant) {
+    reasons.push({ reason: "Professional review recommended or required by analysis", severity: "high" });
+  }
+  return reasons;
 }
 
 /**
@@ -316,8 +344,16 @@ export async function runCaseAnalysis(caseId: string): Promise<void> {
     include: { documents: { where: { deletedAt: null } } },
   });
   if (!c) return;
-  const caseAnalysisVersion =
-    (await db.analysisRun.count({ where: { caseId, stageKey: STAGE_KEYS.PRESENTER } })) + 1;
+  const reanalysisEventId = await recordReanalysisEvent(caseId, "case_analysis", [
+    STAGE_KEYS.SUMMARY,
+    STAGE_KEYS.GOAL,
+    STAGE_KEYS.DOCUMENT,
+    STAGE_KEYS.SITUATION,
+    STAGE_KEYS.PRESENTER,
+  ]);
+  const analysisVersion = await startCaseAnalysisVersion(caseId, "case_analysis");
+  const caseAnalysisVersion = analysisVersion.version;
+  const sourceSnapshotIds: string[] = [];
   await db.case.update({ where: { id: caseId }, data: { status: "analyzing" } });
 
   // Clear previous results for a clean re-run.
@@ -368,7 +404,8 @@ export async function runCaseAnalysis(caseId: string): Promise<void> {
 
   async function stageRun(stageKey: string, vars: Record<string, string>, sequentialContext = false, stageMedia?: MediaAttachment[]) {
     const stage = await db.pipelineStage.findUnique({ where: { key: stageKey } });
-    const sourceId = sourceSnapshotId(vars.irs_sources || vars.knowledge || "");
+    const sourceId = await upsertSourceSnapshot(vars.irs_sources || vars.knowledge || "");
+    if (sourceId) sourceSnapshotIds.push(sourceId);
     const run = await db.analysisRun.create({
       data: {
         caseId,
@@ -413,6 +450,13 @@ export async function runCaseAnalysis(caseId: string): Promise<void> {
         existing_verified_documents: "(none)",
       }, false, media)
     : null;
+  if (documentOut) {
+    await recordDocumentFieldVerifications({
+      documents: c.documents.map((d) => ({ id: d.id, caseId: d.caseId })),
+      analysisVersionId: analysisVersion.id,
+      stepOutputs: documentOut.stepOutputs,
+    });
+  }
 
   // Documents read by a vision model count as examined evidence.
   if (documentOut?.usedAi && media.length > 0) {
@@ -467,6 +511,14 @@ export async function runCaseAnalysis(caseId: string): Promise<void> {
       input: JSON.stringify({ facts, goal: goalFacts, documents: documentOut?.merged ?? null, analysis: situationMerged }),
     });
     const p = presenterOut.stepOutputs.find((o) => o.data)?.data ?? null;
+    if (p) {
+      await recordPresentationSnapshot({
+        caseId,
+        analysisVersionId: analysisVersion.id,
+        schemaVersion: "3.0",
+        presentation: p,
+      });
+    }
     presentation = normalizePresentation(p);
   }
   let issues: Json[] = presentation
@@ -483,6 +535,7 @@ export async function runCaseAnalysis(caseId: string): Promise<void> {
   }
 
   // Persist issues.
+  const issueIds: string[] = [];
   for (const [i, issue] of issues.entries()) {
     const toCents = (v: unknown) => (typeof v === "number" && Number.isFinite(v) ? Math.round(v * 100) : null);
     const oneOf = (v: unknown, allowed: string[], dflt: string) => (allowed.includes(String(v)) ? String(v) : dflt);
@@ -493,7 +546,7 @@ export async function runCaseAnalysis(caseId: string): Promise<void> {
       : issue.what_we_dont_know
         ? [String(issue.what_we_dont_know)]
         : [];
-    await db.issue.create({
+    const createdIssue = await db.issue.create({
       data: {
         caseId,
         issueType: String(issue.issue_type ?? "other"),
@@ -521,14 +574,16 @@ export async function runCaseAnalysis(caseId: string): Promise<void> {
         evidenceJson: JSON.stringify(Array.isArray(issue.analysis_outline) ? issue.analysis_outline : []),
       },
     });
+    issueIds.push(createdIssue.id);
   }
 
   // Path forward steps (each carries an action key for evidence verification).
   const pathSteps: Json[] = presentation?.path_steps
     ? ((presentation.path_steps as Json[]) ?? [])
     : ((fallback ?? (await fallbackAnalyze(c.situation, c.goal, rawDocText, docInfos))).pathSteps as unknown as Json[]);
+  const pathStepIds: string[] = [];
   for (const [i, step] of pathSteps.entries()) {
-    await db.pathStep.create({
+    const createdStep = await db.pathStep.create({
       data: {
         caseId,
         sortOrder: i,
@@ -538,6 +593,7 @@ export async function runCaseAnalysis(caseId: string): Promise<void> {
         status: i === 0 ? "current" : "pending",
       },
     });
+    pathStepIds.push(createdStep.id);
   }
 
   // Deterministic readiness score (our formula, not an AI's opinion).
@@ -609,6 +665,43 @@ export async function runCaseAnalysis(caseId: string): Promise<void> {
       });
     }
   }
+
+  const reviewReasons = humanReviewReasons({
+    narrative: `${c.situation}\n${c.goal}`,
+    issues,
+    conflicts: allConflicts,
+    needsConsultant,
+  });
+  for (const review of reviewReasons) {
+    await queueHumanReview({
+      caseId,
+      analysisVersionId: analysisVersion.id,
+      reason: review.reason,
+      severity: review.severity,
+      payload: { readiness, conflicts: displayConflicts.slice(0, 5) },
+    });
+  }
+
+  await completeCaseAnalysisVersion({
+    analysisVersionId: analysisVersion.id,
+    status: reviewReasons.length > 0 ? "human_review" : allConflicts.length > 0 ? "needs_verification" : "approved",
+    issueIds,
+    pathStepIds,
+    sourceSnapshotIds,
+    snapshot: {
+      case_id: caseId,
+      status: needsConsultant ? "consultant_recommended" : "analyzed",
+      readiness,
+      facts,
+      goal: goalFacts,
+      documents: documentOut?.merged ?? null,
+      analysis: situationMerged,
+      presentation,
+      conflicts: displayConflicts,
+      human_review: reviewReasons,
+    },
+  });
+  await finishReanalysisEvent(reanalysisEventId, "complete");
 
   // Immediately verify path-step evidence (e.g. documents already uploaded at intake).
   await verifyCaseProgress(caseId);

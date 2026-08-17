@@ -27,6 +27,7 @@ for (const role of requiredRoles) {
 }
 
 const promptIds = new Set(V3_PROMPT_RECORDS.map((p) => p.promptId));
+assert.ok(V3_PROMPT_RECORDS.every((p) => p.promptId.endsWith("-v3") || p.promptId === "GLOBAL-RULES-v3"), "all production prompts must be versioned v3 IDs");
 for (const stage of V3_PIPELINE_BLUEPRINT) {
   for (const step of stage.steps) {
     assert.ok(promptIds.has(step.promptId), `${stage.key}/${step.role} references missing prompt ${step.promptId}`);
@@ -47,6 +48,19 @@ assert.deepEqual(
   matching?.steps.map((s) => s.role),
   [STEP_ROLES.MATCH_ANALYST, STEP_ROLES.MATCH_REVIEWER],
   "consultant matching AI must stay inside the deterministic eligible pool",
+);
+assert.equal(matching?.reviewerRequired, true, "consultant matching must require review");
+
+const letter = V3_PIPELINE_BLUEPRINT.find((p) => p.key === STAGE_KEYS.LETTER);
+assert.ok(letter?.steps.some((s) => s.role === STEP_ROLES.LETTER_DRAFTER), "letter flow must include drafter");
+assert.ok(letter?.steps.some((s) => s.role === STEP_ROLES.REVIEWER), "letter flow must include reviewer");
+assert.ok(letter?.steps.some((s) => s.role === STEP_ROLES.FINAL_EDITOR), "letter flow must include final editor");
+
+const closing = V3_PIPELINE_BLUEPRINT.find((p) => p.key === STAGE_KEYS.CLOSING);
+assert.deepEqual(
+  closing?.steps.map((s) => s.role),
+  [STEP_ROLES.CLOSURE_SUMMARIZER, STEP_ROLES.CLOSURE_REVIEWER, STEP_ROLES.PRESENTER],
+  "closure flow must summarize, review, then present",
 );
 
 const documentStage = V3_PIPELINE_BLUEPRINT.find((p) => p.key === STAGE_KEYS.DOCUMENT);

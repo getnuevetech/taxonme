@@ -17,6 +17,10 @@ type Provider = {
   supportsVision: boolean;
   isEnabled: boolean;
   notes: string;
+  dataRetentionProfile: string;
+  regionProfile: string;
+  costTier: string;
+  timeoutMs: number;
 } | null;
 
 export function AiProviderForm({ provider }: { provider: Provider }) {
@@ -51,6 +55,22 @@ export function AiProviderForm({ provider }: { provider: Provider }) {
             <input name="temperature" type="number" step="0.1" min="0" max="2" defaultValue={provider?.temperature ?? 0.2} className={inputClass} />
           </Field>
         </div>
+        <Field label="Timeout (ms)">
+          <input name="timeoutMs" type="number" min="5000" max="180000" defaultValue={provider?.timeoutMs ?? 90000} className={inputClass} />
+        </Field>
+        <Field label="Cost tier">
+          <select name="costTier" defaultValue={provider?.costTier ?? "medium"} className={inputClass}>
+            <option value="low">low</option>
+            <option value="medium">medium</option>
+            <option value="high">high</option>
+          </select>
+        </Field>
+        <Field label="Data retention profile">
+          <input name="dataRetentionProfile" defaultValue={provider?.dataRetentionProfile ?? "unreviewed"} placeholder="approved_taxpayer_data" className={inputClass} />
+        </Field>
+        <Field label="Region profile">
+          <input name="regionProfile" defaultValue={provider?.regionProfile ?? "unreviewed"} placeholder="approved_us" className={inputClass} />
+        </Field>
       </div>
       <div className="mt-3 flex flex-wrap items-center gap-6">
         <label className="flex items-center gap-2 text-sm text-slate-700">

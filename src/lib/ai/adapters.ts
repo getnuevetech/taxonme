@@ -14,6 +14,10 @@ export type MediaAttachment = { mimeType: string; dataBase64: string; name: stri
 // admin tester), never silently stuck requests.
 const CALL_TIMEOUT_MS = 90_000;
 
+function timeoutForProvider(p: AiProvider): number {
+  return Math.max(5_000, Math.min(180_000, p.timeoutMs || CALL_TIMEOUT_MS));
+}
+
 async function providerBaseUrl(p: AiProvider, fallback: string): Promise<string> {
   const base = (p.baseUrl || fallback).replace(/\/$/, "");
   const urlError = await validatePublicHttpsUrl(base);
@@ -26,7 +30,7 @@ async function callOpenAiCompatible(p: AiProvider, messages: ChatMessage[], medi
   const post = (payload: Record<string, unknown>) =>
     fetch(`${base}/chat/completions`, {
       method: "POST",
-      signal: AbortSignal.timeout(CALL_TIMEOUT_MS),
+      signal: AbortSignal.timeout(timeoutForProvider(p)),
       headers: {
         "Content-Type": "application/json",
         Authorization: `Bearer ${p.apiKey}`,
@@ -84,7 +88,7 @@ async function callAnthropic(p: AiProvider, messages: ChatMessage[], media: Medi
   const post = (payload: Record<string, unknown>) =>
     fetch(`${base}/v1/messages`, {
       method: "POST",
-      signal: AbortSignal.timeout(CALL_TIMEOUT_MS),
+      signal: AbortSignal.timeout(timeoutForProvider(p)),
       headers: {
         "Content-Type": "application/json",
         "x-api-key": p.apiKey,
@@ -142,7 +146,7 @@ async function callGoogle(p: AiProvider, messages: ChatMessage[], media: MediaAt
   }
   const res = await fetch(`${base}/models/${p.model}:generateContent?key=${p.apiKey}`, {
     method: "POST",
-    signal: AbortSignal.timeout(CALL_TIMEOUT_MS),
+    signal: AbortSignal.timeout(timeoutForProvider(p)),
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       contents,
