@@ -2,7 +2,7 @@ import Link from "next/link";
 import { db } from "@/lib/db";
 import { guardAdminPage } from "@/lib/admin-guard";
 import { PageHeader, Card, CardBody, Badge } from "@/components/ui";
-import { formatCaseNumber } from "@/lib/format";
+import { formatCaseNumber } from "@/lib/case-number";
 
 export const metadata = { title: "Human review queue" };
 
