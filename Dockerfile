@@ -16,6 +16,8 @@ ENV DATABASE_URL="postgresql://build:build@localhost:5432/build"
 ENV AUTH_SECRET="build-time-auth-secret-placeholder"
 ENV CRON_SECRET="build-time-cron-secret-placeholder"
 ENV NEXT_TELEMETRY_DISABLED=1
+ENV NEXT_PRIVATE_BUILD_WORKER=1
+ENV NODE_OPTIONS="--max-old-space-size=768"
 RUN npx prisma generate
 RUN npm run build
 
