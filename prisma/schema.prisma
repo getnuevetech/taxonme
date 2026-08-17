@@ -99,6 +99,10 @@ model AiProvider {
   supportsVision Boolean       @default(false)
   isEnabled     Boolean        @default(true)
   notes         String         @default("")
+  dataRetentionProfile String  @default("unreviewed")
+  regionProfile String         @default("unreviewed")
+  costTier      String         @default("medium") // high | medium | low
+  timeoutMs     Int            @default(90000)
   createdAt     DateTime       @default(now())
   steps         PipelineStep[]
   stepResults   AnalysisStepResult[]
@@ -114,9 +118,25 @@ model AiPrompt {
   schemaVersion  String   @default("3.0")
   title          String   @default("")
   body           String
+  bodyHash       String   @default("")
+  isReleased     Boolean  @default(true)
+  releasedAt     DateTime?
+  supersedesPromptId String @default("")
   isActive       Boolean  @default(true)
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
+  changes        AiPromptChange[]
+}
+
+model AiPromptChange {
+  id             String   @id @default(cuid())
+  promptRecordId String
+  promptId       String
+  fromHash       String   @default("")
+  toHash         String   @default("")
+  changeReason   String   @default("")
+  createdAt      DateTime @default(now())
+  prompt         AiPrompt @relation(fields: [promptRecordId], references: [id], onDelete: Cascade)
 }
 
 model PipelineStage {
@@ -342,6 +362,10 @@ model Case {
   assignments    ConsultantAssignment[]
   comments       CaseComment[]
   clarifyMessages CaseClarifyMessage[]
+  analysisVersions CaseAnalysisVersion[]
+  humanReviewItems HumanReviewItem[]
+  presentations CasePresentation[]
+  reanalysisEvents CaseReanalysisEvent[]
 }
 
 // The clarifying-questions conversation: when the analysis lacks specific
@@ -375,6 +399,36 @@ model Document {
   guestSession   GuestSession? @relation(fields: [guestSessionId], references: [id])
   case           Case?         @relation(fields: [caseId], references: [id])
   notices        Notice[]
+  fieldVerifications DocumentFieldVerification[]
+}
+
+model CaseAnalysisVersion {
+  id             String   @id @default(cuid())
+  caseId         String
+  version        Int
+  status         String   @default("running") // running | approved | needs_verification | human_review | failed
+  trigger        String   @default("analysis")
+  snapshotJson   String   @default("{}")
+  sourceSnapshotIdsJson String @default("[]")
+  issueIdsJson   String   @default("[]")
+  pathStepIdsJson String  @default("[]")
+  createdAt      DateTime @default(now())
+  approvedAt     DateTime?
+  case           Case     @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  presentations  CasePresentation[]
+  fieldVerifications DocumentFieldVerification[]
+  humanReviewItems HumanReviewItem[]
+
+  @@unique([caseId, version])
+}
+
+model SourceSnapshot {
+  id             String   @id @default(cuid())
+  snapshotHash   String   @unique
+  sourceRefsJson String   @default("[]")
+  taxYearsJson   String   @default("[]")
+  metadataJson   String   @default("{}")
+  createdAt      DateTime @default(now())
 }
 
 model AnalysisRun {
@@ -393,6 +447,59 @@ model AnalysisRun {
   case       Case      @relation(fields: [caseId], references: [id], onDelete: Cascade)
   stepResults AnalysisStepResult[]
   consensus  ConsensusResult?
+}
+
+model DocumentFieldVerification {
+  id                String   @id @default(cuid())
+  documentId        String
+  caseId            String?
+  analysisVersionId String?
+  fieldKey          String
+  fieldValue        String   @default("")
+  status            String   @default("candidate") // candidate | verified | verification_required | rejected
+  sourcesJson       String   @default("[]")
+  locationJson      String   @default("{}")
+  createdAt         DateTime @default(now())
+  document          Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  analysisVersion   CaseAnalysisVersion? @relation(fields: [analysisVersionId], references: [id], onDelete: SetNull)
+}
+
+model HumanReviewItem {
+  id                String   @id @default(cuid())
+  caseId            String
+  analysisVersionId String?
+  reason            String
+  severity          String   @default("medium") // low | medium | high | urgent
+  status            String   @default("open") // open | assigned | resolved | dismissed
+  payloadJson       String   @default("{}")
+  createdAt         DateTime @default(now())
+  resolvedAt        DateTime?
+  case              Case     @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  analysisVersion   CaseAnalysisVersion? @relation(fields: [analysisVersionId], references: [id], onDelete: SetNull)
+}
+
+model CasePresentation {
+  id                String   @id @default(cuid())
+  caseId            String
+  analysisVersionId String?
+  schemaVersion     String   @default("3.0")
+  presentationJson  String   @default("{}")
+  createdAt         DateTime @default(now())
+  case              Case     @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  analysisVersion   CaseAnalysisVersion? @relation(fields: [analysisVersionId], references: [id], onDelete: SetNull)
+}
+
+model CaseReanalysisEvent {
+  id            String   @id @default(cuid())
+  caseId        String
+  trigger       String
+  pipelinesJson String  @default("[]")
+  status        String  @default("queued") // queued | running | complete | failed
+  actorType     String  @default("system")
+  metadataJson  String  @default("{}")
+  createdAt     DateTime @default(now())
+  finishedAt    DateTime?
+  case          Case    @relation(fields: [caseId], references: [id], onDelete: Cascade)
 }
 
 model AnalysisStepResult {

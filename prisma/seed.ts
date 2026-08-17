@@ -278,11 +278,11 @@ async function seedGateway() {
 
 async function seedAiAndPipelines() {
   const providerDefs = [
-    { name: "OpenAI GPT-5.6 Sol", kind: "openai_compatible", baseUrl: "https://api.openai.com/v1", model: "gpt-5.6-sol", supportsVision: true, notes: "Flagship reasoning model for complex professional work." },
-    { name: "OpenAI GPT-5.6 Terra", kind: "openai_compatible", baseUrl: "https://api.openai.com/v1", model: "gpt-5.6-terra", supportsVision: false, notes: "Fast model used for presentation-layer structuring." },
-    { name: "Anthropic Claude Sonnet 5", kind: "anthropic", baseUrl: "https://api.anthropic.com", model: "claude-sonnet-5", supportsVision: true, notes: "Strong document analysis with visual PDF understanding." },
-    { name: "Anthropic Claude Opus 5", kind: "anthropic", baseUrl: "https://api.anthropic.com", model: "claude-opus-5", supportsVision: true, notes: "High-capability independent analysis / review." },
-    { name: "Google Gemini 3.1 Pro", kind: "google", baseUrl: "https://generativelanguage.googleapis.com/v1beta", model: "gemini-3.1-pro", supportsVision: true, notes: "Long-context document reasoning, native PDF understanding." },
+    { name: "OpenAI GPT-5.6 Sol", kind: "openai_compatible", baseUrl: "https://api.openai.com/v1", model: "gpt-5.6-sol", supportsVision: true, costTier: "high", dataRetentionProfile: "approved_taxpayer_data", regionProfile: "approved", notes: "Flagship reasoning model for complex professional work." },
+    { name: "OpenAI GPT-5.6 Terra", kind: "openai_compatible", baseUrl: "https://api.openai.com/v1", model: "gpt-5.6-terra", supportsVision: false, costTier: "low", dataRetentionProfile: "approved_taxpayer_data", regionProfile: "approved", notes: "Fast model used for presentation-layer structuring." },
+    { name: "Anthropic Claude Sonnet 5", kind: "anthropic", baseUrl: "https://api.anthropic.com", model: "claude-sonnet-5", supportsVision: true, costTier: "medium", dataRetentionProfile: "approved_taxpayer_data", regionProfile: "approved", notes: "Strong document analysis with visual PDF understanding." },
+    { name: "Anthropic Claude Opus 5", kind: "anthropic", baseUrl: "https://api.anthropic.com", model: "claude-opus-5", supportsVision: true, costTier: "high", dataRetentionProfile: "approved_taxpayer_data", regionProfile: "approved", notes: "High-capability independent analysis / review." },
+    { name: "Google Gemini 3.1 Pro", kind: "google", baseUrl: "https://generativelanguage.googleapis.com/v1beta", model: "gemini-3.1-pro", supportsVision: true, costTier: "medium", dataRetentionProfile: "approved_taxpayer_data", regionProfile: "approved", notes: "Long-context document reasoning, native PDF understanding." },
   ];
   const providers: Record<string, string> = {};
   for (const p of providerDefs) {
@@ -292,19 +292,11 @@ async function seedAiAndPipelines() {
   }
 
   for (const prompt of V3_PROMPT_RECORDS) {
-    await db.aiPrompt.upsert({
-      where: { promptId: prompt.promptId },
-      update: {
-        kind: prompt.kind,
-        responsibility: prompt.responsibility ?? "",
-        stageKey: prompt.stageKey ?? "",
-        version: prompt.version ?? AI_V3_VERSION,
-        schemaVersion: prompt.schemaVersion ?? AI_V3_VERSION,
-        title: prompt.title,
-        body: prompt.body,
-        isActive: true,
-      },
-      create: {
+    const bodyHash = crypto.createHash("sha256").update(prompt.body).digest("hex");
+    const existingPrompt = await db.aiPrompt.findUnique({ where: { promptId: prompt.promptId } });
+    if (!existingPrompt) {
+      await db.aiPrompt.create({
+        data: {
         promptId: prompt.promptId,
         kind: prompt.kind,
         responsibility: prompt.responsibility ?? "",
@@ -313,9 +305,46 @@ async function seedAiAndPipelines() {
         schemaVersion: prompt.schemaVersion ?? AI_V3_VERSION,
         title: prompt.title,
         body: prompt.body,
+        bodyHash,
+        isReleased: true,
+        releasedAt: new Date(),
         isActive: true,
       },
-    });
+      });
+      continue;
+    }
+    if (existingPrompt.bodyHash && existingPrompt.bodyHash !== bodyHash && process.env.RESEED_AI_PROMPTS !== "true") {
+      await db.aiPromptChange.create({
+        data: {
+          promptRecordId: existingPrompt.id,
+          promptId: prompt.promptId,
+          fromHash: existingPrompt.bodyHash,
+          toHash: bodyHash,
+          changeReason: "Seed attempted to change a released prompt; existing body preserved.",
+        },
+      });
+      await db.aiPrompt.update({
+        where: { id: existingPrompt.id },
+        data: { kind: prompt.kind, responsibility: prompt.responsibility ?? "", stageKey: prompt.stageKey ?? "", title: prompt.title, isActive: true },
+      });
+    } else {
+      await db.aiPrompt.update({
+        where: { id: existingPrompt.id },
+        data: {
+          kind: prompt.kind,
+          responsibility: prompt.responsibility ?? "",
+          stageKey: prompt.stageKey ?? "",
+          version: prompt.version ?? AI_V3_VERSION,
+          schemaVersion: prompt.schemaVersion ?? AI_V3_VERSION,
+          title: prompt.title,
+          body: prompt.body,
+          bodyHash,
+          isReleased: true,
+          releasedAt: existingPrompt.releasedAt ?? new Date(),
+          isActive: true,
+        },
+      });
+    }
   }
 
   const stages = V3_PIPELINE_BLUEPRINT;

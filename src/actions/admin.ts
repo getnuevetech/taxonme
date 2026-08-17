@@ -52,6 +52,10 @@ export async function saveAiProviderAction(_prev: ActionState, formData: FormDat
     supportsVision: formData.get("supportsVision") === "on",
     isEnabled: formData.get("isEnabled") === "on",
     notes: String(formData.get("notes") ?? ""),
+    dataRetentionProfile: String(formData.get("dataRetentionProfile") ?? "unreviewed"),
+    regionProfile: String(formData.get("regionProfile") ?? "unreviewed"),
+    costTier: String(formData.get("costTier") ?? "medium"),
+    timeoutMs: Math.max(5000, Math.min(180000, Number(formData.get("timeoutMs") ?? 90000) || 90000)),
   };
   if (!data.name || !data.model) return { error: "Name and model are required." };
   if (data.baseUrl) {
