@@ -55,7 +55,7 @@ assert.equal(validateAiJson(STAGE_KEYS.GUIDE, { answer: "I captured that.", new_
 // Consultant AI cannot restore ineligible candidates.
 assert.deepEqual(stageRoles(STAGE_KEYS.MATCH), [STEP_ROLES.MATCH_ANALYST, STEP_ROLES.MATCH_REVIEWER]);
 assert.match(promptBody("RESP-MATCH-ANL-v3"), /rank only candidates who already passed deterministic eligibility/);
-assert.match(promptBody("RESP-MATCH-REV-v3"), /deterministically eligible/);
+assert.match(promptBody("RESP-MATCH-REV-v3"), /deterministic eligible pool/);
 
 // Letter and closure safety.
 assert.match(promptBody("RESP-LTR-DRAFT-v3"), /do not fabricate/);
