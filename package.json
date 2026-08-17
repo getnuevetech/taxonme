@@ -7,7 +7,7 @@
     "build": "next build --webpack",
     "start": "next start",
     "lint": "eslint",
-    "test": "tsx scripts/ai-v3-acceptance.ts",
+    "test": "tsx scripts/ai-v3-acceptance.ts && tsx scripts/ai-v3-fixture-tests.ts",
     "ai:v3:backfill": "tsx scripts/ai-v3-backfill.ts",
     "ai:v3:rollout-check": "tsx scripts/ai-v3-rollout-check.ts",
     "db:push": "prisma db push",
