@@ -10,6 +10,7 @@ import { compileDocumentEvents, compileDocumentFacts } from "../src/lib/evidence
 import { countTransactionRowCandidates, parseTranscript } from "../src/lib/evidence/transcript";
 import { resolveQuestionFromFacts, resolveUnknownTextFromFacts } from "../src/lib/evidence/unknowns";
 import { DOCUMENT_TYPES, FACT_KEYS, PROVENANCE } from "../src/lib/evidence/types";
+import { EXTRACTION_SCHEMA_VERSION, countPages, extractorSignature, isExtractionCacheValid } from "../src/lib/evidence/extraction-cache";
 import { evaluateAiV3Readiness } from "../src/lib/ai/readiness-core";
 import { redactSensitiveText } from "../src/lib/ai/privacy";
 import { DOMAIN_RULES_PROMPT_ID, RESPONSIBILITY_PROMPTS, V3_PIPELINE_BLUEPRINT, V3_PROMPT_RECORDS } from "../src/lib/ai/v3-prompts";
@@ -137,6 +138,33 @@ assert.equal(
   resolveQuestionFromFacts("balance_amount", [{ id: "u1", factKey: FACT_KEYS.ACCOUNT_BALANCE, provenance: PROVENANCE.USER_REPORTED, valueNumber: 5000 }]).suppressed,
   false,
 );
+
+// Verified extraction is reusable, and only while the extractor lineup holds.
+const lineup = [
+  { role: "extractor_a", promptId: "RESP-DOC-A-v3", provider: { name: "Provider A", model: "model-a" } },
+  { role: "extractor_b", promptId: "RESP-DOC-B-v3", provider: { name: "Provider B", model: "model-b" } },
+];
+const signature = extractorSignature(lineup);
+assert.equal(signature, extractorSignature([...lineup].reverse()), "signature must not depend on step ordering");
+assert.notEqual(signature, extractorSignature([{ ...lineup[0], provider: { name: "Provider C", model: "model-c" } }, lineup[1]]));
+
+const cachedDoc = {
+  contentHash: "hash",
+  extractionSchemaVersion: EXTRACTION_SCHEMA_VERSION,
+  extractorVersionsJson: JSON.stringify({ signature }),
+  verificationStatus: "verified",
+  processingStatus: "complete",
+};
+assert.equal(isExtractionCacheValid(cachedDoc, signature), true);
+assert.equal(isExtractionCacheValid({ ...cachedDoc, extractorVersionsJson: "{}" }, signature), false, "changed extractors must invalidate the cache");
+assert.equal(isExtractionCacheValid({ ...cachedDoc, extractionSchemaVersion: "3.1" }, signature), false, "schema changes must invalidate the cache");
+assert.equal(isExtractionCacheValid({ ...cachedDoc, processingStatus: "failed" }, signature), false, "failed processing is never a cache hit");
+assert.equal(isExtractionCacheValid({ ...cachedDoc, contentHash: "" }, signature), false);
+
+// A document that declares more pages than we read is partial, not complete.
+assert.deepEqual(countPages("Page 1 of 3\nfirst page text"), { expected: 3, processed: 1 });
+assert.deepEqual(countPages(""), { expected: 0, processed: 0 });
+assert.equal(countPages("single page of text").expected, 1);
 
 // Appendix C/H: user belief must not become confirmed IRS fact.
 assert.match(promptBody("RESP-FACT-v3"), /belief/);
