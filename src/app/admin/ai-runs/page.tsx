@@ -29,7 +29,9 @@ export default async function AiRunsPage() {
                   <span className="mr-2 font-semibold">{run.stageKey}</span>
                   <Badge color={run.status === "complete" ? "green" : run.status === "failed" ? "red" : "amber"}>{run.status}</Badge>
                   <span className="ml-2 text-slate-500">
-                    <Link href={`/admin/cases/${run.case.id}`} className="text-indigo-600 hover:text-indigo-800">{formatCaseNumber(run.case.number)}</Link>
+                    {run.case
+                      ? <Link href={`/admin/cases/${run.case.id}`} className="text-indigo-600 hover:text-indigo-800">{formatCaseNumber(run.case.number)}</Link>
+                      : <span>System / helper call</span>}
                     {" "}v{run.caseAnalysisVersion} · {run.startedAt.toLocaleString("en-US")}
                   </span>
                 </summary>

@@ -134,7 +134,9 @@ export default async function DiagnosticsPage() {
                   </div>
                   <p className="mt-1 text-xs text-slate-500">
                     {failure.provider?.name ?? "Provider unavailable"} · {failure.run.stageKey} ·{" "}
-                    <Link href={`/admin/cases/${failure.run.case.id}`} className="text-indigo-600">{formatCaseNumber(failure.run.case.number)}</Link>
+                    {failure.run.case
+                      ? <Link href={`/admin/cases/${failure.run.case.id}`} className="text-indigo-600">{formatCaseNumber(failure.run.case.number)}</Link>
+                      : <span>System / helper call</span>}
                   </p>
                   <p className="mt-1 line-clamp-2 text-xs text-slate-500">{failure.rawText}</p>
                 </div>

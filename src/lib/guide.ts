@@ -3,12 +3,10 @@ import { after } from "next/server";
 import { db } from "./db";
 import { hasFeature, getActivePlan } from "./access";
 import { FEATURE_KEYS, STAGE_KEYS } from "./constants";
-import { callProvider, extractJson } from "./ai/adapters";
-import { composePromptForStep } from "./ai/prompt-composer";
-import { providerAllowedForTaxData } from "./ai/provider-policy";
 import { extractUserFacingText } from "./ai/validation";
 import { queueHumanReview } from "./ai/audit";
 import { queueCaseReanalysis, processQueuedReanalysisEvents } from "./reanalysis-events";
+import { runTrackedStage } from "./ai/orchestrator";
 
 // The in-account guide chatbot. It always analyzes the user's account state,
 // coaches them through the current step of their case, and routes anything it
@@ -204,29 +202,21 @@ export async function guideRespond(
     };
   }
 
-  // AI coaching: v3 guide uses a primary Case Assistant with ordered failover.
-  const stage = await db.pipelineStage.findUnique({
-    where: { key: STAGE_KEYS.GUIDE },
-    include: {
-      steps: { where: { isEnabled: true }, orderBy: { sortOrder: "asc" }, include: { provider: true } },
-    },
-  });
-  const steps = (stage?.isEnabled ? stage.steps : []).filter((s) => providerAllowedForTaxData(s.provider));
+  // AI coaching: v3 guide uses the central stage runner so failover,
+  // conditional reviewer gates, validation, and telemetry stay consistent.
   const convo = history.map((m) => `${m.role === "user" ? "User" : "Guide"}: ${m.content}`).join("\n");
-  for (const step of steps) {
-    if (step.isConditional) continue;
-    try {
-      const composed = await composePromptForStep(step, {
-        input: convo,
-        context: snapshot.text,
-        case: snapshot.text,
-        current_step: snapshot.currentStep ? `${snapshot.currentStep.title} (${snapshot.currentStep.actionKey})` : "(no active step)",
-        allowed_actions: baseActions().map((a) => `${a.type}:${a.label}`).join(", "),
-        verified_documents: snapshot.text,
-        irs_sources: "(none supplied)",
-      });
-      const result = await callProvider(step.provider, [{ role: "user", content: composed.text }]);
-      const parsed = extractJson(result.text);
+  try {
+    const outcome = await runTrackedStage(STAGE_KEYS.GUIDE, {
+      input: convo,
+      context: snapshot.text,
+      case: snapshot.text,
+      current_step: snapshot.currentStep ? `${snapshot.currentStep.title} (${snapshot.currentStep.actionKey})` : "(no active step)",
+      allowed_actions: baseActions().map((a) => `${a.type}:${a.label}`).join(", "),
+      verified_documents: snapshot.text,
+      irs_sources: "(none supplied)",
+    }, { sequentialContext: true, metadata: { helper: "guide", userId } });
+    const answerOutput = [...outcome.stepOutputs].reverse().find((output) => typeof output.data?.answer === "string") ?? outcome.stepOutputs.at(-1);
+    const parsed = answerOutput?.data ?? (Object.keys(outcome.merged).length ? outcome.merged : null);
       if (parsed?.requires_reanalysis === true && snapshot.currentStep) {
         const captured = typeof parsed.captured_fact === "string"
           ? parsed.captured_fact
@@ -262,15 +252,13 @@ export async function guideRespond(
           payload: { source: "case_guide", last_question: lastQuestion.slice(0, 1000), guide_output: parsed },
         });
       }
-      if (result.text.trim()) {
+      if (answerOutput?.rawText.trim()) {
         const actions = guideActionsFromParsed(parsed);
-        return { message: extractUserFacingText(parsed, result.text), actions: actions.length ? actions : baseActions() };
+        return { message: extractUserFacingText(parsed, answerOutput.rawText), actions: actions.length ? actions : baseActions() };
       }
-    } catch (err) {
-      const { logSystem } = await import("./syslog");
-      await logSystem("error", "guide", `${step.provider.name} failed answering the guide chat`, String(err), userId);
-      // fall through to the next configured model
-    }
+  } catch (err) {
+    const { logSystem } = await import("./syslog");
+    await logSystem("error", "guide", "Case Guide stage failed", String(err), userId);
   }
 
   // Deterministic fallback when no AI is reachable: coach the current step.
