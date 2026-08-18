@@ -371,6 +371,8 @@ model Case {
   canonicalState CanonicalCaseState?
   canonicalStateSnapshots CanonicalCaseStateSnapshot[]
   discoveries CaseDiscovery[]
+  issueClusters CaseIssueCluster[]
+  actionNodes CaseActionNode[]
 }
 
 // The clarifying-questions conversation: when the analysis lacks specific
@@ -465,6 +467,40 @@ model CaseDiscovery {
   case          Case     @relation(fields: [caseId], references: [id], onDelete: Cascade)
 
   @@unique([caseId, caseVersion])
+}
+
+model CaseIssueCluster {
+  id               String   @id @default(cuid())
+  caseId           String
+  analysisVersionId String?
+  clusterKey       String
+  title            String
+  category         String   @default("UNCLASSIFIED_TAX_ISSUE")
+  status           String   @default("NEEDS_VERIFICATION")
+  evidenceStrength String   @default("LIMITED")
+  issueIdsJson     String   @default("[]")
+  unknownsJson     String   @default("[]")
+  possibleExplanationsJson String @default("[]")
+  actionsJson      String   @default("[]")
+  sortOrder        Int      @default(0)
+  createdAt        DateTime @default(now())
+  case             Case     @relation(fields: [caseId], references: [id], onDelete: Cascade)
+}
+
+model CaseActionNode {
+  id          String   @id @default(cuid())
+  caseId      String
+  actionKey   String
+  normalizedPurpose String
+  title       String
+  description String @default("")
+  priority    Int    @default(1)
+  dependsOnJson String @default("[]")
+  resolvesJson String @default("[]")
+  requiresJson String @default("[]")
+  status      String @default("READY")
+  createdAt   DateTime @default(now())
+  case        Case   @relation(fields: [caseId], references: [id], onDelete: Cascade)
 }
 
 model SourceSnapshot {

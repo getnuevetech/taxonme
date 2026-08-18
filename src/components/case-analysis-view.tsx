@@ -36,7 +36,8 @@ export async function CaseAnalysisView({ caseId, viewer }: { caseId: string; vie
 
   const interactive = viewer.role === "customer";
   const fullAccess = viewer.role !== "customer" ? true : (viewer.fullResults ?? true);
-  const visibleIssues = fullAccess ? c.issues : c.issues.slice(0, 1);
+  const visibleIssues = fullAccess ? c.issues.slice(0, 5) : c.issues.slice(0, 1);
+  const hiddenIssueCount = fullAccess ? Math.max(0, c.issues.length - visibleIssues.length) : Math.max(0, c.issues.length - 1);
   let conflicts: { topic: string; description: string; resolution?: string }[] = [];
   try {
     const parsed = JSON.parse(c.conflictsJson || "[]");
@@ -248,6 +249,11 @@ export async function CaseAnalysisView({ caseId, viewer }: { caseId: string; vie
 
         <section>
           <h2 className="mb-3 text-base font-semibold text-slate-900">What we found</h2>
+          {hiddenIssueCount > 0 && (
+            <p className="mb-3 rounded-lg bg-slate-50 px-3 py-2 text-xs text-slate-500">
+              {hiddenIssueCount} additional sub-finding{hiddenIssueCount === 1 ? "" : "s"} are grouped into the main findings to avoid duplicate customer-facing cards.
+            </p>
+          )}
           <div className="space-y-4">
             {visibleIssues.length === 0 && (
               <Card><CardBody className="text-sm text-slate-500">The analysis is still in progress or found nothing actionable yet.</CardBody></Card>

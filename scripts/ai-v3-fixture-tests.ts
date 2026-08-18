@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { STAGE_KEYS, STEP_ROLES } from "../src/lib/constants";
 import { validateAiJson } from "../src/lib/ai/validation";
-import { classifyInformationCondition, conceptsConflict, isMaterialDifference, normalizeConcept } from "../src/lib/case-semantics";
+import { classifyInformationCondition, conceptsConflict, isMaterialDifference, normalizeActionPurpose, normalizeConcept } from "../src/lib/case-semantics";
 import { redactSensitiveText } from "../src/lib/ai/privacy";
 import { DOMAIN_RULES_PROMPT_ID, RESPONSIBILITY_PROMPTS, V3_PIPELINE_BLUEPRINT, V3_PROMPT_RECORDS } from "../src/lib/ai/v3-prompts";
 
@@ -33,6 +33,8 @@ assert.equal(classifyInformationCondition({ exists: true, verified: true, eviden
 assert.equal(classifyInformationCondition({ exists: true, verified: true, modelValues: ["possible", "not supported"] }), "MODEL_DISAGREEMENT");
 assert.equal(isMaterialDifference("deadline"), true);
 assert.equal(isMaterialDifference("wording style"), false);
+assert.equal(normalizeActionPurpose("Review IRS notice and identify notice number"), "VERIFY_NOTICE");
+assert.equal(normalizeActionPurpose("Confirm notice details"), "VERIFY_NOTICE");
 
 // Appendix C/H: user belief must not become confirmed IRS fact.
 assert.match(promptBody("RESP-FACT-v3"), /belief/);
