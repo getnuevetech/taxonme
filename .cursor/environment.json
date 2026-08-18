@@ -1,6 +1,17 @@
+#{
+#  "name": "TaxOnMe AI v3 local rollout",
+#  "install": "sudo apt-get update && sudo apt-get install -y postgresql postgresql-client && npm ci && npx prisma generate",
+#  "start": "bash scripts/cloud-start.sh",
+#  "ports": [3000]
+#}
 {
   "name": "TaxOnMe AI v3 local rollout",
   "install": "sudo apt-get update && sudo apt-get install -y postgresql postgresql-client && npm ci && npx prisma generate",
   "start": "bash scripts/cloud-start.sh",
-  "ports": [3000]
+  "ports": [
+    {
+      "port": 3000,
+      "name": "web"
+    }
+  ]
 }
