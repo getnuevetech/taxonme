@@ -7,6 +7,7 @@ import { db } from "@/lib/db";
 import { getCurrentUser, requireUser } from "@/lib/auth";
 import { getOrCreateGuestSession } from "@/lib/guest";
 import { runCaseAnalysis } from "@/lib/ai/orchestrator";
+import { processQueuedReanalysisEvents, queueCaseReanalysis } from "@/lib/reanalysis-events";
 import { verifyCaseProgress, isVerifiable } from "@/lib/case-progress";
 import { saveUpload, validateUploadFile } from "@/lib/uploads";
 import type { ActionState } from "./auth";
@@ -86,10 +87,16 @@ export async function reanalyzeCaseAction(caseId: string) {
   const user = await requireUser();
   const c = await db.case.findUnique({ where: { id: caseId } });
   if (!c || c.userId !== user.id) return;
-  await db.case.update({ where: { id: caseId }, data: { status: "analyzing" } });
+  await queueCaseReanalysis({
+    caseId,
+    trigger: "manual_reanalysis_requested",
+    actorType: "user",
+    materialKey: user.id,
+    metadata: { requestedBy: user.id },
+  });
   after(async () => {
     try {
-      await runCaseAnalysis(caseId);
+      await processQueuedReanalysisEvents(1);
     } catch (err) {
       const { logSystem } = await import("@/lib/syslog");
       await logSystem("error", "analysis", "Background re-analysis failed", String(err));
@@ -155,12 +162,19 @@ export async function clarifyAnswerAction(_prev: ActionState, formData: FormData
       status: "analyzing",
     },
   });
+  await queueCaseReanalysis({
+    caseId,
+    trigger: files.length > 0 ? "document_added" : "material_user_fact_added",
+    actorType: "user",
+    materialKey: `${q.key}:${answerWithFiles}`,
+    metadata: { questionKey: q.key, attachments: attachedNames },
+  });
   // The multi-model re-analysis can take minutes — never block the button on
   // it. The answer is saved instantly; the analysis runs after the response
   // and the case page live-refreshes while status is "analyzing".
   after(async () => {
     try {
-      await runCaseAnalysis(caseId);
+      await processQueuedReanalysisEvents(1);
     } catch (err) {
       const { logSystem } = await import("@/lib/syslog");
       await logSystem("error", "analysis", "Background re-analysis after a clarify answer failed", String(err));

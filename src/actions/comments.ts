@@ -5,6 +5,7 @@ import { db } from "@/lib/db";
 import { requireUser, hasAdminArea } from "@/lib/auth";
 import { getBoolSetting } from "@/lib/settings";
 import { saveUpload, validateUploadFile } from "@/lib/uploads";
+import { processQueuedReanalysisEvents, queueCaseReanalysis } from "@/lib/reanalysis-events";
 import type { ActionState } from "./auth";
 
 // Case discussion with visibility rules:
@@ -86,11 +87,16 @@ export async function addCaseCommentAction(_prev: ActionState, formData: FormDat
   // New evidence changes the picture — re-run the analysis in the background.
   if (attachmentIds.length > 0 && c.userId) {
     const { after } = await import("next/server");
-    await db.case.update({ where: { id: caseId }, data: { status: "analyzing" } });
+    await queueCaseReanalysis({
+      caseId,
+      trigger: "document_added",
+      actorType: authorRole,
+      materialKey: attachmentIds.join(","),
+      metadata: { source: "case_comment", attachmentIds },
+    });
     after(async () => {
       try {
-        const { runCaseAnalysis } = await import("@/lib/ai/orchestrator");
-        await runCaseAnalysis(caseId);
+        await processQueuedReanalysisEvents(1);
       } catch (err) {
         const { logSystem } = await import("@/lib/syslog");
         await logSystem("error", "analysis", "Background re-analysis after a comment attachment failed", String(err));

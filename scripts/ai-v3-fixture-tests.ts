@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { STAGE_KEYS, STEP_ROLES } from "../src/lib/constants";
 import { validateAiJson } from "../src/lib/ai/validation";
 import { classifyInformationCondition, conceptsConflict, isMaterialDifference, normalizeActionPurpose, normalizeConcept } from "../src/lib/case-semantics";
+import { buildReanalysisIdempotencyKey, normalizeReanalysisPipelines, pipelinesForMaterialEvent } from "../src/lib/reanalysis-policy";
 import { redactSensitiveText } from "../src/lib/ai/privacy";
 import { DOMAIN_RULES_PROMPT_ID, RESPONSIBILITY_PROMPTS, V3_PIPELINE_BLUEPRINT, V3_PROMPT_RECORDS } from "../src/lib/ai/v3-prompts";
 
@@ -35,6 +36,24 @@ assert.equal(isMaterialDifference("deadline"), true);
 assert.equal(isMaterialDifference("wording style"), false);
 assert.equal(normalizeActionPurpose("Review IRS notice and identify notice number"), "VERIFY_NOTICE");
 assert.equal(normalizeActionPurpose("Confirm notice details"), "VERIFY_NOTICE");
+assert.deepEqual(pipelinesForMaterialEvent("document_added"), ["document", "situation", "presenter"]);
+assert.deepEqual(pipelinesForMaterialEvent("professional_confirmed_fact"), ["situation", "presenter"]);
+assert.deepEqual(normalizeReanalysisPipelines(["presenter", "situation", "bogus", "presenter"]), ["situation", "presenter"]);
+assert.deepEqual(normalizeReanalysisPipelines(["bogus"]), ["summary", "goal", "document", "situation", "presenter"]);
+assert.equal(
+  buildReanalysisIdempotencyKey({
+    caseId: "case_123",
+    trigger: "document_added",
+    pipelines: ["document", "situation", "presenter"],
+    materialKey: "doc_hash",
+  }),
+  buildReanalysisIdempotencyKey({
+    caseId: "case_123",
+    trigger: "document_added",
+    pipelines: ["presenter", "document", "situation"],
+    materialKey: "doc_hash",
+  }),
+);
 
 // Appendix C/H: user belief must not become confirmed IRS fact.
 assert.match(promptBody("RESP-FACT-v3"), /belief/);

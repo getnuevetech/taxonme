@@ -123,7 +123,7 @@ export async function recordPresentationSnapshot(args: {
 
 export async function queueHumanReview(args: {
   caseId: string;
-  analysisVersionId: string;
+  analysisVersionId?: string;
   reason: string;
   severity?: string;
   payload?: Json;
@@ -139,7 +139,7 @@ export async function queueHumanReview(args: {
   await db.humanReviewItem.create({
     data: {
       caseId: args.caseId,
-      analysisVersionId: args.analysisVersionId,
+      analysisVersionId: args.analysisVersionId ?? null,
       reason: args.reason,
       severity: args.severity ?? "medium",
       payloadJson: JSON.stringify(args.payload ?? {}),

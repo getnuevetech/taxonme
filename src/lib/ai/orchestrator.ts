@@ -11,6 +11,7 @@ import { buildCanonicalCaseState, upsertCanonicalCaseState } from "../canonical-
 import { recordCaseDiscovery } from "../case-discovery";
 import { retrieveAuthorityForCase } from "../authority-retrieval";
 import { rebuildCaseIssueAndActionGraph } from "../action-graph";
+import { pipelinesForMaterialEvent } from "../reanalysis-policy";
 import { composePromptForStep } from "./prompt-composer";
 import {
   completeCaseAnalysisVersion,
@@ -360,20 +361,15 @@ async function getDocumentText(doc: { filePath: string; fileName: string; mimeTy
   return "";
 }
 
-export async function runCaseAnalysis(caseId: string, opts?: { trigger?: string; reanalysisEventId?: string }): Promise<void> {
+export async function runCaseAnalysis(caseId: string, opts?: { trigger?: string; reanalysisEventId?: string; pipelines?: string[] }): Promise<void> {
   const c = await db.case.findUnique({
     where: { id: caseId },
     include: { documents: { where: { deletedAt: null } } },
   });
   if (!c) return;
   const trigger = opts?.trigger ?? "case_analysis";
-  const reanalysisEventId = opts?.reanalysisEventId ?? await recordReanalysisEvent(caseId, trigger, [
-    STAGE_KEYS.SUMMARY,
-    STAGE_KEYS.GOAL,
-    STAGE_KEYS.DOCUMENT,
-    STAGE_KEYS.SITUATION,
-    STAGE_KEYS.PRESENTER,
-  ]);
+  const requestedPipelines = pipelinesForMaterialEvent(trigger, opts?.pipelines);
+  const reanalysisEventId = opts?.reanalysisEventId ?? await recordReanalysisEvent(caseId, trigger, requestedPipelines);
   const analysisVersion = await startCaseAnalysisVersion(caseId, trigger);
   const caseAnalysisVersion = analysisVersion.version;
   const sourceSnapshotIds: string[] = [];
@@ -746,6 +742,7 @@ export async function runCaseAnalysis(caseId: string, opts?: { trigger?: string;
     sourceSnapshotIds,
     snapshot: {
       case_id: caseId,
+      requested_pipelines: requestedPipelines,
       status: needsConsultant ? "consultant_recommended" : "analyzed",
       readiness,
       facts,

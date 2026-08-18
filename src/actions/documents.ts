@@ -8,6 +8,7 @@ import { getOrCreateGuestSession } from "@/lib/guest";
 import { saveUpload, deleteUpload, validateUploadFile } from "@/lib/uploads";
 import { explainNoticeContent } from "@/lib/ai/orchestrator";
 import { verifyCaseProgress, verifyUserCasesProgress } from "@/lib/case-progress";
+import { processQueuedReanalysisEvents, queueCaseReanalysis } from "@/lib/reanalysis-events";
 import type { ActionState } from "./auth";
 
 export async function uploadDocumentAction(_prev: ActionState, formData: FormData): Promise<ActionState> {
@@ -57,11 +58,16 @@ export async function uploadDocumentAction(_prev: ActionState, formData: FormDat
       // Run the (potentially minutes-long) multi-model re-analysis in the
       // background — the upload returns instantly and the case page
       // live-refreshes while status is "analyzing".
-      await db.case.update({ where: { id: ownedCaseId }, data: { status: "analyzing" } });
+      await queueCaseReanalysis({
+        caseId: ownedCaseId,
+        trigger: "document_added",
+        actorType: "user",
+        materialKey: files.slice(0, 10).map((file) => `${file.name}:${file.size}`).join("|"),
+        metadata: { docKind, fileCount: files.length },
+      });
       after(async () => {
         try {
-          const { runCaseAnalysis } = await import("@/lib/ai/orchestrator");
-          await runCaseAnalysis(ownedCaseId);
+          await processQueuedReanalysisEvents(1);
         } catch (err) {
           const { logSystem } = await import("@/lib/syslog");
           await logSystem("error", "analysis", "Background re-analysis after upload failed", String(err));

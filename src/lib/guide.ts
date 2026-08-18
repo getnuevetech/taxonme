@@ -7,6 +7,8 @@ import { callProvider, extractJson } from "./ai/adapters";
 import { composePromptForStep } from "./ai/prompt-composer";
 import { providerAllowedForTaxData } from "./ai/provider-policy";
 import { extractUserFacingText } from "./ai/validation";
+import { queueHumanReview } from "./ai/audit";
+import { queueCaseReanalysis, processQueuedReanalysisEvents } from "./reanalysis-events";
 
 // The in-account guide chatbot. It always analyzes the user's account state,
 // coaches them through the current step of their case, and routes anything it
@@ -117,6 +119,22 @@ function baseActions(): GuideAction[] {
   ];
 }
 
+function guideActionsFromParsed(parsed: Record<string, unknown> | null): GuideAction[] {
+  if (!Array.isArray(parsed?.action_buttons)) return [];
+  return parsed.action_buttons.flatMap((item): GuideAction[] => {
+    if (typeof item !== "object" || item === null) return [];
+    const row = item as Record<string, unknown>;
+    const label = String(row.label ?? row.title ?? "").trim().slice(0, 80);
+    const href = String(row.href ?? row.url ?? "").trim();
+    const rawType = String(row.type ?? "link");
+    const type: GuideAction["type"] = rawType === "new_case" || rawType === "ticket_tech" || rawType === "ticket_service" || rawType === "upgrade"
+      ? rawType
+      : "link";
+    if (!label || !href || !href.startsWith("/")) return [];
+    return [{ type, label, href }];
+  }).slice(0, 3);
+}
+
 export async function guideRespond(
   userId: string,
   history: { role: string; content: string }[],
@@ -221,13 +239,33 @@ export async function guideRespond(
             content: captured.slice(0, 4000),
           },
         });
-        await db.case.update({ where: { id: snapshot.currentStep.caseId }, data: { status: "analyzing" } });
+        const pipelines = Array.isArray(parsed.reanalysis_pipeline) || typeof parsed.reanalysis_pipeline === "string"
+          ? parsed.reanalysis_pipeline
+          : undefined;
+        await queueCaseReanalysis({
+          caseId: snapshot.currentStep.caseId,
+          trigger: "material_user_fact_added",
+          pipelines,
+          actorType: "user",
+          materialKey: captured,
+          metadata: { source: "case_guide", captured_fact: captured.slice(0, 1000) },
+        });
         after(async () => {
-          const { runCaseAnalysis } = await import("./ai/orchestrator");
-          await runCaseAnalysis(snapshot.currentStep!.caseId);
+          await processQueuedReanalysisEvents(1);
         });
       }
-      if (result.text.trim()) return { message: extractUserFacingText(parsed, result.text), actions: baseActions() };
+      if (parsed?.requires_professional_review === true && snapshot.currentStep) {
+        await queueHumanReview({
+          caseId: snapshot.currentStep.caseId,
+          reason: String(parsed.review_reason ?? "Case Guide requested professional review").slice(0, 300),
+          severity: "high",
+          payload: { source: "case_guide", last_question: lastQuestion.slice(0, 1000), guide_output: parsed },
+        });
+      }
+      if (result.text.trim()) {
+        const actions = guideActionsFromParsed(parsed);
+        return { message: extractUserFacingText(parsed, result.text), actions: actions.length ? actions : baseActions() };
+      }
     } catch (err) {
       const { logSystem } = await import("./syslog");
       await logSystem("error", "guide", `${step.provider.name} failed answering the guide chat`, String(err), userId);
