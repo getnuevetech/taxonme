@@ -66,6 +66,7 @@ fi
 
 npm run db:migrate
 npm run db:seed
+npm test
 npm run ai:v3:rollout-check
 
 echo "TaxOnMe AI v3 local rollout environment is ready."

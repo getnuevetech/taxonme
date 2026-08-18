@@ -47,6 +47,12 @@ Use `docs/ai-v3-provider-setup.md` as the detailed provider setup checklist.
 
 ## 4. Check AI readiness
 
+First run the acceptance suite:
+
+```bash
+npm test
+```
+
 Use Admin -> AI readiness or run:
 
 ```bash
@@ -96,6 +102,7 @@ Maintenance now processes:
 
 Review:
 
+- Admin -> Diagnostics
 - Admin -> AI readiness
 - Admin -> AI run audit
 - Admin -> Human review
@@ -104,6 +111,8 @@ Review:
 
 Operational signals to watch:
 
+- case analysis cycles versus pipeline runs versus model calls
+- failed model calls, retries, fallback calls, and cache hits
 - schema failures
 - provider policy blocks
 - source-missing verifier outputs
