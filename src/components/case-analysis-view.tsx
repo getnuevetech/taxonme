@@ -36,6 +36,7 @@ export async function CaseAnalysisView({ caseId, viewer }: { caseId: string; vie
 
   const interactive = viewer.role === "customer";
   const fullAccess = viewer.role !== "customer" ? true : (viewer.fullResults ?? true);
+  const customerFacing = viewer.role === "customer";
   const visibleIssues = fullAccess ? c.issues.slice(0, 5) : c.issues.slice(0, 1);
   const hiddenIssueCount = fullAccess ? Math.max(0, c.issues.length - visibleIssues.length) : Math.max(0, c.issues.length - 1);
   let conflicts: { topic: string; description: string; resolution?: string }[] = [];
@@ -64,10 +65,19 @@ export async function CaseAnalysisView({ caseId, viewer }: { caseId: string; vie
   const textFrom = (value: unknown): string => {
     if (value === null || value === undefined) return "";
     if (typeof value === "string" || typeof value === "number") return String(value);
+    if (Array.isArray(value)) return value.map(textFrom).filter(Boolean).join(" ");
     if (typeof value === "object") {
       const row = value as Record<string, unknown>;
-      return [row.title, row.description, row.detail, row.summary].map(textFrom).filter(Boolean).join(" — ");
+      const preferred = [row.title, row.headline, row.label, row.description, row.detail, row.summary, row.text, row.fact, row.value]
+        .map(textFrom)
+        .filter(Boolean);
+      if (preferred.length) return preferred.join(" — ");
+      return Object.entries(row)
+        .filter(([, v]) => typeof v === "string" || typeof v === "number" || typeof v === "boolean")
+        .map(([key, v]) => `${key.replace(/_/g, " ")}: ${String(v)}`)
+        .join("; ");
     }
+    if (typeof value === "boolean") return value ? "yes" : "no";
     return "";
   };
   const listFrom = (value: unknown): string[] => Array.isArray(value)
@@ -138,8 +148,8 @@ export async function CaseAnalysisView({ caseId, viewer }: { caseId: string; vie
     } catch { /* empty */ }
     switch (run.stageKey) {
       case "summary": {
-        const years = Array.isArray(merged.tax_years) ? (merged.tax_years as unknown[]).join(", ") : "";
-        const notices = Array.isArray(merged.notices_received) ? (merged.notices_received as unknown[]).join(", ") : "";
+        const years = Array.isArray(merged.tax_years) ? (merged.tax_years as unknown[]).map(textFrom).filter(Boolean).join(", ") : "";
+        const notices = Array.isArray(merged.notices_received) ? (merged.notices_received as unknown[]).map(textFrom).filter(Boolean).join(", ") : "";
         const parts = [
           years && `tax year(s) ${years}`,
           notices && `notice ${notices}`,
@@ -163,6 +173,10 @@ export async function CaseAnalysisView({ caseId, viewer }: { caseId: string; vie
         return `Completed the ${run.stageKey.replace(/_/g, " ")} check.`;
     }
   };
+  const customerRelevantConflicts = conflicts.filter((cf) =>
+    /(amount|balance|refund|deadline|date|year|notice|document|transcript|identity|filing status)/i.test(`${cf.topic} ${cf.description}`),
+  );
+  const visibleConflicts = customerFacing ? customerRelevantConflicts : conflicts;
 
   return (
     <div className="grid gap-6 lg:grid-cols-3">
@@ -261,20 +275,20 @@ export async function CaseAnalysisView({ caseId, viewer }: { caseId: string; vie
         )}
         {verificationFlags > 0 && (
           <div className="rounded-xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-900">
-            <span className="font-semibold">◐ Verification required.</span> Some values in this case couldn&apos;t be confirmed
-            against each other — we flag disagreements instead of guessing. More documents (like the IRS account
+            <span className="font-semibold">◐ Verification required.</span> Some details in this case couldn&apos;t be confirmed
+            from the available information — we flag uncertainty instead of guessing. More documents (like the IRS account
             transcript) resolve this.
           </div>
         )}
-        {conflicts.map((cf, ci) => (
+        {visibleConflicts.map((cf, ci) => (
           <div key={ci} className="rounded-xl border border-orange-300 bg-orange-50 px-4 py-3">
-            <p className="text-xs font-bold uppercase tracking-wider text-orange-700">Information conflict — {cf.topic}</p>
+            <p className="text-xs font-bold uppercase tracking-wider text-orange-700">{customerFacing ? "Needs confirmation" : "Information conflict"} — {cf.topic}</p>
             <p className="mt-1 text-sm text-orange-900">{cf.description}</p>
             {cf.resolution && <p className="mt-1 text-xs text-orange-700">{cf.resolution}</p>}
           </div>
         ))}
 
-        {latestBatch.length > 0 && (
+        {!customerFacing && latestBatch.length > 0 && (
           <section>
             <h2 className="mb-3 text-base font-semibold text-slate-900">How we analyzed this case</h2>
             <Card>
