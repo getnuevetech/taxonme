@@ -157,28 +157,38 @@ export async function pickConsultantForCase(caseId: string): Promise<Candidate |
   const steps = await getStageSteps(STAGE_KEYS.MATCH);
   if (steps.length > 0 && ranked.length > 1) {
     const top = ranked.slice(0, 5);
-    for (const step of steps) {
-      try {
-        const caseText = caseSummaryText(c, issueTypes);
-        const candidateList = top.map(candidateText).join("\n\n---\n\n");
-        const composed = await composePromptForStep(step, {
-          case: caseText,
-          case_requirements: caseText,
-          candidates: candidateList,
-          eligible_candidates: candidateList,
-          base_scores: top.map((t) => `${t.userId}: ${t.score}`).join("\n"),
-          approved_profile_fields: candidateList,
+    try {
+      const caseText = caseSummaryText(c, issueTypes);
+      const candidateList = top.map(candidateText).join("\n\n---\n\n");
+      const { runStage } = await import("./ai/orchestrator");
+      const outcome = await runStage(STAGE_KEYS.MATCH, {
+        case: caseText,
+        case_requirements: caseText,
+        candidates: candidateList,
+        eligible_candidates: candidateList,
+        base_scores: top.map((t) => `${t.userId}: ${t.score}`).join("\n"),
+        approved_profile_fields: candidateList,
+      }, { sequentialContext: true });
+      const parsed = (outcome.stepOutputs.at(-1)?.data ?? outcome.merged) as Record<string, unknown> | null;
+      const reviewResult = String(parsed?.review_result ?? parsed?.status ?? "").toLowerCase();
+      const humanReviewReason = String(parsed?.human_review_reason ?? parsed?.review_reason ?? "");
+      if (reviewResult.includes("human_review") || humanReviewReason) {
+        const { queueHumanReview } = await import("./ai/audit");
+        await queueHumanReview({
+          caseId,
+          reason: humanReviewReason || "Consultant matching reviewer requested human review",
+          severity: "medium",
+          payload: { source: "consultant_matching", topCandidateIds: top.map((candidate) => candidate.userId), matchReview: parsed },
         });
-        const result = await callProvider(step.provider, [{ role: "user", content: composed.text }]);
-        const parsed = extractJson(result.text);
-        const firstRanked = Array.isArray(parsed?.ranked_candidates) ? parsed.ranked_candidates[0] as Record<string, unknown> : null;
-        const consultantId = String(parsed?.consultant_id ?? firstRanked?.candidate_id ?? "");
-        const chosen = parsed && top.find((t) => t.userId === consultantId);
-        if (chosen) return chosen;
-      } catch (err) {
-        const { logSystem } = await import("./syslog");
-        await logSystem("error", "ai_call", `${step.provider.name} failed re-ranking consultant matches`, String(err));
+        return null;
       }
+      const firstRanked = Array.isArray(parsed?.ranked_candidates) ? parsed.ranked_candidates[0] as Record<string, unknown> : null;
+      const consultantId = String(parsed?.consultant_id ?? firstRanked?.candidate_id ?? "");
+      const chosen = parsed && top.find((t) => t.userId === consultantId);
+      if (chosen) return chosen;
+    } catch (err) {
+      const { logSystem } = await import("./syslog");
+      await logSystem("error", "ai_call", "Configured consultant match pipeline failed", String(err));
     }
   }
   return ranked[0];
