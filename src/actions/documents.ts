@@ -33,7 +33,7 @@ export async function uploadDocumentAction(_prev: ActionState, formData: FormDat
   for (const file of files.slice(0, 10)) {
     const validationError = validateUploadFile(file);
     if (validationError) return { error: validationError };
-    const { filePath, sizeBytes } = await saveUpload(file);
+    const { filePath, sizeBytes, contentHash } = await saveUpload(file);
     await db.document.create({
       data: {
         userId: user?.id ?? null,
@@ -43,6 +43,7 @@ export async function uploadDocumentAction(_prev: ActionState, formData: FormDat
         filePath,
         mimeType: file.type || "application/octet-stream",
         sizeBytes,
+        contentHash,
         docKind,
       },
     });
@@ -105,7 +106,7 @@ export async function uploadNoticeAction(_prev: ActionState, formData: FormData)
   if (file instanceof File && file.size > 0) {
     const validationError = validateUploadFile(file);
     if (validationError) return { error: validationError };
-    const { filePath, sizeBytes } = await saveUpload(file);
+    const { filePath, sizeBytes, contentHash } = await saveUpload(file);
     const doc = await db.document.create({
       data: {
         userId: user?.id ?? null,
@@ -114,6 +115,7 @@ export async function uploadNoticeAction(_prev: ActionState, formData: FormData)
         filePath,
         mimeType: file.type || "application/octet-stream",
         sizeBytes,
+        contentHash,
         docKind: "notice",
       },
     });

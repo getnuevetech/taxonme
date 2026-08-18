@@ -44,7 +44,7 @@ export async function startIntakeAction(_prev: ActionState, formData: FormData):
 
   // Attach uploaded documents.
   for (const file of files.slice(0, 10)) {
-    const { filePath, sizeBytes } = await saveUpload(file);
+    const { filePath, sizeBytes, contentHash } = await saveUpload(file);
     await db.document.create({
       data: {
         userId: user?.id ?? null,
@@ -54,6 +54,7 @@ export async function startIntakeAction(_prev: ActionState, formData: FormData):
         filePath,
         mimeType: file.type || "application/octet-stream",
         sizeBytes,
+        contentHash,
       },
     });
   }
@@ -122,7 +123,7 @@ export async function clarifyAnswerAction(_prev: ActionState, formData: FormData
   // where the re-analysis below picks them up as evidence.
   const attachedNames: string[] = [];
   for (const file of files.slice(0, 10)) {
-    const { filePath, sizeBytes } = await saveUpload(file);
+    const { filePath, sizeBytes, contentHash } = await saveUpload(file);
     await db.document.create({
       data: {
         userId: user.id,
@@ -131,6 +132,7 @@ export async function clarifyAnswerAction(_prev: ActionState, formData: FormData
         filePath,
         mimeType: file.type || "application/octet-stream",
         sizeBytes,
+        contentHash,
         docKind: "other",
       },
     });

@@ -398,6 +398,10 @@ model Document {
   docKind        String    @default("other") // w2 | 1099 | 1040 | notice | transcript | proof | avatar | other
   status         String    @default("uploaded") // uploaded | analyzing | extracted | verification_required
   extractedJson  String    @default("")
+  contentHash    String    @default("")
+  extractionSchemaVersion String @default("")
+  extractorVersionsJson String @default("{}")
+  verificationStatus String @default("unverified") // unverified | verified | verification_required
   uploadedAt     DateTime  @default(now())
   deletedAt      DateTime?
   user           User?         @relation(fields: [userId], references: [id], onDelete: Cascade)
