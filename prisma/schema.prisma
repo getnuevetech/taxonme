@@ -373,6 +373,14 @@ model Case {
   discoveries CaseDiscovery[]
   issueClusters CaseIssueCluster[]
   actionNodes CaseActionNode[]
+  evidenceFacts EvidenceFact[]
+  events CaseEvent[]
+  accountStates AccountPeriodState[]
+  evidenceRelationships EvidenceRelationship[]
+  evidenceAudits EvidenceAudit[]
+  reconstruction CaseReconstruction?
+  unknowns CaseUnknown[]
+  suppressedQuestions SuppressedQuestion[]
 }
 
 // The clarifying-questions conversation: when the analysis lacks specific
@@ -404,13 +412,185 @@ model Document {
   extractionSchemaVersion String @default("")
   extractorVersionsJson String @default("{}")
   verificationStatus String @default("unverified") // unverified | verified | verification_required
+  // v3.2 document inventory: analytical classification and completeness are
+  // tracked separately from the customer-selected docKind.
+  duplicateOfId  String?
+  documentFamily String    @default("")
+  documentType   String    @default("") // IRS_ACCOUNT_TRANSCRIPT | IRS_NOTICE | TAX_RETURN | ... | UNKNOWN_TAX_DOCUMENT
+  classificationConfidence String @default("") // high | medium | low
+  taxPeriodsJson String    @default("[]")
+  pagesExpected  Int       @default(0)
+  pagesProcessed Int       @default(0)
+  tablesDetected Int       @default(0)
+  tablesProcessed Int      @default(0)
+  transactionRowsDetected Int @default(0)
+  transactionRowsExtracted Int @default(0)
+  processingStatus String  @default("pending") // pending | complete | partial | failed
+  processingNotesJson String @default("[]")
   uploadedAt     DateTime  @default(now())
   deletedAt      DateTime?
   user           User?         @relation(fields: [userId], references: [id], onDelete: Cascade)
   guestSession   GuestSession? @relation(fields: [guestSessionId], references: [id])
   case           Case?         @relation(fields: [caseId], references: [id])
+  duplicateOf    Document?     @relation("documentDuplicate", fields: [duplicateOfId], references: [id], onDelete: SetNull)
+  duplicates     Document[]    @relation("documentDuplicate")
   notices        Notice[]
   fieldVerifications DocumentFieldVerification[]
+  evidenceFacts  EvidenceFact[]
+
+  @@index([caseId, contentHash])
+}
+
+// ---------- v3.2 evidence intelligence ----------
+
+// Normalized fact compiled from user reports, verified document fields, and
+// deterministic calculations. This is the case's evidence ledger.
+model EvidenceFact {
+  id           String   @id @default(cuid())
+  caseId       String
+  documentId   String?
+  factKey      String // normalized fact identifier, e.g. account_balance
+  subject      String   @default("")
+  factType     String   @default("") // amount | date | identifier | status | narrative
+  valueText    String   @default("")
+  valueNumber  Float?
+  unit         String   @default("")
+  taxPeriod    String   @default("")
+  effectiveDate DateTime?
+  recordDate   DateTime?
+  status       String   @default("active") // active | superseded | disputed
+  provenance   String   @default("MODEL_INFERENCE") // USER_REPORTED | DOCUMENT_EXTRACTED | DOCUMENT_VERIFIED | IRS_AUTHORITY | SYSTEM_CALCULATED | PROFESSIONAL_CONFIRMED | MODEL_INFERENCE
+  sourceId     String   @default("")
+  sourcePage   Int?
+  sourceField  String   @default("")
+  metadataJson String   @default("{}")
+  createdAt    DateTime @default(now())
+  case         Case     @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  document     Document? @relation(fields: [documentId], references: [id], onDelete: SetNull)
+
+  @@index([caseId, factKey])
+}
+
+// Ordered tax-account events reconstructed from evidence (transcript rows,
+// notices, payments). Event types stay open so unknown activity is preserved.
+model CaseEvent {
+  id              String   @id @default(cuid())
+  caseId          String
+  taxPeriod       String   @default("")
+  eventType       String   @default("UNCLASSIFIED_EVENT")
+  transactionCode String   @default("")
+  description     String   @default("")
+  eventDate       DateTime?
+  amount          Float?
+  balanceEffect   String   @default("") // increase | decrease | none | unknown
+  sourceFactIdsJson String @default("[]")
+  provenance      String   @default("DOCUMENT_EXTRACTED")
+  createdAt       DateTime @default(now())
+  case            Case     @relation(fields: [caseId], references: [id], onDelete: Cascade)
+
+  @@index([caseId, taxPeriod])
+}
+
+// Reconstructed per-period account position.
+model AccountPeriodState {
+  id                 String   @id @default(cuid())
+  caseId             String
+  taxPeriod          String
+  currentBalance     Float?
+  currentBalanceAsOf DateTime?
+  currentStatus      String   @default("")
+  stateJson          String   @default("{}")
+  supportingFactIdsJson String @default("[]")
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+  case               Case     @relation(fields: [caseId], references: [id], onDelete: Cascade)
+
+  @@unique([caseId, taxPeriod])
+}
+
+// Cross-document and cross-period relationships found by the reconciler.
+model EvidenceRelationship {
+  id               String   @id @default(cuid())
+  caseId           String
+  relationshipType String
+  fromTaxPeriod    String   @default("")
+  toTaxPeriod      String   @default("")
+  amount           Float?
+  status           String   @default("POSSIBLE") // CONFIRMED | POSSIBLE | REJECTED
+  description      String   @default("")
+  supportingFactIdsJson String @default("[]")
+  createdAt        DateTime @default(now())
+  case             Case     @relation(fields: [caseId], references: [id], onDelete: Cascade)
+
+  @@index([caseId, relationshipType])
+}
+
+// Result of the evidence audit gate for one analysis cycle.
+model EvidenceAudit {
+  id                String   @id @default(cuid())
+  caseId            String
+  analysisVersionId String?
+  status            String   @default("EVIDENCE_PROCESSING_INCOMPLETE")
+  documentsTotal    Int      @default(0)
+  documentsProcessed Int     @default(0)
+  documentsVerified Int      @default(0)
+  duplicatesResolved Int     @default(0)
+  factsCompiled     Int      @default(0)
+  unknownsResolved  Int      @default(0)
+  unknownsRemaining Int      @default(0)
+  reportJson        String   @default("{}")
+  createdAt         DateTime @default(now())
+  case              Case     @relation(fields: [caseId], references: [id], onDelete: Cascade)
+
+  @@index([caseId, createdAt])
+}
+
+// Factual reconstruction of the case ahead of tax reasoning.
+model CaseReconstruction {
+  id                String   @id @default(cuid())
+  caseId            String   @unique
+  analysisVersionId String?
+  reconstructionJson String  @default("{}")
+  status            String   @default("draft") // draft | established
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  case              Case     @relation(fields: [caseId], references: [id], onDelete: Cascade)
+}
+
+// Unknowns tracked explicitly so evidence can close them before the customer
+// is ever asked.
+model CaseUnknown {
+  id               String   @id @default(cuid())
+  caseId           String
+  unknownKey       String
+  label            String
+  question         String   @default("")
+  reason           String   @default("")
+  materiality      String   @default("medium") // low | medium | high
+  status           String   @default("ACTIVE") // ACTIVE | RESOLVED_BY_EXISTING_EVIDENCE | RESOLVED_BY_CUSTOMER | NOT_MATERIAL
+  resolvedValue    String   @default("")
+  supportingFactIdsJson String @default("[]")
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+  case             Case     @relation(fields: [caseId], references: [id], onDelete: Cascade)
+
+  @@unique([caseId, unknownKey])
+}
+
+// Audit trail for questions the app decided not to ask because evidence
+// already answered them.
+model SuppressedQuestion {
+  id            String   @id @default(cuid())
+  caseId        String
+  questionKey   String
+  question      String   @default("")
+  missingFact   String   @default("")
+  reason        String   @default("")
+  supportingFactIdsJson String @default("[]")
+  createdAt     DateTime @default(now())
+  case          Case     @relation(fields: [caseId], references: [id], onDelete: Cascade)
+
+  @@unique([caseId, questionKey])
 }
 
 model CaseAnalysisVersion {

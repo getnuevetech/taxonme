@@ -16,6 +16,15 @@ function parseJsonArray(value: string): unknown[] {
   }
 }
 
+function parseJsonRecord(value: string): Json {
+  try {
+    const parsed = JSON.parse(value || "{}");
+    return typeof parsed === "object" && parsed !== null && !Array.isArray(parsed) ? parsed as Json : {};
+  } catch {
+    return {};
+  }
+}
+
 function provenanceForEvidenceStatus(status: string): string {
   if (status === "confirmed") return "DOCUMENT_VERIFIED";
   if (status === "likely") return "DOCUMENT_EXTRACTED";
@@ -38,6 +47,14 @@ export async function buildCanonicalCaseState(caseId: string): Promise<Json | nu
       discoveries: { orderBy: { createdAt: "desc" }, take: 1 },
       issueClusters: { orderBy: { sortOrder: "asc" } },
       actionNodes: { orderBy: { priority: "asc" } },
+      evidenceFacts: { orderBy: { createdAt: "asc" } },
+      events: { orderBy: [{ taxPeriod: "asc" }, { eventDate: "asc" }] },
+      accountStates: { orderBy: { taxPeriod: "asc" } },
+      evidenceRelationships: true,
+      unknowns: true,
+      suppressedQuestions: true,
+      evidenceAudits: { orderBy: { createdAt: "desc" }, take: 1 },
+      reconstruction: true,
     },
   });
   if (!c) return null;
@@ -84,9 +101,86 @@ export async function buildCanonicalCaseState(caseId: string): Promise<Json | nu
       status: step.status === "done" ? "DONE" : step.status === "current" ? "READY" : "PENDING",
     }));
   const sourceConflicts = parseJsonArray(c.conflictsJson).filter((x) => typeof x === "object");
+  const latestAudit = c.evidenceAudits[0] ?? null;
+  const evidenceLedger = c.evidenceFacts.map((fact) => ({
+    fact_id: fact.id,
+    fact_key: fact.factKey,
+    fact_type: fact.factType,
+    value: fact.valueNumber ?? fact.valueText,
+    unit: fact.unit || null,
+    tax_period: fact.taxPeriod || null,
+    effective_date: fact.effectiveDate,
+    provenance: fact.provenance,
+    source_id: fact.sourceId || null,
+    source_field: fact.sourceField || null,
+  }));
   return {
     case_id: c.id,
     case_version: latestVersion,
+    evidence_state: {
+      documents_total: c.documents.length,
+      documents_processed: c.documents.filter((d) => d.processingStatus === "complete").length,
+      documents_verified: c.documents.filter((d) => d.verificationStatus === "verified").length,
+      duplicates_resolved: c.documents.filter((d) => d.duplicateOfId).length,
+      processing_complete: c.documents.every((d) => d.processingStatus === "complete"),
+      processing_failures: c.documents
+        .filter((d) => d.processingStatus === "failed" || d.processingStatus === "partial")
+        .map((d) => ({ document_id: d.id, name: d.fileName, status: d.processingStatus, notes: parseJsonArray(d.processingNotesJson) })),
+      audit_status: latestAudit?.status ?? null,
+    },
+    evidence_ledger: evidenceLedger,
+    event_ledger: c.events.map((event) => ({
+      event_id: event.id,
+      tax_period: event.taxPeriod || null,
+      event_type: event.eventType,
+      transaction_code: event.transactionCode || null,
+      description: event.description,
+      date: event.eventDate,
+      amount: event.amount,
+      balance_effect: event.balanceEffect || null,
+    })),
+    account_states: c.accountStates.map((state) => ({
+      tax_period: state.taxPeriod,
+      current_balance: state.currentBalance,
+      current_balance_as_of: state.currentBalanceAsOf,
+      current_status: state.currentStatus,
+      detail: parseJsonRecord(state.stateJson),
+      supporting_facts: parseJsonArray(state.supportingFactIdsJson),
+    })),
+    cross_document_relationships: c.evidenceRelationships.map((rel) => ({
+      relationship_type: rel.relationshipType,
+      from_tax_period: rel.fromTaxPeriod || null,
+      to_tax_period: rel.toTaxPeriod || null,
+      amount: rel.amount,
+      status: rel.status,
+      description: rel.description,
+      supporting_facts: parseJsonArray(rel.supportingFactIdsJson),
+    })),
+    case_reconstruction: c.reconstruction ? parseJsonRecord(c.reconstruction.reconstructionJson) : {},
+    resolved_unknowns: [
+      ...c.unknowns.filter((u) => u.status !== "ACTIVE").map((u) => ({
+        unknown_id: u.id,
+        original_question: u.question || u.label,
+        resolution_status: u.status,
+        resolved_value: u.resolvedValue || null,
+        supporting_fact_ids: parseJsonArray(u.supportingFactIdsJson),
+      })),
+      ...c.suppressedQuestions.map((q) => ({
+        unknown_id: q.id,
+        original_question: q.question,
+        resolution_status: "RESOLVED_BY_EXISTING_EVIDENCE",
+        resolved_value: null,
+        supporting_fact_ids: parseJsonArray(q.supportingFactIdsJson),
+      })),
+    ],
+    active_unknowns: c.unknowns.filter((u) => u.status === "ACTIVE").map((u) => ({
+      unknown_id: u.id,
+      label: u.label,
+      question: u.question,
+      reason: u.reason,
+      materiality: u.materiality,
+    })),
+    evidence_audit: latestAudit ? parseJsonRecord(latestAudit.reportJson) : {},
     user_input: {
       original_summary: c.situation,
       original_goal: c.goal,

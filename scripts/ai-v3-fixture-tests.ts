@@ -5,6 +5,11 @@ import { validateAiJson } from "../src/lib/ai/validation";
 import { classifyInformationCondition, conceptsConflict, isMaterialDifference, normalizeActionPurpose, normalizeConcept } from "../src/lib/case-semantics";
 import { buildReanalysisIdempotencyKey, normalizeReanalysisPipelines, pipelinesForMaterialEvent } from "../src/lib/reanalysis-policy";
 import { AI_DIAGNOSTIC_COUNTERS } from "../src/lib/ai/diagnostics-labels";
+import { classifyDocument } from "../src/lib/evidence/classify";
+import { compileDocumentEvents, compileDocumentFacts } from "../src/lib/evidence/facts";
+import { countTransactionRowCandidates, parseTranscript } from "../src/lib/evidence/transcript";
+import { resolveQuestionFromFacts, resolveUnknownTextFromFacts } from "../src/lib/evidence/unknowns";
+import { DOCUMENT_TYPES, FACT_KEYS, PROVENANCE } from "../src/lib/evidence/types";
 import { evaluateAiV3Readiness } from "../src/lib/ai/readiness-core";
 import { redactSensitiveText } from "../src/lib/ai/privacy";
 import { DOMAIN_RULES_PROMPT_ID, RESPONSIBILITY_PROMPTS, V3_PIPELINE_BLUEPRINT, V3_PROMPT_RECORDS } from "../src/lib/ai/v3-prompts";
@@ -72,6 +77,66 @@ const emptyReadiness = evaluateAiV3Readiness({
 assert.equal(emptyReadiness.metrics.openHumanReviews, 2);
 assert.equal(emptyReadiness.metrics.queuedReanalysisEvents, 3);
 assert.equal(emptyReadiness.metrics.runningReanalysisEvents, 4);
+
+// v3.2 evidence layer: documents must be classified, read, and used before the
+// customer is asked anything.
+const transcriptText = `ACCOUNT TRANSCRIPT
+TAX PERIOD ENDING: Dec. 31, 2023
+ACCOUNT BALANCE: 2,879.00
+AS OF: Mar. 10, 2026
+150 Tax return filed 04-15-2024 $5,000.00
+806 W-2 withholding 04-15-2024 -$7,879.00
+826 Credit transferred out 05-01-2024 -$2,620.07
+846 Refund issued 05-10-2024 -$427.93
+570 Additional account action pending 05-01-2024 $0.00`;
+
+const transcriptParsed = parseTranscript(transcriptText);
+assert.equal(transcriptParsed.accountBalance, 2879);
+assert.equal(transcriptParsed.refundIssued?.amount, -427.93);
+assert.equal(transcriptParsed.offsets.length, 1);
+assert.equal(transcriptParsed.hold, true);
+assert.deepEqual(transcriptParsed.taxPeriods, ["2023"]);
+assert.ok(countTransactionRowCandidates(transcriptText) >= transcriptParsed.transactions.length);
+
+const transcriptClass = classifyDocument({ fileName: "acct.pdf", text: transcriptText });
+assert.equal(transcriptClass.documentType, DOCUMENT_TYPES.IRS_ACCOUNT_TRANSCRIPT);
+const noticeClass = classifyDocument({ fileName: "letter.pdf", text: "Internal Revenue Service Notice CP2000 notice date March 1, 2026" });
+assert.equal(noticeClass.documentType, DOCUMENT_TYPES.IRS_NOTICE);
+const unknownClass = classifyDocument({ fileName: "scan.pdf", text: "unreadable content" });
+assert.equal(unknownClass.documentType, DOCUMENT_TYPES.UNKNOWN_TAX_DOCUMENT, "unclassifiable tax documents must not be mislabelled");
+
+const compiledFacts = compileDocumentFacts({ documentId: "DOC-1", documentType: transcriptClass.documentType, text: transcriptText, taxPeriods: transcriptClass.taxPeriods });
+const balanceFact = compiledFacts.find((f) => f.factKey === FACT_KEYS.ACCOUNT_BALANCE);
+assert.equal(balanceFact?.valueNumber, 2879);
+assert.equal(balanceFact?.provenance, PROVENANCE.DOCUMENT_EXTRACTED);
+assert.equal(balanceFact?.taxPeriod, "2023");
+assert.ok(compiledFacts.some((f) => f.factKey === FACT_KEYS.REFUND_ISSUED));
+assert.ok(compiledFacts.some((f) => f.factKey === FACT_KEYS.CREDIT_TRANSFER));
+
+const compiledEvents = compileDocumentEvents({ documentId: "DOC-1", documentType: transcriptClass.documentType, text: transcriptText });
+assert.ok(compiledEvents.some((e) => e.eventType === "REFUND_ISSUED"));
+assert.ok(compiledEvents.some((e) => e.eventType === "CREDIT_TRANSFERRED_OUT"));
+
+// Existing evidence must retire the question instead of asking the customer.
+const ledger = compiledFacts.map((fact, index) => ({
+  id: `fact-${index}`,
+  factKey: fact.factKey,
+  provenance: fact.provenance,
+  valueText: fact.valueText ?? "",
+  valueNumber: fact.valueNumber ?? null,
+  taxPeriod: fact.taxPeriod ?? "",
+}));
+const balanceQuestion = resolveQuestionFromFacts("balance_amount", ledger);
+assert.equal(balanceQuestion.suppressed, true, "balance question must be suppressed when a transcript states the balance");
+assert.ok(balanceQuestion.supportingFactIds.length > 0);
+assert.equal(resolveQuestionFromFacts("have_transcript", ledger).suppressed, true);
+assert.equal(resolveUnknownTextFromFacts("Exact IRS proposed balance", ledger).suppressed, true);
+assert.equal(resolveQuestionFromFacts("balance_amount", []).suppressed, false);
+// The customer's own words are not evidence for a document-answerable question.
+assert.equal(
+  resolveQuestionFromFacts("balance_amount", [{ id: "u1", factKey: FACT_KEYS.ACCOUNT_BALANCE, provenance: PROVENANCE.USER_REPORTED, valueNumber: 5000 }]).suppressed,
+  false,
+);
 
 // Appendix C/H: user belief must not become confirmed IRS fact.
 assert.match(promptBody("RESP-FACT-v3"), /belief/);

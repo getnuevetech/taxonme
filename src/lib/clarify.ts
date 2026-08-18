@@ -1,5 +1,6 @@
 import "server-only";
 import { db } from "./db";
+import { resolveQuestionFromFacts, resolveUnknownTextFromFacts, type KnownFact } from "./evidence/unknowns";
 
 // The clarifying interview: when the analysis is thin (missing amounts,
 // years, dates, documents), the app asks the customer targeted questions in a
@@ -56,6 +57,32 @@ export async function nextClarifyQuestion(caseId: string): Promise<ClarifyQuesti
   });
   if (!c || c.status === "closed") return null;
 
+  // Evidence first: anything the uploaded documents already establish must
+  // never be asked of the customer again.
+  const evidenceFacts: KnownFact[] = await db.evidenceFact.findMany({
+    where: { caseId },
+    select: { id: true, factKey: true, provenance: true, valueText: true, valueNumber: true, taxPeriod: true },
+  });
+  const suppress = async (key: string, question: string, resolution: ReturnType<typeof resolveQuestionFromFacts>) => {
+    await db.suppressedQuestion.upsert({
+      where: { caseId_questionKey: { caseId, questionKey: key } },
+      update: {
+        question,
+        missingFact: resolution.missingFact,
+        reason: resolution.reason,
+        supportingFactIdsJson: JSON.stringify(resolution.supportingFactIds),
+      },
+      create: {
+        caseId,
+        questionKey: key,
+        question,
+        missingFact: resolution.missingFact,
+        reason: resolution.reason,
+        supportingFactIdsJson: JSON.stringify(resolution.supportingFactIds),
+      },
+    }).catch(() => null);
+  };
+
   const answered = new Set(c.clarifyMessages.map((m) => m.questionKey));
   const narrative = `${c.situation}\n${c.goal}`;
   const unfiledDominant = hasUnfiledReturnIntent(narrative) && !hasRefundIntent(narrative);
@@ -70,14 +97,19 @@ export async function nextClarifyQuestion(caseId: string): Promise<ClarifyQuesti
     }
     for (const [index, item] of unclear.entries()) {
       const key = `unclear:${issue.id}:${index}`;
-      if (!answered.has(key)) {
-        const year = issue.taxYear ? ` for ${issue.taxYear}` : "";
-        return {
-          key,
-          text: `About "${issue.title}"${year}: ${item}`,
-          placeholder: "Answer this point with what you know, or say you are not sure...",
-        };
+      if (answered.has(key)) continue;
+      const year = issue.taxYear ? ` for ${issue.taxYear}` : "";
+      const text = `About "${issue.title}"${year}: ${item}`;
+      const resolution = resolveUnknownTextFromFacts(item, evidenceFacts);
+      if (resolution.suppressed) {
+        await suppress(key, text, resolution);
+        continue;
       }
+      return {
+        key,
+        text,
+        placeholder: "Answer this point with what you know, or say you are not sure...",
+      };
     }
   }
   const hasTranscript = c.documents.some((d) => d.docKind === "transcript");
@@ -139,7 +171,13 @@ export async function nextClarifyQuestion(caseId: string): Promise<ClarifyQuesti
   ];
 
   for (const q of questions) {
-    if (q.needed && !answered.has(q.key)) return { key: q.key, text: q.text, placeholder: q.placeholder };
+    if (!q.needed || answered.has(q.key)) continue;
+    const resolution = resolveQuestionFromFacts(q.key, evidenceFacts);
+    if (resolution.suppressed) {
+      await suppress(q.key, q.text, resolution);
+      continue;
+    }
+    return { key: q.key, text: q.text, placeholder: q.placeholder };
   }
   return null;
 }
