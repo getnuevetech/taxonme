@@ -8,6 +8,7 @@ import { getNumberSetting } from "../settings";
 import { readUpload } from "../uploads";
 import { verifyCaseProgress } from "../case-progress";
 import { buildCanonicalCaseState, upsertCanonicalCaseState } from "../canonical-case-state";
+import { recordCaseDiscovery } from "../case-discovery";
 import { composePromptForStep } from "./prompt-composer";
 import {
   completeCaseAnalysisVersion,
@@ -361,6 +362,7 @@ export async function runCaseAnalysis(caseId: string, opts?: { trigger?: string;
   const caseAnalysisVersion = analysisVersion.version;
   const sourceSnapshotIds: string[] = [];
   const caseEvidenceIds = c.documents.map((d) => d.id).join(",");
+  await recordCaseDiscovery(caseId, caseAnalysisVersion);
   await db.case.update({ where: { id: caseId }, data: { status: "analyzing" } });
 
   // Clear previous results for a clean re-run.

@@ -1,5 +1,6 @@
 import { PrismaClient } from "@prisma/client";
 import { upsertCanonicalCaseState } from "../src/lib/canonical-case-state";
+import { recordCaseDiscovery } from "../src/lib/case-discovery";
 
 const db = new PrismaClient();
 
@@ -53,6 +54,7 @@ async function main() {
         },
       });
     }
+    await recordCaseDiscovery(c.id, version.version);
     await upsertCanonicalCaseState(c.id, "backfill");
     created++;
   }

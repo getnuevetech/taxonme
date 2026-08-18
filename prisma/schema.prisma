@@ -370,6 +370,7 @@ model Case {
   reanalysisEvents CaseReanalysisEvent[]
   canonicalState CanonicalCaseState?
   canonicalStateSnapshots CanonicalCaseStateSnapshot[]
+  discoveries CaseDiscovery[]
 }
 
 // The clarifying-questions conversation: when the analysis lacks specific
@@ -449,6 +450,17 @@ model CanonicalCaseStateSnapshot {
   case      Case     @relation(fields: [caseId], references: [id], onDelete: Cascade)
 
   @@unique([caseId, version])
+}
+
+model CaseDiscovery {
+  id            String   @id @default(cuid())
+  caseId        String
+  caseVersion   Int
+  discoveryJson String   @default("{}")
+  createdAt     DateTime @default(now())
+  case          Case     @relation(fields: [caseId], references: [id], onDelete: Cascade)
+
+  @@unique([caseId, caseVersion])
 }
 
 model SourceSnapshot {
