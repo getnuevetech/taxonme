@@ -44,7 +44,7 @@ export function AiProviderForm({ provider }: { provider: Provider }) {
           <input name="baseUrl" defaultValue={provider?.baseUrl} placeholder="https://api.openai.com/v1" className={inputClass} />
         </Field>
         <Field label="Model">
-          <input name="model" defaultValue={provider?.model} required placeholder="e.g. gpt-5.6-sol, claude-sonnet-5, gemini-3.1-pro" className={inputClass} />
+          <input name="model" defaultValue={provider?.model} required placeholder="e.g. gpt-5.6-sol, claude-sonnet-5, gemini-3.1-pro-preview" className={inputClass} />
         </Field>
         <Field label="API key" hint={provider?.hasKey ? "A key is stored. Enter a new value to replace it." : "Paste the provider's API key."}>
           <input name="apiKey" type="password" defaultValue={provider?.hasKey ? "••••••••••••" : ""} className={inputClass} />
