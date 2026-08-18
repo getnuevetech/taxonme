@@ -514,7 +514,7 @@ model SourceSnapshot {
 
 model AnalysisRun {
   id         String    @id @default(cuid())
-  caseId     String
+  caseId     String?
   stageKey   String
   status     String    @default("pending") // pending | running | complete | failed
   error      String    @default("")
@@ -525,7 +525,7 @@ model AnalysisRun {
   metadataJson String @default("{}")
   startedAt  DateTime  @default(now())
   finishedAt DateTime?
-  case       Case      @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  case       Case?     @relation(fields: [caseId], references: [id], onDelete: Cascade)
   stepResults AnalysisStepResult[]
   consensus  ConsensusResult?
 }

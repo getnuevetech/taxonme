@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { STAGE_KEYS, STEP_ROLES } from "../src/lib/constants";
 import { validateAiJson } from "../src/lib/ai/validation";
 import { classifyInformationCondition, conceptsConflict, isMaterialDifference, normalizeActionPurpose, normalizeConcept } from "../src/lib/case-semantics";
@@ -107,6 +108,14 @@ assert.equal(validateAiJson(STAGE_KEYS.PRESENTER, { invented_deadline: "tomorrow
 // Case Guide must capture new facts and request re-analysis.
 assert.match(promptBody("RESP-CASE-v3"), /requires_reanalysis=true/);
 assert.equal(validateAiJson(STAGE_KEYS.GUIDE, { answer: "I captured that.", new_material_fact_detected: true, captured_fact: "New CP2000 notice", requires_reanalysis: true }).ok, true);
+const guideSource = readFileSync("src/lib/guide.ts", "utf-8");
+assert.match(guideSource, /runTrackedStage\(STAGE_KEYS\.GUIDE/);
+assert.doesNotMatch(guideSource, /isConditional\)\s*continue/);
+const orchestratorSource = readFileSync("src/lib/ai/orchestrator.ts", "utf-8");
+assert.match(orchestratorSource, /export async function runTrackedStage/);
+assert.match(orchestratorSource, /runTrackedStage\(STAGE_KEYS\.QA/);
+assert.match(orchestratorSource, /runTrackedStage\(STAGE_KEYS\.NOTICE/);
+assert.match(orchestratorSource, /runTrackedStage\(STAGE_KEYS\.LETTER/);
 
 // Consultant AI cannot restore ineligible candidates.
 assert.deepEqual(stageRoles(STAGE_KEYS.MATCH), [STEP_ROLES.MATCH_ANALYST, STEP_ROLES.MATCH_REVIEWER]);

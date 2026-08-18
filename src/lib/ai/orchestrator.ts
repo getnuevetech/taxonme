@@ -186,6 +186,10 @@ function humanReviewReasons(input: {
   if (input.conflicts.length > 0 || input.issues.some((i) => String(i.evidence_status ?? i.status ?? "").toLowerCase().includes("verification"))) {
     reasons.push({ reason: "Material facts or model outputs require verification", severity: "high" });
   }
+  const serializedIssues = JSON.stringify(input.issues).toLowerCase();
+  if (serializedIssues.includes("human_review") || /professional_review["':\s,{]+\s*required/.test(serializedIssues)) {
+    reasons.push({ reason: "Model reviewer requested human review", severity: "high" });
+  }
   if (input.needsConsultant) {
     reasons.push({ reason: "Professional review recommended or required by analysis", severity: "high" });
   }
@@ -338,6 +342,55 @@ export async function runStage(
     ? mergeStructured(structured.map((o) => ({ source: o.source, data: o.data as Json })))
     : { merged: (structured.at(-1)?.data as Json | undefined) ?? {}, conflicts: [] };
   return { stepOutputs, merged, conflicts, usedAi: stepOutputs.length > 0 };
+}
+
+export async function runTrackedStage(
+  stageKey: string,
+  vars: Record<string, string>,
+  opts?: { caseId?: string; sequentialContext?: boolean; media?: MediaAttachment[]; metadata?: Json },
+): Promise<StageOutcome> {
+  const stage = await db.pipelineStage.findUnique({ where: { key: stageKey } });
+  const sourceId = await upsertSourceSnapshot(vars.irs_sources || vars.knowledge || "");
+  const run = await db.analysisRun.create({
+    data: {
+      caseId: opts?.caseId ?? null,
+      stageKey,
+      status: "running",
+      caseAnalysisVersion: 0,
+      pipelineVersion: stage?.version ?? "",
+      schemaVersion: "3.0",
+      sourceSnapshotId: sourceId,
+      metadataJson: JSON.stringify({
+        stageKey,
+        helper: true,
+        sourceSnapshotId: sourceId,
+        inputKeys: Object.keys(vars),
+        ...(opts?.metadata ?? {}),
+      }),
+    },
+  });
+  try {
+    const outcome = await runStage(stageKey, vars, { runId: run.id, sequentialContext: opts?.sequentialContext, media: opts?.media });
+    await db.analysisRun.update({
+      where: { id: run.id },
+      data: { status: "complete", finishedAt: new Date() },
+    });
+    await db.consensusResult.create({
+      data: {
+        runId: run.id,
+        mergedJson: JSON.stringify(outcome.merged),
+        conflictsJson: JSON.stringify(outcome.conflicts),
+        verificationRequired: outcome.conflicts.length > 0,
+      },
+    });
+    return outcome;
+  } catch (err) {
+    await db.analysisRun.update({
+      where: { id: run.id },
+      data: { status: "failed", error: String(err).slice(0, 1000), finishedAt: new Date() },
+    }).catch(() => null);
+    throw err;
+  }
 }
 
 // ---------- Full case analysis pipeline (Layers 1–5) ----------
@@ -876,7 +929,7 @@ export async function runQaChat(history: { role: string; content: string }[], us
     return "The assistant isn't available just yet. Meanwhile, you can upload your documents to your vault and browse the guides — everything you add will be analyzed as soon as the assistant comes online.";
   }
   try {
-    const outcome = await runStage(STAGE_KEYS.QA, {
+    const outcome = await runTrackedStage(STAGE_KEYS.QA, {
       input: convo,
       question: history.filter((m) => m.role === "user").at(-1)?.content ?? "",
       knowledge: knowledge || "(none)",
@@ -885,7 +938,7 @@ export async function runQaChat(history: { role: string; content: string }[], us
       tax_year_or_context: "unknown unless stated by the user",
       claims: convo,
       verified_answer: "(use prior source verification output when present)",
-    }, { sequentialContext: true });
+    }, { sequentialContext: true, metadata: { helper: "qa", userId: userId ?? "" } });
     const final = outcome.stepOutputs.at(-1);
     if (final) return extractUserFacingText(final.data, final.rawText);
   } catch (err) {
@@ -897,14 +950,14 @@ export async function runQaChat(history: { role: string; content: string }[], us
 
 export async function explainNoticeContent(content: string): Promise<Json | null> {
   const knowledge = await retrieveKnowledge(content);
-  const outcome = await runStage(STAGE_KEYS.NOTICE, {
+  const outcome = await runTrackedStage(STAGE_KEYS.NOTICE, {
     input: content,
     notice_document: content,
     case_context: "(no linked case context supplied)",
     irs_sources: knowledge || "(no matching notice-specific reference material)",
     claims: content,
     review: "(use prior reviewer output when present)",
-  }, { sequentialContext: true });
+  }, { sequentialContext: true, metadata: { helper: "notice" } });
   const parsed = outcome.stepOutputs.at(-1)?.data ?? outcome.stepOutputs.find((o) => o.data)?.data ?? null;
   if (parsed) return parsed;
   // Deterministic fallback: identify notice code and match knowledge base.
@@ -929,9 +982,9 @@ export async function explainNoticeContent(content: string): Promise<Json | null
 export async function generateLetterDraft(context: string): Promise<string> {
   const steps = await getRunnableSteps(STAGE_KEYS.LETTER);
   // Try every configured model; log failures; fall back to the template letter.
-  for (const step of steps) {
+  if (steps.length > 0) {
     try {
-      const composed = await composePromptForStep(step, {
+      const outcome = await runTrackedStage(STAGE_KEYS.LETTER, {
         input: context,
         facts: context,
         notice: context,
@@ -940,13 +993,12 @@ export async function generateLetterDraft(context: string): Promise<string> {
         irs_sources: "(none supplied)",
         draft: "",
         required_changes: "",
-      });
-      const prompt = composed.text;
-      const result = await callProvider(step.provider, [{ role: "user", content: prompt }]);
-      if (result.text.trim()) return result.text;
+      }, { sequentialContext: true, metadata: { helper: "letter" } });
+      const final = outcome.stepOutputs.at(-1);
+      if (final?.rawText.trim()) return extractUserFacingText(final.data, final.rawText);
     } catch (err) {
       const { logSystem } = await import("../syslog");
-      await logSystem("error", "ai_call", `${step.provider.name} failed generating a response letter draft`, String(err));
+      await logSystem("error", "ai_call", "Response letter pipeline failed", String(err));
     }
   }
   {

@@ -160,15 +160,15 @@ export async function pickConsultantForCase(caseId: string): Promise<Candidate |
     try {
       const caseText = caseSummaryText(c, issueTypes);
       const candidateList = top.map(candidateText).join("\n\n---\n\n");
-      const { runStage } = await import("./ai/orchestrator");
-      const outcome = await runStage(STAGE_KEYS.MATCH, {
+      const { runTrackedStage } = await import("./ai/orchestrator");
+      const outcome = await runTrackedStage(STAGE_KEYS.MATCH, {
         case: caseText,
         case_requirements: caseText,
         candidates: candidateList,
         eligible_candidates: candidateList,
         base_scores: top.map((t) => `${t.userId}: ${t.score}`).join("\n"),
         approved_profile_fields: candidateList,
-      }, { sequentialContext: true });
+      }, { caseId, sequentialContext: true, metadata: { helper: "consultant_matching" } });
       const parsed = (outcome.stepOutputs.at(-1)?.data ?? outcome.merged) as Record<string, unknown> | null;
       const reviewResult = String(parsed?.review_result ?? parsed?.status ?? "").toLowerCase();
       const humanReviewReason = String(parsed?.human_review_reason ?? parsed?.review_reason ?? "");
