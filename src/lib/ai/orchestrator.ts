@@ -10,6 +10,7 @@ import { verifyCaseProgress } from "../case-progress";
 import { buildCanonicalCaseState, upsertCanonicalCaseState } from "../canonical-case-state";
 import { recordCaseDiscovery } from "../case-discovery";
 import { retrieveAuthorityForCase } from "../authority-retrieval";
+import { rebuildCaseIssueAndActionGraph } from "../action-graph";
 import { composePromptForStep } from "./prompt-composer";
 import {
   completeCaseAnalysisVersion,
@@ -649,6 +650,7 @@ export async function runCaseAnalysis(caseId: string, opts?: { trigger?: string;
     });
     pathStepIds.push(createdStep.id);
   }
+  await rebuildCaseIssueAndActionGraph(caseId, analysisVersion.id);
 
   // Deterministic readiness score (our formula, not an AI's opinion).
   const unknowns = Array.isArray(facts.unknowns) ? (facts.unknowns as unknown[]).length : 0;

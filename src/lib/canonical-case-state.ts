@@ -36,6 +36,8 @@ export async function buildCanonicalCaseState(caseId: string): Promise<Json | nu
       analysisVersions: { orderBy: { version: "desc" }, take: 1 },
       presentations: { orderBy: { createdAt: "desc" }, take: 1 },
       discoveries: { orderBy: { createdAt: "desc" }, take: 1 },
+      issueClusters: { orderBy: { sortOrder: "asc" } },
+      actionNodes: { orderBy: { priority: "asc" } },
     },
   });
   if (!c) return null;
@@ -99,7 +101,17 @@ export async function buildCanonicalCaseState(caseId: string): Promise<Json | nu
     document_facts: documentFacts,
     authority_facts: c.issues.filter((i) => i.irsBasis).map((i) => ({ fact: i.irsBasis, provenance: "IRS_AUTHORITY", source_id: i.id })),
     inferences: issueFacts.filter((f) => f.provenance === "MODEL_INFERENCE"),
-    issues: c.issues.map((issue) => ({
+    issues: c.issueClusters.length > 0 ? c.issueClusters.map((cluster) => ({
+      issue_id: cluster.id,
+      title: cluster.title,
+      category: cluster.category,
+      status: cluster.status,
+      evidence_strength: cluster.evidenceStrength,
+      sub_findings: parseJsonArray(cluster.issueIdsJson),
+      unknowns: parseJsonArray(cluster.unknownsJson),
+      possible_explanations: parseJsonArray(cluster.possibleExplanationsJson),
+      actions: parseJsonArray(cluster.actionsJson),
+    })) : c.issues.map((issue) => ({
       issue_id: issue.id,
       title: issue.title,
       category: issue.issueType || "UNCLASSIFIED_TAX_ISSUE",
@@ -130,7 +142,18 @@ export async function buildCanonicalCaseState(caseId: string): Promise<Json | nu
     })),
     resolution_options: [],
     approved_findings: c.issues.filter((i) => ["confirmed", "likely"].includes(i.evidenceStatus)).map((i) => i.id),
-    actions,
+    actions: c.actionNodes.length > 0 ? c.actionNodes.map((action) => ({
+      action_id: action.id,
+      type: action.actionKey,
+      normalized_purpose: action.normalizedPurpose,
+      title: action.title,
+      description: action.description,
+      priority: action.priority,
+      depends_on: parseJsonArray(action.dependsOnJson),
+      resolves: parseJsonArray(action.resolvesJson),
+      requires: parseJsonArray(action.requiresJson),
+      status: action.status,
+    })) : actions,
     professional_review: {
       recommended: c.status === "consultant_recommended",
       status: c.status,

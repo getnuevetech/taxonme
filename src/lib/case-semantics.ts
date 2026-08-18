@@ -76,3 +76,13 @@ export function classifyInformationCondition(input: {
 export function isMaterialDifference(topic: string): boolean {
   return /(amount|balance|refund|deadline|date|year|period|entity|identity|filing|eligibility|liability|risk|action|professional|outcome)/i.test(topic);
 }
+
+export function normalizeActionPurpose(value: string): string {
+  const text = value.toLowerCase();
+  if (/(notice|letter|correspondence|cp\d+|lt\d+)/i.test(text)) return "VERIFY_NOTICE";
+  if (/(transcript|account record|irs account)/i.test(text)) return "VERIFY_TRANSCRIPT";
+  if (/(balance|amount|liability|owe|refund)/i.test(text)) return "VERIFY_AMOUNT";
+  if (/(deadline|date|respond by)/i.test(text)) return "VERIFY_DEADLINE";
+  if (/(professional|consultant|cpa|ea|attorney)/i.test(text)) return "GET_PROFESSIONAL_REVIEW";
+  return value.toUpperCase().replace(/[^A-Z0-9]+/g, "_").replace(/^_+|_+$/g, "") || "UNCLASSIFIED_ACTION";
+}
