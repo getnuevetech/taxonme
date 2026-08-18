@@ -1,0 +1,112 @@
+import Module from "node:module";
+import assert from "node:assert/strict";
+
+// Focused end-to-end check for the v3.2 evidence slice. Run with tsx.
+const moduleAny = Module as unknown as { _load: (...args: unknown[]) => unknown };
+const originalLoad = moduleAny._load;
+moduleAny._load = function (request: unknown, ...args: unknown[]) {
+  if (request === "server-only") return {};
+  return originalLoad.call(this, request, ...args);
+};
+
+const TRANSCRIPT = `ACCOUNT TRANSCRIPT
+TAX PERIOD ENDING: Dec. 31, 2023
+ACCOUNT BALANCE: 2,879.00
+AS OF: Mar. 10, 2026
+150 Tax return filed 04-15-2024 $5,000.00
+826 Credit transferred out 05-01-2024 -$2,620.07
+846 Refund issued 05-10-2024 -$427.93`;
+
+async function main() {
+  const db = (await import("../src/lib/db")).db;
+  const { compileCaseEvidence } = await import("../src/lib/evidence/compile");
+  const { nextClarifyQuestion } = await import("../src/lib/clarify");
+
+  const email = `v32-evidence-${Date.now()}@example.com`;
+  let userId: string | null = null;
+  try {
+    const user = await db.user.create({ data: { email, role: "user", status: "active" } });
+    userId = user.id;
+    const c = await db.case.create({
+      data: {
+        userId: user.id,
+        title: "v3.2 evidence check",
+        situation: "The IRS says I owe money for a past tax year and I uploaded my account transcript.",
+        goal: "Understand what I owe and what to do next.",
+        status: "analyzed",
+      },
+    });
+
+    const hash = "identical-hash-for-duplicate-test";
+    const canonical = await db.document.create({
+      data: {
+        userId: user.id,
+        caseId: c.id,
+        fileName: "account-transcript.pdf",
+        filePath: "fake-1.pdf",
+        mimeType: "application/pdf",
+        docKind: "other",
+        contentHash: hash,
+        extractedJson: JSON.stringify({ raw_text: TRANSCRIPT }),
+      },
+    });
+    const duplicate = await db.document.create({
+      data: {
+        userId: user.id,
+        caseId: c.id,
+        fileName: "account-transcript-copy.pdf",
+        filePath: "fake-2.pdf",
+        mimeType: "application/pdf",
+        docKind: "other",
+        contentHash: hash,
+        extractedJson: JSON.stringify({ raw_text: TRANSCRIPT }),
+      },
+    });
+
+    const result = await compileCaseEvidence(c.id);
+    assert.equal(result.duplicatesResolved, 1, "identical uploads must collapse to one evidence document");
+
+    const duplicateRow = await db.document.findUnique({ where: { id: duplicate.id } });
+    assert.equal(duplicateRow?.duplicateOfId, canonical.id, "duplicate must point at the canonical document");
+    const canonicalRow = await db.document.findUnique({ where: { id: canonical.id } });
+    assert.equal(canonicalRow?.documentType, "IRS_ACCOUNT_TRANSCRIPT", "transcript must be classified, not left as other");
+    assert.equal(canonicalRow?.processingStatus, "complete");
+    assert.ok((canonicalRow?.transactionRowsExtracted ?? 0) >= 3, "transaction rows must be extracted");
+
+    const balanceFact = await db.evidenceFact.findFirst({ where: { caseId: c.id, factKey: "account_balance" } });
+    assert.equal(balanceFact?.valueNumber, 2879, "account balance must be compiled from the transcript");
+    assert.equal(balanceFact?.provenance, "DOCUMENT_EXTRACTED");
+
+    const accountState = await db.accountPeriodState.findUnique({ where: { caseId_taxPeriod: { caseId: c.id, taxPeriod: "2023" } } });
+    assert.equal(accountState?.currentBalance, 2879, "per-period account state must be reconstructed");
+
+    const events = await db.caseEvent.findMany({ where: { caseId: c.id } });
+    assert.ok(events.some((e) => e.eventType === "REFUND_ISSUED"), "refund event must be recorded");
+    assert.ok(events.some((e) => e.eventType === "CREDIT_TRANSFERRED_OUT"), "credit transfer event must be recorded");
+
+    // A balance question would normally be asked here; the transcript answers it.
+    await db.issue.create({
+      data: {
+        caseId: c.id,
+        issueType: "balance_due",
+        title: "Balance due",
+        description: "Reported balance owed.",
+        unclearJson: JSON.stringify(["Exact IRS proposed balance"]),
+      },
+    });
+
+    const question = await nextClarifyQuestion(c.id);
+    assert.notEqual(question?.key, "balance_amount", "the customer must not be asked for a balance the transcript states");
+    const suppressed = await db.suppressedQuestion.findMany({ where: { caseId: c.id } });
+    assert.ok(suppressed.length > 0, "suppressed questions must be recorded for audit");
+
+    console.log(
+      `v3.2 evidence check passed — facts: ${result.factsCompiled}, events: ${result.eventsCompiled}, periods: ${result.periodsReconstructed}, suppressed: ${suppressed.length}`,
+    );
+  } finally {
+    if (userId) await db.user.delete({ where: { id: userId } }).catch(() => undefined);
+    await db.$disconnect();
+  }
+}
+
+main();

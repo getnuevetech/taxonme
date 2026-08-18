@@ -11,6 +11,7 @@ import { buildCanonicalCaseState, upsertCanonicalCaseState } from "../canonical-
 import { recordCaseDiscovery } from "../case-discovery";
 import { retrieveAuthorityForCase } from "../authority-retrieval";
 import { rebuildCaseIssueAndActionGraph } from "../action-graph";
+import { compileCaseEvidence } from "../evidence/compile";
 import { pipelinesForMaterialEvent } from "../reanalysis-policy";
 import { composePromptForStep } from "./prompt-composer";
 import {
@@ -462,8 +463,10 @@ export async function runCaseAnalysis(caseId: string, opts?: { trigger?: string;
   const docParts: string[] = [];
   let rawDocText = "";
   const readableDocIds = new Set<string>();
+  const documentTextById = new Map<string, string>();
   for (const d of c.documents) {
     const content = await getDocumentText(d);
+    documentTextById.set(d.id, content);
     if (content) {
       readableDocIds.add(d.id);
       if (!d.extractedJson) {
@@ -479,6 +482,16 @@ export async function runCaseAnalysis(caseId: string, opts?: { trigger?: string;
     );
   }
   const docText = docParts.join("\n\n");
+
+  // v3.2: compile evidence before any reasoning stage runs, so downstream
+  // stages consume normalized facts instead of re-reading raw uploads.
+  const evidenceSummary = await compileCaseEvidence(caseId, {
+    readDocumentText: async (doc) => documentTextById.get(doc.id) ?? "",
+  }).catch(async (err) => {
+    const { logSystem } = await import("../syslog");
+    await logSystem("error", "analysis", "Evidence compilation failed", String(err));
+    return null;
+  });
 
   // Media for vision-capable providers: PDFs and images (scans/photos) are
   // attached so the models read the ACTUAL documents, not just filenames.
@@ -865,6 +878,7 @@ export async function runCaseAnalysis(caseId: string, opts?: { trigger?: string;
       case_id: caseId,
       requested_pipelines: requestedPipelines,
       reused_pipelines: reusedPipelines,
+      evidence_state: evidenceSummary,
       status: needsConsultant ? "consultant_recommended" : "analyzed",
       readiness,
       facts,
