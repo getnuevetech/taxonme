@@ -6,6 +6,7 @@ import crypto from "crypto";
 import { cache } from "react";
 import { db } from "./db";
 import { ROLES } from "./constants";
+import { getNumberSetting } from "./settings";
 
 const SESSION_COOKIE = "taxonme_session";
 
@@ -63,21 +64,29 @@ export async function secureCookiesEnabled(): Promise<boolean> {
   return (row?.value ?? "").trim().toLowerCase().startsWith("https://");
 }
 
+async function sessionTimeoutSeconds(role: string): Promise<number> {
+  const minutes = role === ROLES.ADMIN || role === ROLES.SUPER_ADMIN
+    ? await getNumberSetting("auth.session_admin_minutes", 120)
+    : await getNumberSetting("auth.session_user_consultant_minutes", 1440);
+  return Math.max(5 * 60, Math.min(60 * 60 * 24 * 30, Math.round(minutes * 60)));
+}
+
 export async function createSession(userId: string) {
   const secret = await getSecret();
-  const user = await db.user.findUnique({ where: { id: userId }, select: { passwordHash: true } });
+  const user = await db.user.findUnique({ where: { id: userId }, select: { passwordHash: true, role: true } });
   if (!user) throw new Error("Cannot create a session for a missing user.");
-  const token = await new SignJWT({ sub: userId, pwd: passwordFingerprint(user.passwordHash) })
+  const maxAge = await sessionTimeoutSeconds(user.role);
+  const token = await new SignJWT({ sub: userId, pwd: passwordFingerprint(user.passwordHash), role: user.role })
     .setProtectedHeader({ alg: "HS256" })
     .setIssuedAt()
-    .setExpirationTime("30d")
+    .setExpirationTime(`${maxAge}s`)
     .sign(secret);
   const jar = await cookies();
   jar.set(SESSION_COOKIE, token, {
     httpOnly: true,
     sameSite: "lax",
     secure: await secureCookiesEnabled(),
-    maxAge: 60 * 60 * 24 * 30,
+    maxAge,
     path: "/",
   });
 }
@@ -101,6 +110,9 @@ export const getCurrentUser = cache(async () => {
     });
     if (!user || user.status !== "active") return null;
     if (payload.pwd !== passwordFingerprint(user.passwordHash)) return null;
+    const issuedAt = typeof payload.iat === "number" ? payload.iat : 0;
+    const maxAge = await sessionTimeoutSeconds(user.role);
+    if (!issuedAt || Math.floor(Date.now() / 1000) - issuedAt > maxAge) return null;
     return user;
   } catch {
     return null;
