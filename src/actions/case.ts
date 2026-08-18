@@ -7,6 +7,7 @@ import { db } from "@/lib/db";
 import { getCurrentUser, requireUser } from "@/lib/auth";
 import { getOrCreateGuestSession } from "@/lib/guest";
 import { runCaseAnalysis } from "@/lib/ai/orchestrator";
+import { fallbackAnalyze } from "@/lib/ai/fallback";
 import { processQueuedReanalysisEvents, queueCaseReanalysis } from "@/lib/reanalysis-events";
 import { verifyCaseProgress, isVerifiable } from "@/lib/case-progress";
 import { saveUpload, validateUploadFile } from "@/lib/uploads";
@@ -56,6 +57,30 @@ export async function startIntakeAction(_prev: ActionState, formData: FormData):
         mimeType: file.type || "application/octet-stream",
         sizeBytes,
         contentHash,
+      },
+    });
+  }
+
+  if (!user) {
+    const teaser = await fallbackAnalyze(
+      situation,
+      goal,
+      "",
+      files.slice(0, 10).map((file) => ({
+        docKind: "other",
+        readable: file.type.startsWith("text/") || /\.(txt|csv|md)$/i.test(file.name),
+      })),
+    );
+    await db.guestSession.update({
+      where: { id: guest!.id },
+      data: {
+        teaserJson: JSON.stringify({
+          caseId,
+          createdAt: new Date().toISOString(),
+          issues: teaser.issues.slice(0, 3),
+          pathSteps: teaser.pathSteps.slice(0, 3),
+          conflicts: teaser.conflicts.slice(0, 3),
+        }),
       },
     });
   }

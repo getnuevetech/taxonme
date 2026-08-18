@@ -25,21 +25,81 @@ export default async function GuestResultPage({
   });
   if (!c) redirect("/start");
   const nowMs = new Date().getTime();
+  const teaser = guest.teaserJson
+    ? (() => {
+        try {
+          const parsed = JSON.parse(guest.teaserJson) as {
+            caseId?: string;
+            issues?: Array<{ title?: string; what_we_know?: string; description?: string; state?: string; evidence_status?: string; tax_year?: number | null }>;
+            pathSteps?: Array<{ title?: string; description?: string }>;
+            conflicts?: Array<{ topic?: string; description?: string }>;
+          };
+          return parsed.caseId === caseId ? parsed : null;
+        } catch {
+          return null;
+        }
+      })()
+    : null;
+  const teaserIssue = teaser?.issues?.[0] ?? null;
+  const teaserStep = teaser?.pathSteps?.[0] ?? null;
 
   // The analysis runs in the background after intake — show a live-refreshing
-  // waiting state until findings are ready.
+  // waiting state until findings are ready. When the deterministic first pass
+  // is available, show it immediately so the user gets value while the full
+  // v3.1 review continues.
   if (c.status === "analyzing" && nowMs - c.updatedAt.getTime() < 10 * 60000) {
     const { AutoRefresh } = await import("@/components/auto-refresh");
     return (
       <div className="flex min-h-screen flex-col">
         <SiteHeader />
-        <main className="mx-auto w-full max-w-2xl flex-1 px-4 py-24 text-center">
-          <span className="mx-auto block h-4 w-4 animate-ping rounded-full bg-indigo-500" />
-          <h1 className="mt-6 text-2xl font-extrabold text-slate-900">Analyzing your situation…</h1>
-          <p className="mt-2 text-slate-600">
-            We&apos;re reading your summary, goal, and documents. This page updates automatically — most analyses finish in
-            under a minute.
-          </p>
+        <main className="mx-auto w-full max-w-2xl flex-1 px-4 py-16">
+          <div className="text-center">
+            <span className="mx-auto block h-4 w-4 animate-ping rounded-full bg-indigo-500" />
+            <h1 className="mt-6 text-2xl font-extrabold text-slate-900">
+              {teaserIssue ? "Your first read is ready" : "Analyzing your situation…"}
+            </h1>
+            <p className="mt-2 text-slate-600">
+              {teaserIssue
+                ? "We found an initial direction. The full v3.1 review is still checking documents, rules, and next steps."
+                : "We're reading your summary, goal, and documents. This page updates automatically as the review progresses."}
+            </p>
+          </div>
+          {teaserIssue && (
+            <Card className="mt-8 text-left">
+              <CardBody>
+                <div className="mb-3 flex flex-wrap items-center gap-2">
+                  <Badge color="indigo">Fast first pass</Badge>
+                  <Badge>{String(teaserIssue.evidence_status ?? "needs verification").replace(/_/g, " ")}</Badge>
+                </div>
+                <h2 className="text-xl font-semibold text-slate-900">
+                  {teaserIssue.tax_year ? `${teaserIssue.tax_year} · ` : ""}{teaserIssue.title || "Initial case direction"}
+                </h2>
+                <p className="mt-3 text-sm leading-relaxed text-slate-700">
+                  {teaserIssue.what_we_know || teaserIssue.description || "We are organizing your facts and checking what needs verification."}
+                </p>
+                {teaserStep && (
+                  <div className="mt-5 rounded-xl bg-indigo-50 p-4">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-indigo-500">Useful next step while we finish</p>
+                    <p className="mt-2 text-sm font-semibold text-slate-900">{teaserStep.title || "Gather supporting documents"}</p>
+                    <p className="mt-1 text-sm text-slate-700">{teaserStep.description || "Upload the notices, transcripts, or returns related to this issue."}</p>
+                  </div>
+                )}
+                {teaser.conflicts && teaser.conflicts.length > 0 && (
+                  <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-4">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-amber-700">Needs confirmation</p>
+                    <ul className="mt-2 space-y-1 text-sm text-amber-900">
+                      {teaser.conflicts.map((conflict, index) => (
+                        <li key={index}>• {conflict.topic || "Information"}: {conflict.description}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </CardBody>
+            </Card>
+          )}
+          <div className="mt-6 rounded-xl border border-slate-200 bg-white px-4 py-3 text-center text-sm text-slate-600">
+            Full review is still running in the background. This page refreshes automatically.
+          </div>
           <AutoRefresh />
         </main>
         <SiteFooter />
