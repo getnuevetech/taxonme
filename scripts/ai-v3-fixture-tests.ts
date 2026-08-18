@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { STAGE_KEYS, STEP_ROLES } from "../src/lib/constants";
 import { validateAiJson } from "../src/lib/ai/validation";
+import { classifyInformationCondition, conceptsConflict, isMaterialDifference, normalizeConcept } from "../src/lib/case-semantics";
 import { redactSensitiveText } from "../src/lib/ai/privacy";
 import { DOMAIN_RULES_PROMPT_ID, RESPONSIBILITY_PROMPTS, V3_PIPELINE_BLUEPRINT, V3_PROMPT_RECORDS } from "../src/lib/ai/v3-prompts";
 
@@ -20,6 +21,18 @@ const domainRules = V3_PROMPT_RECORDS.find((p) => p.promptId === DOMAIN_RULES_PR
 assert.ok(domainRules, "v3.1 domain rules prompt must exist");
 assert.match(domainRules.body.toLowerCase(), /canonical case state/);
 assert.match(domainRules.body.toLowerCase(), /case-agnostic/);
+
+const goalA = normalizeConcept("I want to be debt free.");
+const goalB = normalizeConcept("I want to resolve the IRS debt.");
+assert.equal(goalA.normalized_category, "IRS_DEBT_RESOLUTION");
+assert.equal(goalB.normalized_category, "IRS_DEBT_RESOLUTION");
+assert.equal(conceptsConflict(goalA, goalB), false, "semantic equivalents must not conflict");
+assert.equal(classifyInformationCondition({ exists: false, verified: false }), "MISSING_INFORMATION");
+assert.equal(classifyInformationCondition({ exists: true, verified: false }), "UNVERIFIED_INFORMATION");
+assert.equal(classifyInformationCondition({ exists: true, verified: true, evidenceValues: [5000, 2879] }), "SOURCE_CONFLICT");
+assert.equal(classifyInformationCondition({ exists: true, verified: true, modelValues: ["possible", "not supported"] }), "MODEL_DISAGREEMENT");
+assert.equal(isMaterialDifference("deadline"), true);
+assert.equal(isMaterialDifference("wording style"), false);
 
 // Appendix C/H: user belief must not become confirmed IRS fact.
 assert.match(promptBody("RESP-FACT-v3"), /belief/);

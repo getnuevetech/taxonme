@@ -35,10 +35,20 @@ export async function buildCanonicalCaseState(caseId: string): Promise<Json | nu
       clarifyMessages: { orderBy: { createdAt: "asc" } },
       analysisVersions: { orderBy: { version: "desc" }, take: 1 },
       presentations: { orderBy: { createdAt: "desc" }, take: 1 },
+      discoveries: { orderBy: { createdAt: "desc" }, take: 1 },
     },
   });
   if (!c) return null;
   const latestVersion = c.analysisVersions[0]?.version ?? 1;
+  const latestDiscovery = c.discoveries[0]?.discoveryJson
+    ? (() => {
+        try {
+          return JSON.parse(c.discoveries[0].discoveryJson) as Json;
+        } catch {
+          return null;
+        }
+      })()
+    : null;
   const documentFacts = c.documents.flatMap((doc) =>
     doc.fieldVerifications.map((field) => ({
       fact: field.fieldKey,
@@ -131,6 +141,7 @@ export async function buildCanonicalCaseState(caseId: string): Promise<Json | nu
       latest_analysis_version: latestVersion,
       latest_presentation_id: c.presentations[0]?.id ?? null,
     },
+    discovery: latestDiscovery,
   };
 }
 
