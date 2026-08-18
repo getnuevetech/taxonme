@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { STAGE_KEYS, STEP_ROLES } from "../src/lib/constants";
 import { validateAiJson } from "../src/lib/ai/validation";
 import { redactSensitiveText } from "../src/lib/ai/privacy";
-import { RESPONSIBILITY_PROMPTS, V3_PIPELINE_BLUEPRINT } from "../src/lib/ai/v3-prompts";
+import { DOMAIN_RULES_PROMPT_ID, RESPONSIBILITY_PROMPTS, V3_PIPELINE_BLUEPRINT, V3_PROMPT_RECORDS } from "../src/lib/ai/v3-prompts";
 
 function promptBody(promptId: string): string {
   const prompt = RESPONSIBILITY_PROMPTS.find((p) => p.promptId === promptId);
@@ -15,6 +15,11 @@ function stageRoles(stageKey: string): string[] {
   assert.ok(stage, `missing stage ${stageKey}`);
   return stage.steps.map((s) => s.role);
 }
+
+const domainRules = V3_PROMPT_RECORDS.find((p) => p.promptId === DOMAIN_RULES_PROMPT_ID);
+assert.ok(domainRules, "v3.1 domain rules prompt must exist");
+assert.match(domainRules.body.toLowerCase(), /canonical case state/);
+assert.match(domainRules.body.toLowerCase(), /case-agnostic/);
 
 // Appendix C/H: user belief must not become confirmed IRS fact.
 assert.match(promptBody("RESP-FACT-v3"), /belief/);
