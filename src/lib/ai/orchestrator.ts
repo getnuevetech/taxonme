@@ -12,6 +12,8 @@ import { recordCaseDiscovery } from "../case-discovery";
 import { retrieveAuthorityForCase } from "../authority-retrieval";
 import { rebuildCaseIssueAndActionGraph } from "../action-graph";
 import { compileCaseEvidence } from "../evidence/compile";
+import { recordExtractionLineage, recordProcessingFailure } from "../evidence/document-processing";
+import { extractorSignature, isExtractionCacheValid } from "../evidence/extraction-cache";
 import { pipelinesForMaterialEvent } from "../reanalysis-policy";
 import { composePromptForStep } from "./prompt-composer";
 import {
@@ -494,21 +496,20 @@ export async function runCaseAnalysis(caseId: string, opts?: { trigger?: string;
   });
 
   // Media for vision-capable providers: PDFs and images (scans/photos) are
-  // attached so the models read the ACTUAL documents, not just filenames.
-  const media: MediaAttachment[] = [];
+  // attached per document so each extraction sees only its own file.
+  const mediaByDocumentId = new Map<string, MediaAttachment[]>();
   for (const d of c.documents) {
-    if (media.length >= 6) break;
     const isImage = d.mimeType.startsWith("image/");
     const isPdf = d.mimeType === "application/pdf" || /\.pdf$/i.test(d.fileName);
     if (!isImage && !isPdf) continue;
     try {
       const buf = await readUpload(d.filePath);
       if (buf.length > 10 * 1024 * 1024) continue;
-      media.push({
+      mediaByDocumentId.set(d.id, [{
         mimeType: isPdf ? "application/pdf" : d.mimeType,
         dataBase64: buf.toString("base64"),
         name: d.fileName,
-      });
+      }]);
     } catch { /* file missing — skip */ }
   }
 
@@ -571,59 +572,106 @@ export async function runCaseAnalysis(caseId: string, opts?: { trigger?: string;
     }, true)
     : reusedStageOutcome(priorSnapshot?.goal);
   if (!shouldRunGoal) reusedPipelines.push(STAGE_KEYS.GOAL);
-  const cachedDocumentState: Json | null = c.documents.length > 0 && c.documents.every((d) =>
-    d.contentHash &&
-    d.extractedJson &&
-    d.verificationStatus === "verified" &&
-    d.extractionSchemaVersion === "3.1"
-  )
-    ? {
-        cached: true,
-        documents: c.documents.map((d) => ({
-          document_id: d.id,
-          content_hash: d.contentHash,
-          extracted: d.extractedJson,
-          schema_version: d.extractionSchemaVersion,
-          extractor_versions: d.extractorVersionsJson,
-        })),
-      }
-    : null;
+  // v3.2 document analysis: each unique document is extracted on its own so
+  // completeness, conflicts, and caching are tracked per file rather than
+  // across one concatenated blob.
+  const inventory = await db.document.findMany({
+    where: { caseId, deletedAt: null },
+    orderBy: { uploadedAt: "asc" },
+  });
+  const canonicalDocuments = inventory.filter((d) => !d.duplicateOfId);
   const priorDocumentState = typeof priorSnapshot?.documents === "object" && priorSnapshot.documents !== null
     ? priorSnapshot.documents as Json
     : null;
-  const shouldRunDocument = requestedPipelineSet.has(STAGE_KEYS.DOCUMENT) || (!cachedDocumentState && !priorDocumentState);
-  const reusedDocumentState = shouldRunDocument ? null : (cachedDocumentState ?? priorDocumentState);
-  const documentOut = c.documents.length
-    ? reusedDocumentState
-      ? { stepOutputs: [], merged: reusedDocumentState, conflicts: [], usedAi: false }
-      : await stageRun(STAGE_KEYS.DOCUMENT, {
-        input: docText,
-        documents: docText,
-        document_id: c.documents.map((d) => d.id).join(","),
-        existing_verified_documents: "(none)",
-      }, false, media)
-    : null;
-  if (c.documents.length > 0 && !shouldRunDocument) reusedPipelines.push(STAGE_KEYS.DOCUMENT);
-  if (documentOut && shouldRunDocument && !cachedDocumentState) {
-    await recordDocumentFieldVerifications({
-      documents: c.documents.map((d) => ({ id: d.id, caseId: d.caseId })),
-      analysisVersionId: analysisVersion.id,
-      stepOutputs: documentOut.stepOutputs,
-    });
-  }
+  const shouldRunDocument = requestedPipelineSet.has(STAGE_KEYS.DOCUMENT) || !priorDocumentState;
+  let documentOut: StageOutcome | null = null;
 
-  // Documents read by a vision model count as examined evidence.
-  if (documentOut?.usedAi && media.length > 0) {
-    for (const d of c.documents) {
-      if (readableDocIds.has(d.id) || d.extractedJson) continue;
-      const wasSent = media.some((m) => m.name === d.fileName);
-      if (wasSent) {
-        await db.document.update({
-          where: { id: d.id },
-          data: { extractedJson: JSON.stringify({ vision_reviewed: true }), status: "extracted" },
+  if (canonicalDocuments.length > 0 && !shouldRunDocument && priorDocumentState) {
+    documentOut = reusedStageOutcome(priorDocumentState);
+    reusedPipelines.push(STAGE_KEYS.DOCUMENT);
+  } else if (canonicalDocuments.length > 0) {
+    const documentSteps = await getRunnableSteps(STAGE_KEYS.DOCUMENT);
+    const signature = extractorSignature(documentSteps);
+    const maxDocuments = await getNumberSetting("analysis.max_documents_per_run", 10);
+    const perDocument: Json[] = [];
+    const documentStepOutputs: StageOutcome["stepOutputs"] = [];
+    const documentConflicts: Conflict[] = [];
+    let documentUsedAi = false;
+    let cacheHits = 0;
+
+    for (const doc of canonicalDocuments.slice(0, Math.max(1, maxDocuments))) {
+      if (isExtractionCacheValid(doc, signature)) {
+        cacheHits++;
+        perDocument.push({
+          document_id: doc.id,
+          document_type: doc.documentType,
+          cached: true,
+          processing_status: doc.processingStatus,
+          extracted: doc.extractedJson,
         });
+        continue;
+      }
+      const text = documentTextById.get(doc.id) ?? "";
+      const docMedia = mediaByDocumentId.get(doc.id) ?? [];
+      if (!text && docMedia.length === 0) {
+        await recordProcessingFailure(doc.id, `${doc.fileName}: no readable text and no attachable file for extraction`);
+        perDocument.push({ document_id: doc.id, document_type: doc.documentType, processing_status: "failed" });
+        continue;
+      }
+      try {
+        const outcome = await stageRun(STAGE_KEYS.DOCUMENT, {
+          input: text || `(scanned document: ${doc.fileName})`,
+          documents: text || `(scanned document: ${doc.fileName})`,
+          document_id: doc.id,
+          document_type: doc.documentType,
+          existing_verified_documents: "(none)",
+        }, false, docMedia);
+        documentUsedAi = documentUsedAi || outcome.usedAi;
+        documentStepOutputs.push(...outcome.stepOutputs);
+        documentConflicts.push(...outcome.conflicts);
+        await recordDocumentFieldVerifications({
+          documents: [{ id: doc.id, caseId: doc.caseId }],
+          analysisVersionId: analysisVersion.id,
+          stepOutputs: outcome.stepOutputs,
+        });
+        await recordExtractionLineage({
+          documentId: doc.id,
+          signature,
+          extractorA: outcome.stepOutputs.find((o) => o.role === "extractor_a")?.source ?? "",
+          extractorB: outcome.stepOutputs.find((o) => o.role === "extractor_b")?.source ?? "",
+        });
+        // A scanned file read by a vision model counts as examined evidence.
+        if (outcome.usedAi && !text && docMedia.length > 0) {
+          await db.document.update({
+            where: { id: doc.id },
+            data: { extractedJson: JSON.stringify({ vision_reviewed: true }), status: "extracted" },
+          });
+        }
+        perDocument.push({
+          document_id: doc.id,
+          document_type: doc.documentType,
+          cached: false,
+          extraction: outcome.merged,
+          conflicts: outcome.conflicts.length,
+        });
+      } catch (err) {
+        await recordProcessingFailure(doc.id, `${doc.fileName}: extraction failed — ${String(err).slice(0, 200)}`);
+        perDocument.push({ document_id: doc.id, document_type: doc.documentType, processing_status: "failed" });
       }
     }
+
+    if (canonicalDocuments.length > maxDocuments) {
+      for (const skipped of canonicalDocuments.slice(Math.max(1, maxDocuments))) {
+        await recordProcessingFailure(skipped.id, `${skipped.fileName}: queued for extraction in a later pass`);
+      }
+    }
+
+    documentOut = {
+      stepOutputs: documentStepOutputs,
+      merged: { documents: perDocument, cache_hits: cacheHits, documents_examined: perDocument.length },
+      conflicts: documentConflicts,
+      usedAi: documentUsedAi,
+    };
   }
 
   const upstreamUsedAi =

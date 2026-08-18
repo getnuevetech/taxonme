@@ -100,8 +100,35 @@ async function main() {
     const suppressed = await db.suppressedQuestion.findMany({ where: { caseId: c.id } });
     assert.ok(suppressed.length > 0, "suppressed questions must be recorded for audit");
 
+    // A document we cannot read is a processing failure, not taxpayer doubt.
+    const { runCaseAnalysis } = await import("../src/lib/ai/orchestrator");
+    const unreadable = await db.document.create({
+      data: {
+        userId: user.id,
+        caseId: c.id,
+        fileName: "unreadable-scan.pdf",
+        filePath: "missing-file-on-disk.pdf",
+        mimeType: "application/pdf",
+        docKind: "other",
+        contentHash: "unreadable-hash",
+      },
+    });
+    await runCaseAnalysis(c.id, { trigger: "manual_reanalysis_requested" });
+
+    const unreadableRow = await db.document.findUnique({ where: { id: unreadable.id } });
+    assert.equal(unreadableRow?.processingStatus, "failed", "an unreadable document must be recorded as a processing failure");
+    assert.ok(
+      JSON.parse(unreadableRow?.processingNotesJson || "[]").length > 0,
+      "processing failures must carry an explanation",
+    );
+
+    const version = await db.caseAnalysisVersion.findFirst({ where: { caseId: c.id }, orderBy: { version: "desc" } });
+    const snapshot = JSON.parse(version?.snapshotJson || "{}");
+    assert.ok(snapshot.evidence_state, "analysis snapshot must record the evidence state");
+    assert.equal(snapshot.evidence_state.duplicatesResolved, 1, "duplicate accounting must survive a full analysis run");
+
     console.log(
-      `v3.2 evidence check passed — facts: ${result.factsCompiled}, events: ${result.eventsCompiled}, periods: ${result.periodsReconstructed}, suppressed: ${suppressed.length}`,
+      `v3.2 evidence check passed — facts: ${result.factsCompiled}, events: ${result.eventsCompiled}, periods: ${result.periodsReconstructed}, suppressed: ${suppressed.length}, processing failures recorded: ${snapshot.evidence_state.processingFailures?.length ?? 0}`,
     );
   } finally {
     if (userId) await db.user.delete({ where: { id: userId } }).catch(() => undefined);

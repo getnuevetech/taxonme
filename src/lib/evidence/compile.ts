@@ -3,6 +3,7 @@ import { db } from "../db";
 import { classifyDocument } from "./classify";
 import { compileDocumentEvents, compileDocumentFacts, compileNarrativeFacts } from "./facts";
 import { countTransactionRowCandidates, parseTranscript } from "./transcript";
+import { countPages } from "./extraction-cache";
 import { PROCESSING_STATUS, PROVENANCE, FACT_KEYS, type EvidenceFactInput } from "./types";
 
 // Evidence compilation runs before any tax reasoning. It is deterministic on
@@ -94,16 +95,22 @@ export async function compileCaseEvidence(
     const classification = classifyDocument({ fileName: doc.fileName, mimeType: doc.mimeType, text, docKind: doc.docKind });
     const rowsDetected = text ? countTransactionRowCandidates(text) : 0;
     const rowsExtracted = text ? parseTranscript(text).transactions.length : 0;
+    const pages = countPages(text);
+    const tablesDetected = rowsDetected > 0 ? 1 : 0;
+    const tablesProcessed = rowsExtracted > 0 ? 1 : 0;
+    const pagesIncomplete = pages.expected > 0 && pages.processed < pages.expected;
     const status = !text
       ? PROCESSING_STATUS.PARTIAL
-      : rowsDetected > rowsExtracted
+      : rowsDetected > rowsExtracted || pagesIncomplete
         ? PROCESSING_STATUS.PARTIAL
         : PROCESSING_STATUS.COMPLETE;
     if (status !== PROCESSING_STATUS.COMPLETE) {
       processingFailures.push(
         !text
           ? `${doc.fileName}: no machine-readable text extracted yet`
-          : `${doc.fileName}: ${rowsDetected - rowsExtracted} transaction row(s) detected but not extracted`,
+          : pagesIncomplete
+            ? `${doc.fileName}: ${pages.expected - pages.processed} page(s) of ${pages.expected} not processed`
+            : `${doc.fileName}: ${rowsDetected - rowsExtracted} transaction row(s) detected but not extracted`,
       );
     }
     if (status === PROCESSING_STATUS.COMPLETE) documentsProcessed++;
@@ -115,6 +122,10 @@ export async function compileCaseEvidence(
         documentFamily: classification.documentFamily,
         classificationConfidence: classification.confidence,
         taxPeriodsJson: JSON.stringify(classification.taxPeriods),
+        pagesExpected: pages.expected,
+        pagesProcessed: pages.processed,
+        tablesDetected,
+        tablesProcessed,
         transactionRowsDetected: rowsDetected,
         transactionRowsExtracted: rowsExtracted,
         processingStatus: status,
