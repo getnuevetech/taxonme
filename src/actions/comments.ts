@@ -62,7 +62,7 @@ export async function addCaseCommentAction(_prev: ActionState, formData: FormDat
   const attachmentIds: string[] = [];
   if (files.length > 0) {
     for (const file of files.slice(0, 10)) {
-      const { filePath, sizeBytes } = await saveUpload(file);
+      const { filePath, sizeBytes, contentHash } = await saveUpload(file);
       const doc = await db.document.create({
         data: {
           userId: c.userId, // the case owner's vault
@@ -71,6 +71,7 @@ export async function addCaseCommentAction(_prev: ActionState, formData: FormDat
           filePath,
           mimeType: file.type || "application/octet-stream",
           sizeBytes,
+          contentHash,
           docKind: "other",
         },
       });

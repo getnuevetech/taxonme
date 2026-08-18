@@ -75,7 +75,7 @@ export function validateImageUploadFile(file: File): string | null {
   return null;
 }
 
-export async function saveUpload(file: File): Promise<{ filePath: string; sizeBytes: number }> {
+export async function saveUpload(file: File): Promise<{ filePath: string; sizeBytes: number; contentHash: string }> {
   const validationError = validateUploadFile(file);
   if (validationError) throw new Error(validationError);
   await fs.mkdir(UPLOAD_ROOT, { recursive: true });
@@ -84,7 +84,7 @@ export async function saveUpload(file: File): Promise<{ filePath: string; sizeBy
   const buf = Buffer.from(await file.arrayBuffer());
   if (buf.length > MAX_UPLOAD_BYTES) throw new Error(`${file.name} is larger than 20 MB.`);
   await fs.writeFile(path.join(UPLOAD_ROOT, name), buf);
-  return { filePath: name, sizeBytes: buf.length };
+  return { filePath: name, sizeBytes: buf.length, contentHash: crypto.createHash("sha256").update(buf).digest("hex") };
 }
 
 export async function saveUploadBuffer(buf: Buffer, ext: string): Promise<string> {

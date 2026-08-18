@@ -459,15 +459,34 @@ export async function runCaseAnalysis(caseId: string, opts?: { trigger?: string;
     summary_analysis: JSON.stringify(summaryOut.merged),
     verified_case_facts: JSON.stringify(summaryOut.merged),
   }, true);
+  const cachedDocumentState: Json | null = c.documents.length > 0 && c.documents.every((d) =>
+    d.contentHash &&
+    d.extractedJson &&
+    d.verificationStatus === "verified" &&
+    d.extractionSchemaVersion === "3.1"
+  )
+    ? {
+        cached: true,
+        documents: c.documents.map((d) => ({
+          document_id: d.id,
+          content_hash: d.contentHash,
+          extracted: d.extractedJson,
+          schema_version: d.extractionSchemaVersion,
+          extractor_versions: d.extractorVersionsJson,
+        })),
+      }
+    : null;
   const documentOut = c.documents.length
-    ? await stageRun(STAGE_KEYS.DOCUMENT, {
+    ? cachedDocumentState
+      ? { stepOutputs: [], merged: cachedDocumentState, conflicts: [], usedAi: false }
+      : await stageRun(STAGE_KEYS.DOCUMENT, {
         input: docText,
         documents: docText,
         document_id: c.documents.map((d) => d.id).join(","),
         existing_verified_documents: "(none)",
       }, false, media)
     : null;
-  if (documentOut) {
+  if (documentOut && !cachedDocumentState) {
     await recordDocumentFieldVerifications({
       documents: c.documents.map((d) => ({ id: d.id, caseId: d.caseId })),
       analysisVersionId: analysisVersion.id,

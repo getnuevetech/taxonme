@@ -208,12 +208,22 @@ export async function recordDocumentFieldVerifications(args: {
         },
       });
     }
-    if (keys.some((key) => {
+    const hasVerificationIssue = keys.some((key) => {
       const left = aFields[key] ?? "";
       const right = bFields[key] ?? "";
       return !left || !right || left !== right;
-    })) {
-      await db.document.update({ where: { id: doc.id }, data: { status: "verification_required" } });
-    }
+    });
+    await db.document.update({
+      where: { id: doc.id },
+      data: {
+        status: hasVerificationIssue ? "verification_required" : "extracted",
+        verificationStatus: hasVerificationIssue ? "verification_required" : "verified",
+        extractionSchemaVersion: "3.1",
+        extractorVersionsJson: JSON.stringify({
+          extractor_a: args.stepOutputs.find((o) => o.role === "extractor_a")?.source ?? "",
+          extractor_b: args.stepOutputs.find((o) => o.role === "extractor_b")?.source ?? "",
+        }),
+      },
+    });
   }
 }
