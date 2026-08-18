@@ -25,7 +25,7 @@ export async function rebuildActionGraph(caseId: string): Promise<void> {
   const nodes = Array.from(deduped.entries());
   let previousActionNodeId: string | null = null;
   for (const [index, [purpose, step]] of nodes.entries()) {
-    const created = await db.caseActionNode.create({
+    const created: { id: string } = await db.caseActionNode.create({
       data: {
         caseId,
         actionKey: step.actionKey || purpose,
