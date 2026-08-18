@@ -142,14 +142,16 @@ export default async function AdminTicketsPage({
                 {inboundSecret ? (
                   <p className="mt-1">
                     Enabled. Point your email provider&apos;s inbound webhook (SendGrid Inbound Parse, Mailgun Routes, Postmark) at{" "}
-                    <code className="rounded bg-white px-1">/api/inbound-email?secret=…</code>. Emails from registered users create
+                    <code className="rounded bg-white px-1">/api/inbound-email</code> and send the secret as{" "}
+                    <code className="rounded bg-white px-1">x-inbound-secret</code>. Emails from registered users create
                     tickets; replies containing a TKT number are appended to that ticket.
                   </p>
                 ) : (
                   <p className="mt-1">
                     Disabled. Set <code className="rounded bg-white px-1">tickets.inbound_email_secret</code> in App settings to a
                     long random value, then point your email provider&apos;s inbound webhook at{" "}
-                    <code className="rounded bg-white px-1">/api/inbound-email?secret=&lt;value&gt;</code>.
+                    <code className="rounded bg-white px-1">/api/inbound-email</code> with an{" "}
+                    <code className="rounded bg-white px-1">x-inbound-secret</code> header.
                   </p>
                 )}
               </div>

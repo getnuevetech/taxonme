@@ -32,7 +32,7 @@ async function seedSettings() {
     ["consultants.subscriptions_enabled", "false", "consultants", "Consultant subscriptions", "Require consultants to hold an active partner plan to accept clients (toggle on the Plans page)."],
     ["users.deleted_retention_days", "90", "users", "Deleted account retention (days)", "How long deleted accounts stay recoverable before being expunged permanently."],
     ["tickets.sla_first_response_hours", "24", "tickets", "Ticket first-response SLA (hours)", "Open tickets without a staff reply within this window are flagged SLA overdue."],
-    ["tickets.inbound_email_secret", "", "tickets", "Inbound email webhook secret", "Set to a long random value to enable email-to-ticket at /api/inbound-email?secret=<value>. Empty disables it."],
+    ["tickets.inbound_email_secret", "", "tickets", "Inbound email webhook secret", "Set to a long random value and send it as the x-inbound-secret header to enable email-to-ticket at /api/inbound-email. Empty disables it."],
     ["tickets.auto_close_days", "7", "tickets", "Ticket auto-close (days)", "Tickets are closed automatically when the customer doesn't respond for this many days after a staff reply. 0 disables."],
     ["cases.autoclose_completed_days", "14", "cases", "Case auto-close after completion (days)", "Completed cases (every path step done) close automatically with AI closing remarks this many days after the last activity. 0 disables."],
     ["cases.autoclose_abandoned_days", "60", "cases", "Case auto-close when abandoned (days)", "Cases with no activity for this many days are closed automatically with closing remarks. Documents stay in the customer's account. 0 disables."],

@@ -61,6 +61,28 @@ export async function CaseAnalysisView({ caseId, viewer }: { caseId: string; vie
     ? latestPresentation.finding_card as Record<string, unknown>
     : null;
   const v3WhatWeFound = Array.isArray(latestPresentation?.what_we_found) ? latestPresentation.what_we_found : [];
+  const textFrom = (value: unknown): string => {
+    if (value === null || value === undefined) return "";
+    if (typeof value === "string" || typeof value === "number") return String(value);
+    if (typeof value === "object") {
+      const row = value as Record<string, unknown>;
+      return [row.title, row.description, row.detail, row.summary].map(textFrom).filter(Boolean).join(" — ");
+    }
+    return "";
+  };
+  const listFrom = (value: unknown): string[] => Array.isArray(value)
+    ? value.map(textFrom).filter(Boolean)
+    : textFrom(value)
+      ? [textFrom(value)]
+      : [];
+  const v3WhatWeFoundItems = listFrom(v3WhatWeFound).slice(0, 5);
+  const v3NeedItems = listFrom(latestPresentation?.what_is_still_unclear).slice(0, 5);
+  const v3How = latestPresentation?.how_we_reached_this && typeof latestPresentation.how_we_reached_this === "object"
+    ? latestPresentation.how_we_reached_this as Record<string, unknown>
+    : null;
+  const v3NextStep = latestPresentation?.next_step && typeof latestPresentation.next_step === "object"
+    ? latestPresentation.next_step as Record<string, unknown>
+    : null;
 
   const form9465 = interactive
     ? await db.irsFormTemplate.findFirst({ where: { formNumber: "9465", isPublished: true }, select: { id: true } })
@@ -148,18 +170,57 @@ export async function CaseAnalysisView({ caseId, viewer }: { caseId: string; vie
         {v3FindingCard && (
           <Card>
             <CardBody>
-              <div className="flex flex-wrap items-center gap-2">
-                <Badge color="indigo">v3 presentation</Badge>
-                <Badge>{String(v3FindingCard.status ?? "review")}</Badge>
-                <Badge color="amber">{String(v3FindingCard.priority ?? "medium")}</Badge>
+              <div className="flex flex-wrap items-center gap-2 text-xs">
+                <Badge color="indigo">Latest case analysis</Badge>
+                <Badge>{String(v3FindingCard.status ?? "review").replace(/_/g, " ")}</Badge>
+                <Badge color="amber">{String(v3FindingCard.priority ?? "medium").replace(/_/g, " ")}</Badge>
               </div>
-              <h2 className="mt-3 text-xl font-semibold text-slate-900">{String(v3FindingCard.headline ?? "Case finding")}</h2>
-              <p className="mt-2 text-sm text-slate-600">{String(v3FindingCard.summary ?? "")}</p>
-              {v3WhatWeFound.length > 0 && (
-                <div className="mt-4">
-                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">What we found</p>
-                  <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-slate-700">
-                    {v3WhatWeFound.slice(0, 5).map((item, idx) => <li key={idx}>{String(item)}</li>)}
+              <h2 className="mt-3 text-xl font-semibold text-slate-900">{textFrom(v3FindingCard.headline) || "Your case at a glance"}</h2>
+              {textFrom(v3FindingCard.summary) && <p className="mt-2 text-sm leading-relaxed text-slate-700">{textFrom(v3FindingCard.summary)}</p>}
+              <div className="mt-5 grid gap-4 md:grid-cols-2">
+                <div className="rounded-xl bg-slate-50 p-4">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">What we know so far</p>
+                  {v3WhatWeFoundItems.length > 0 ? (
+                    <ul className="mt-2 space-y-2 text-sm text-slate-700">
+                      {v3WhatWeFoundItems.map((item, idx) => <li key={idx} className="leading-relaxed">• {item}</li>)}
+                    </ul>
+                  ) : (
+                    <p className="mt-2 text-sm text-slate-500">We are still organizing the facts from your summary and documents.</p>
+                  )}
+                </div>
+                <div className="rounded-xl bg-indigo-50 p-4">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-indigo-500">Your next useful step</p>
+                  <p className="mt-2 text-sm font-semibold text-slate-900">{textFrom(v3NextStep?.title) || "Review the findings below"}</p>
+                  <p className="mt-1 text-sm leading-relaxed text-slate-700">{textFrom(v3NextStep?.description) || "Use the checklist and open questions to confirm the facts that matter most."}</p>
+                </div>
+              </div>
+              {v3How && (
+                <div className="mt-4 rounded-xl border border-slate-200 p-4">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">How we reached this</p>
+                  <div className="mt-3 grid gap-3 text-sm md:grid-cols-2">
+                    {[
+                      ["Your situation", v3How.your_situation],
+                      ["Tax rules", v3How.tax_rules],
+                      ["Your evidence", v3How.your_evidence],
+                      ["Our conclusion", v3How.our_conclusion],
+                    ].map(([label, value]) => {
+                      const details = listFrom(value);
+                      if (details.length === 0) return null;
+                      return (
+                        <div key={String(label)}>
+                          <p className="font-semibold text-slate-800">{String(label)}</p>
+                          <p className="mt-1 leading-relaxed text-slate-600">{details.join(" ")}</p>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+              {v3NeedItems.length > 0 && (
+                <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-4">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-amber-700">What still needs confirmation</p>
+                  <ul className="mt-2 space-y-1 text-sm text-amber-900">
+                    {v3NeedItems.map((item, idx) => <li key={idx}>• {item}</li>)}
                   </ul>
                 </div>
               )}

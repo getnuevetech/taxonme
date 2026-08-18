@@ -453,6 +453,7 @@ export async function runCaseAnalysis(caseId: string, opts?: { trigger?: string;
   const caseAnalysisVersion = analysisVersion.version;
   const sourceSnapshotIds: string[] = [];
   const caseEvidenceIds = c.documents.map((d) => d.id).join(",");
+  try {
   await recordCaseDiscovery(caseId, caseAnalysisVersion);
   await db.case.update({ where: { id: caseId }, data: { status: "analyzing" } });
 
@@ -612,10 +613,14 @@ export async function runCaseAnalysis(caseId: string, opts?: { trigger?: string;
     }
   }
 
-  const usedAi =
+  const upstreamUsedAi =
     summaryOut.usedAi ||
     goalOut.usedAi ||
-    (documentOut?.usedAi ?? false) ||
+    (documentOut?.usedAi ?? false);
+  const hasReusableUpstream = Boolean(priorSnapshot?.facts || priorSnapshot?.goal || priorSnapshot?.documents);
+  const shouldAttemptDownstreamAi =
+    upstreamUsedAi ||
+    hasReusableUpstream ||
     requestedPipelineSet.has(STAGE_KEYS.SITUATION) ||
     requestedPipelineSet.has(STAGE_KEYS.PRESENTER);
   const docInfos = c.documents.map((d) => ({
@@ -626,9 +631,9 @@ export async function runCaseAnalysis(caseId: string, opts?: { trigger?: string;
       /\.(txt|csv|md|log)$/i.test(d.fileName) ||
       d.extractedJson.length > 0,
   }));
-  const fallback = usedAi ? null : await fallbackAnalyze(c.situation, c.goal, rawDocText, docInfos);
-  const facts = usedAi ? summaryOut.merged : fallback!.facts;
-  const goalFacts = usedAi ? goalOut.merged : { user_goal: c.goal };
+  const fallback = upstreamUsedAi || hasReusableUpstream ? null : await fallbackAnalyze(c.situation, c.goal, rawDocText, docInfos);
+  const facts = upstreamUsedAi || hasReusableUpstream ? summaryOut.merged : fallback!.facts;
+  const goalFacts = upstreamUsedAi || hasReusableUpstream ? goalOut.merged : { user_goal: c.goal };
 
   // Layer 4: situation analysis grounded in the IRS knowledge base.
   const authority = await retrieveAuthorityForCase(caseId, `${c.situation} ${c.goal} ${docText}`);
@@ -639,7 +644,7 @@ export async function runCaseAnalysis(caseId: string, opts?: { trigger?: string;
     ? priorSnapshot.analysis as Json
     : null;
   const shouldRunSituation = requestedPipelineSet.has(STAGE_KEYS.SITUATION) || !priorSituationState;
-  if (usedAi && shouldRunSituation) {
+  if (shouldAttemptDownstreamAi && shouldRunSituation) {
     const situationOut = await stageRun(STAGE_KEYS.SITUATION, {
       facts: JSON.stringify(facts),
       documents: documentOut ? JSON.stringify(documentOut.merged) : "(no documents uploaded)",
@@ -665,7 +670,7 @@ export async function runCaseAnalysis(caseId: string, opts?: { trigger?: string;
     ? priorSnapshot.presentation as Json
     : null;
   const shouldRunPresenter = requestedPipelineSet.has(STAGE_KEYS.PRESENTER) || !priorPresentation;
-  if (usedAi && shouldRunPresenter) {
+  if (shouldAttemptDownstreamAi && shouldRunPresenter) {
     const presenterOut = await stageRun(STAGE_KEYS.PRESENTER, {
       input: JSON.stringify({ facts, goal: goalFacts, documents: documentOut?.merged ?? null, analysis: situationMerged }),
     });
@@ -876,6 +881,30 @@ export async function runCaseAnalysis(caseId: string, opts?: { trigger?: string;
 
   // Immediately verify path-step evidence (e.g. documents already uploaded at intake).
   await verifyCaseProgress(caseId);
+  } catch (err) {
+    const previousStatus = typeof priorSnapshot?.status === "string" && priorSnapshot.status
+      ? priorSnapshot.status
+      : c.issues.length > 0
+        ? "analyzed"
+        : "needs_info";
+    await db.caseAnalysisVersion.update({
+      where: { id: analysisVersion.id },
+      data: {
+        status: "failed",
+        snapshotJson: JSON.stringify({
+          case_id: caseId,
+          requested_pipelines: requestedPipelines,
+          reused_pipelines: reusedPipelines,
+          error: String(err).slice(0, 1000),
+        }),
+      },
+    }).catch(() => null);
+    await db.case.update({ where: { id: caseId }, data: { status: previousStatus } }).catch(() => null);
+    await finishReanalysisEvent(reanalysisEventId, "failed");
+    const { logSystem } = await import("../syslog");
+    await logSystem("error", "analysis", "Case analysis failed", String(err));
+    throw err;
+  }
 }
 
 // ---------- Single-purpose AI helpers ----------
