@@ -7,7 +7,7 @@ import { STAGE_KEYS } from "../constants";
 import { getNumberSetting } from "../settings";
 import { readUpload } from "../uploads";
 import { verifyCaseProgress } from "../case-progress";
-import { upsertCanonicalCaseState } from "../canonical-case-state";
+import { buildCanonicalCaseState, upsertCanonicalCaseState } from "../canonical-case-state";
 import { composePromptForStep } from "./prompt-composer";
 import {
   completeCaseAnalysisVersion,
@@ -412,6 +412,14 @@ export async function runCaseAnalysis(caseId: string, opts?: { trigger?: string;
     const stage = await db.pipelineStage.findUnique({ where: { key: stageKey } });
     const sourceId = await upsertSourceSnapshot(vars.irs_sources || vars.knowledge || "");
     if (sourceId) sourceSnapshotIds.push(sourceId);
+    const canonicalState = await buildCanonicalCaseState(caseId);
+    const promptVars = {
+      ...vars,
+      current_canonical_case_state: canonicalState ? JSON.stringify(canonicalState) : JSON.stringify({ case_id: caseId, case_version: caseAnalysisVersion }),
+      case_version: String(canonicalState?.case_version ?? caseAnalysisVersion),
+      evidence_ids: c.documents.map((d) => d.id).join(","),
+      source_ids: sourceId,
+    };
     const run = await db.analysisRun.create({
       data: {
         caseId,
@@ -421,10 +429,10 @@ export async function runCaseAnalysis(caseId: string, opts?: { trigger?: string;
         pipelineVersion: stage?.version ?? "",
         schemaVersion: "3.0",
         sourceSnapshotId: sourceId,
-        metadataJson: JSON.stringify({ stageKey, caseAnalysisVersion, pipelineVersion: stage?.version ?? "", sourceSnapshotId: sourceId, inputKeys: Object.keys(vars) }),
+        metadataJson: JSON.stringify({ stageKey, caseAnalysisVersion, pipelineVersion: stage?.version ?? "", sourceSnapshotId: sourceId, inputKeys: Object.keys(promptVars) }),
       },
     });
-    const outcome = await runStage(stageKey, vars, { runId: run.id, sequentialContext, media: stageMedia });
+    const outcome = await runStage(stageKey, promptVars, { runId: run.id, sequentialContext, media: stageMedia });
     await db.analysisRun.update({
       where: { id: run.id },
       data: { status: "complete", finishedAt: new Date() },

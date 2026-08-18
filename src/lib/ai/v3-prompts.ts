@@ -2,10 +2,11 @@ import { STAGE_KEYS, STEP_ROLES } from "../constants";
 
 export const AI_V3_VERSION = "3.0";
 export const GLOBAL_PROMPT_ID = "GLOBAL-RULES-v3";
+export const DOMAIN_RULES_PROMPT_ID = "DOMAIN-RULES-v31";
 
 export type PromptRecordSeed = {
   promptId: string;
-  kind: "global" | "responsibility" | "overlay" | "schema";
+  kind: "global" | "domain" | "responsibility" | "overlay" | "schema";
   responsibility?: string;
   stageKey?: string;
   version?: string;
@@ -551,8 +552,23 @@ GLOBAL OPERATING RULES
 14. Treat taxpayer information as sensitive and use only the minimum information supplied for this responsibility.`,
 };
 
+export const DOMAIN_RULES_PROMPT: PromptRecordSeed = {
+  promptId: DOMAIN_RULES_PROMPT_ID,
+  kind: "domain",
+  title: "TaxOnMe Dynamic Case-Orchestration Domain Rules",
+  body: `DOMAIN POLICY
+TaxOnMe is case-agnostic. Never optimize for a named tax case, a single customer's wording, or a predefined case template.
+The Canonical Case State is the single source of truth. Model outputs are candidate intelligence until supported by evidence, authority, system calculation, or professional confirmation.
+Do not hard-code issue names, workflows, resolution paths, decision trees, frontend cards, next-step logic, or case-analysis rules around examples.
+Preserve unknown and unclassified cases as first-class cases using UNCLASSIFIED_TAX_CASE, UNCLASSIFIED_TAX_ISSUE, or UNCLASSIFIED requirements when needed.
+Separate MISSING_INFORMATION, UNVERIFIED_INFORMATION, SOURCE_CONFLICT, and MODEL_DISAGREEMENT. Only source conflicts and model disagreements are conflicts.
+Differences are material only when they affect factual understanding, liability, eligibility, deadline, filing requirement, recommended action, risk, professional escalation, or outcome.
+Presenter and Case Guide have no analytical authority. They may only format approved state or help the customer execute approved actions.`,
+};
+
 export const V3_PROMPT_RECORDS: PromptRecordSeed[] = [
   GLOBAL_PROMPT,
+  DOMAIN_RULES_PROMPT,
   ...RESPONSIBILITY_PROMPTS,
   ...PIPELINE_OVERLAYS,
   ...SCHEMA_PROMPTS,
