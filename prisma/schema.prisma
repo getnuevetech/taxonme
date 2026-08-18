@@ -575,6 +575,7 @@ model CaseReanalysisEvent {
   caseId        String
   trigger       String
   pipelinesJson String  @default("[]")
+  idempotencyKey String?
   status        String  @default("queued") // queued | running | complete | failed
   actorType     String  @default("system")
   metadataJson  String  @default("{}")

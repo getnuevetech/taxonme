@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db";
 import { requireAdminArea, hashPassword } from "@/lib/auth";
 import { setSetting } from "@/lib/settings";
+import { queueCaseReanalysis } from "@/lib/reanalysis-events";
 import type { ActionState } from "./auth";
 
 // ---------- Settings ----------
@@ -289,15 +290,12 @@ export async function resolveHumanReviewItemAction(formData: FormData) {
         content: professionalFact.slice(0, 4000),
       },
     });
-    await db.caseReanalysisEvent.create({
-      data: {
-        caseId: item.caseId,
-        trigger: "professional_confirmed_fact",
-        pipelinesJson: JSON.stringify(["situation", "presenter"]),
-        status: "queued",
-        actorType: "admin",
-        metadataJson: JSON.stringify({ humanReviewItemId: id }),
-      },
+    await queueCaseReanalysis({
+      caseId: item.caseId,
+      trigger: "professional_confirmed_fact",
+      actorType: "admin",
+      materialKey: id,
+      metadata: { humanReviewItemId: id },
     });
   }
   await db.humanReviewItem.update({
@@ -822,16 +820,13 @@ export async function saveKnowledgeAction(_prev: ActionState, formData: FormData
       select: { id: true },
       take: 500,
     });
-    await db.caseReanalysisEvent.createMany({
-      data: activeCases.map((c) => ({
-        caseId: c.id,
-        trigger: "authoritative_source_update",
-        pipelinesJson: JSON.stringify(["situation", "presenter"]),
-        status: "queued",
-        actorType: "admin",
-        metadataJson: JSON.stringify({ knowledgeSourceId: id }),
-      })),
-    });
+    await Promise.all(activeCases.map((c) => queueCaseReanalysis({
+      caseId: c.id,
+      trigger: "authoritative_source_update",
+      actorType: "admin",
+      materialKey: id,
+      metadata: { knowledgeSourceId: id },
+    })));
   } else await db.knowledgeSource.create({ data });
   revalidatePath("/admin/knowledge");
   return { ok: true };
