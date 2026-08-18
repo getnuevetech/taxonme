@@ -19,6 +19,8 @@ async function seedSettings() {
     ["home.hero_images", '["/hero/hero-1.png", "/hero/hero-2.png", "/hero/hero-3.png"]', "branding", "Hero images (JSON array)", "Rotating homepage hero images. JSON array of image URLs or paths — add, remove, or reorder freely."],
     ["auth.google_client_id", "", "auth", "Google OAuth client ID", "Leave empty to hide the Google sign-in button."],
     ["auth.google_client_secret", "", "auth", "Google OAuth client secret", ""],
+    ["auth.session_user_consultant_minutes", "1440", "auth", "Customer/consultant session timeout (minutes)", "How long customer and consultant sessions remain valid after login. Existing sessions older than this are rejected."],
+    ["auth.session_admin_minutes", "120", "auth", "Admin session timeout (minutes)", "How long admin and super-admin sessions remain valid after login. Keep this shorter than customer sessions."],
     ["billing.free_plan_key", "free", "billing", "Free plan key", "Plan applied to users without a paid subscription."],
     ["irs.account_url", "https://www.irs.gov/your-account", "irs", "IRS online account URL", "Official page users are guided to for creating their IRS individual account."],
     ["analysis.expected_documents", "3", "analysis", "Expected documents per case", "Used by the deterministic case-readiness formula."],
