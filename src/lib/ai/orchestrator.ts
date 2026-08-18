@@ -884,7 +884,7 @@ export async function runCaseAnalysis(caseId: string, opts?: { trigger?: string;
   } catch (err) {
     const previousStatus = typeof priorSnapshot?.status === "string" && priorSnapshot.status
       ? priorSnapshot.status
-      : c.issues.length > 0
+      : priorSnapshot
         ? "analyzed"
         : "needs_info";
     await db.caseAnalysisVersion.update({
