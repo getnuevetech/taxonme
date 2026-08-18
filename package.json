@@ -10,6 +10,7 @@
     "test": "tsx scripts/ai-v3-acceptance.ts && tsx scripts/ai-v3-fixture-tests.ts",
     "ai:v3:backfill": "tsx scripts/ai-v3-backfill.ts",
     "ai:v3:rollout-check": "tsx scripts/ai-v3-rollout-check.ts",
+    "v32:evidence-check": "tsx scripts/v32-evidence-check.ts",
     "db:push": "prisma db push",
     "db:seed": "prisma db seed",
     "db:migrate": "prisma migrate deploy"
