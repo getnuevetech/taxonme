@@ -360,6 +360,7 @@ export async function runCaseAnalysis(caseId: string, opts?: { trigger?: string;
   const analysisVersion = await startCaseAnalysisVersion(caseId, trigger);
   const caseAnalysisVersion = analysisVersion.version;
   const sourceSnapshotIds: string[] = [];
+  const caseEvidenceIds = c.documents.map((d) => d.id).join(",");
   await db.case.update({ where: { id: caseId }, data: { status: "analyzing" } });
 
   // Clear previous results for a clean re-run.
@@ -417,7 +418,7 @@ export async function runCaseAnalysis(caseId: string, opts?: { trigger?: string;
       ...vars,
       current_canonical_case_state: canonicalState ? JSON.stringify(canonicalState) : JSON.stringify({ case_id: caseId, case_version: caseAnalysisVersion }),
       case_version: String(canonicalState?.case_version ?? caseAnalysisVersion),
-      evidence_ids: c.documents.map((d) => d.id).join(","),
+      evidence_ids: caseEvidenceIds,
       source_ids: sourceId,
     };
     const run = await db.analysisRun.create({
