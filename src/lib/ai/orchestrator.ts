@@ -89,6 +89,24 @@ function normalizePresentation(data: Json | null): Json | null {
   };
 }
 
+function parseJsonRecord(value: string): Json | null {
+  try {
+    const parsed = JSON.parse(value || "{}");
+    return typeof parsed === "object" && parsed !== null && !Array.isArray(parsed) ? parsed as Json : null;
+  } catch {
+    return null;
+  }
+}
+
+function reusedStageOutcome(merged: unknown): StageOutcome {
+  return {
+    stepOutputs: [],
+    merged: typeof merged === "object" && merged !== null && !Array.isArray(merged) ? merged as Json : {},
+    conflicts: [],
+    usedAi: false,
+  };
+}
+
 async function getRunnableSteps(stageKey: string) {
   const stage = await db.pipelineStage.findUnique({
     where: { key: stageKey },
@@ -369,17 +387,21 @@ export async function runCaseAnalysis(caseId: string, opts?: { trigger?: string;
   if (!c) return;
   const trigger = opts?.trigger ?? "case_analysis";
   const requestedPipelines = pipelinesForMaterialEvent(trigger, opts?.pipelines);
+  const requestedPipelineSet = new Set(requestedPipelines);
   const reanalysisEventId = opts?.reanalysisEventId ?? await recordReanalysisEvent(caseId, trigger, requestedPipelines);
+  const priorVersion = await db.caseAnalysisVersion.findFirst({
+    where: { caseId, status: { in: ["approved", "needs_verification", "human_review"] } },
+    orderBy: { version: "desc" },
+    select: { snapshotJson: true },
+  });
+  const priorSnapshot = priorVersion ? parseJsonRecord(priorVersion.snapshotJson) : null;
+  const reusedPipelines: string[] = [];
   const analysisVersion = await startCaseAnalysisVersion(caseId, trigger);
   const caseAnalysisVersion = analysisVersion.version;
   const sourceSnapshotIds: string[] = [];
   const caseEvidenceIds = c.documents.map((d) => d.id).join(",");
   await recordCaseDiscovery(caseId, caseAnalysisVersion);
   await db.case.update({ where: { id: caseId }, data: { status: "analyzing" } });
-
-  // Clear previous results for a clean re-run.
-  await db.issue.deleteMany({ where: { caseId } });
-  await db.pathStep.deleteMany({ where: { caseId } });
 
   // Layer 2 input: include actual document content where it can be read
   // (plain text + the text layer of digital PDFs, e.g. IRS transcripts).
@@ -463,14 +485,25 @@ export async function runCaseAnalysis(caseId: string, opts?: { trigger?: string;
     return outcome;
   }
 
-  // Layer 2/3: summary, goal, and document analysis (multi-model, admin-selected).
-  const summaryOut = await stageRun(STAGE_KEYS.SUMMARY, { input: c.situation, goal: c.goal }, true);
-  const goalOut = await stageRun(STAGE_KEYS.GOAL, {
-    input: c.goal,
-    goal: c.goal,
-    summary_analysis: JSON.stringify(summaryOut.merged),
-    verified_case_facts: JSON.stringify(summaryOut.merged),
-  }, true);
+  // Layer 2/3: summary, goal, and document analysis (multi-model,
+  // admin-selected). Targeted re-analysis can reuse prior approved stage
+  // outputs when the event's dependency list does not include that stage.
+  const shouldRunSummary = requestedPipelineSet.has(STAGE_KEYS.SUMMARY) || !priorSnapshot?.facts;
+  const summaryOut = shouldRunSummary
+    ? await stageRun(STAGE_KEYS.SUMMARY, { input: c.situation, goal: c.goal }, true)
+    : reusedStageOutcome(priorSnapshot?.facts);
+  if (!shouldRunSummary) reusedPipelines.push(STAGE_KEYS.SUMMARY);
+
+  const shouldRunGoal = requestedPipelineSet.has(STAGE_KEYS.GOAL) || !priorSnapshot?.goal;
+  const goalOut = shouldRunGoal
+    ? await stageRun(STAGE_KEYS.GOAL, {
+      input: c.goal,
+      goal: c.goal,
+      summary_analysis: JSON.stringify(summaryOut.merged),
+      verified_case_facts: JSON.stringify(summaryOut.merged),
+    }, true)
+    : reusedStageOutcome(priorSnapshot?.goal);
+  if (!shouldRunGoal) reusedPipelines.push(STAGE_KEYS.GOAL);
   const cachedDocumentState: Json | null = c.documents.length > 0 && c.documents.every((d) =>
     d.contentHash &&
     d.extractedJson &&
@@ -488,9 +521,14 @@ export async function runCaseAnalysis(caseId: string, opts?: { trigger?: string;
         })),
       }
     : null;
+  const priorDocumentState = typeof priorSnapshot?.documents === "object" && priorSnapshot.documents !== null
+    ? priorSnapshot.documents as Json
+    : null;
+  const shouldRunDocument = requestedPipelineSet.has(STAGE_KEYS.DOCUMENT) || (!cachedDocumentState && !priorDocumentState);
+  const reusedDocumentState = shouldRunDocument ? null : (cachedDocumentState ?? priorDocumentState);
   const documentOut = c.documents.length
-    ? cachedDocumentState
-      ? { stepOutputs: [], merged: cachedDocumentState, conflicts: [], usedAi: false }
+    ? reusedDocumentState
+      ? { stepOutputs: [], merged: reusedDocumentState, conflicts: [], usedAi: false }
       : await stageRun(STAGE_KEYS.DOCUMENT, {
         input: docText,
         documents: docText,
@@ -498,7 +536,8 @@ export async function runCaseAnalysis(caseId: string, opts?: { trigger?: string;
         existing_verified_documents: "(none)",
       }, false, media)
     : null;
-  if (documentOut && !cachedDocumentState) {
+  if (c.documents.length > 0 && !shouldRunDocument) reusedPipelines.push(STAGE_KEYS.DOCUMENT);
+  if (documentOut && shouldRunDocument && !cachedDocumentState) {
     await recordDocumentFieldVerifications({
       documents: c.documents.map((d) => ({ id: d.id, caseId: d.caseId })),
       analysisVersionId: analysisVersion.id,
@@ -520,7 +559,12 @@ export async function runCaseAnalysis(caseId: string, opts?: { trigger?: string;
     }
   }
 
-  const usedAi = summaryOut.usedAi || goalOut.usedAi || (documentOut?.usedAi ?? false);
+  const usedAi =
+    summaryOut.usedAi ||
+    goalOut.usedAi ||
+    (documentOut?.usedAi ?? false) ||
+    requestedPipelineSet.has(STAGE_KEYS.SITUATION) ||
+    requestedPipelineSet.has(STAGE_KEYS.PRESENTER);
   const docInfos = c.documents.map((d) => ({
     docKind: d.docKind,
     readable:
@@ -538,7 +582,11 @@ export async function runCaseAnalysis(caseId: string, opts?: { trigger?: string;
   const knowledge = authority.text;
   let situationMerged: Json = {};
   let situationConflicts: Conflict[] = [];
-  if (usedAi) {
+  const priorSituationState = typeof priorSnapshot?.analysis === "object" && priorSnapshot.analysis !== null
+    ? priorSnapshot.analysis as Json
+    : null;
+  const shouldRunSituation = requestedPipelineSet.has(STAGE_KEYS.SITUATION) || !priorSituationState;
+  if (usedAi && shouldRunSituation) {
     const situationOut = await stageRun(STAGE_KEYS.SITUATION, {
       facts: JSON.stringify(facts),
       documents: documentOut ? JSON.stringify(documentOut.merged) : "(no documents uploaded)",
@@ -552,12 +600,19 @@ export async function runCaseAnalysis(caseId: string, opts?: { trigger?: string;
     });
     situationMerged = situationOut.merged;
     situationConflicts = situationOut.conflicts;
+  } else if (priorSituationState) {
+    situationMerged = priorSituationState;
+    reusedPipelines.push(STAGE_KEYS.SITUATION);
   }
 
   // Layer 5 presentation: a single AI converts internal analysis to structured
   // data; the UI renders it deterministically. Falls back to rule-based output.
   let presentation: Json | null = null;
-  if (usedAi) {
+  const priorPresentation = typeof priorSnapshot?.presentation === "object" && priorSnapshot.presentation !== null
+    ? priorSnapshot.presentation as Json
+    : null;
+  const shouldRunPresenter = requestedPipelineSet.has(STAGE_KEYS.PRESENTER) || !priorPresentation;
+  if (usedAi && shouldRunPresenter) {
     const presenterOut = await stageRun(STAGE_KEYS.PRESENTER, {
       input: JSON.stringify({ facts, goal: goalFacts, documents: documentOut?.merged ?? null, analysis: situationMerged }),
     });
@@ -571,6 +626,9 @@ export async function runCaseAnalysis(caseId: string, opts?: { trigger?: string;
       });
     }
     presentation = normalizePresentation(p);
+  } else if (priorPresentation) {
+    presentation = normalizePresentation(priorPresentation);
+    reusedPipelines.push(STAGE_KEYS.PRESENTER);
   }
   let issues: Json[] = presentation
     ? ((presentation.issues as Json[]) ?? [])
@@ -584,6 +642,11 @@ export async function runCaseAnalysis(caseId: string, opts?: { trigger?: string;
       if (missingReturn) issues.unshift(missingReturn);
     }
   }
+
+  // Persist issues after successful stage execution so failed targeted runs do
+  // not erase the last approved customer-facing state.
+  await db.issue.deleteMany({ where: { caseId } });
+  await db.pathStep.deleteMany({ where: { caseId } });
 
   // Persist issues.
   const issueIds: string[] = [];
@@ -743,6 +806,7 @@ export async function runCaseAnalysis(caseId: string, opts?: { trigger?: string;
     snapshot: {
       case_id: caseId,
       requested_pipelines: requestedPipelines,
+      reused_pipelines: reusedPipelines,
       status: needsConsultant ? "consultant_recommended" : "analyzed",
       readiness,
       facts,
