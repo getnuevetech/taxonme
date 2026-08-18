@@ -3,6 +3,8 @@ import { STAGE_KEYS, STEP_ROLES } from "../src/lib/constants";
 import { validateAiJson } from "../src/lib/ai/validation";
 import { classifyInformationCondition, conceptsConflict, isMaterialDifference, normalizeActionPurpose, normalizeConcept } from "../src/lib/case-semantics";
 import { buildReanalysisIdempotencyKey, normalizeReanalysisPipelines, pipelinesForMaterialEvent } from "../src/lib/reanalysis-policy";
+import { AI_DIAGNOSTIC_COUNTERS } from "../src/lib/ai/diagnostics-labels";
+import { evaluateAiV3Readiness } from "../src/lib/ai/readiness-core";
 import { redactSensitiveText } from "../src/lib/ai/privacy";
 import { DOMAIN_RULES_PROMPT_ID, RESPONSIBILITY_PROMPTS, V3_PIPELINE_BLUEPRINT, V3_PROMPT_RECORDS } from "../src/lib/ai/v3-prompts";
 
@@ -54,6 +56,21 @@ assert.equal(
     materialKey: "doc_hash",
   }),
 );
+for (const counter of ["caseAnalysisCycles", "pipelineRuns", "modelCalls", "failedModelCalls", "retryLogs", "fallbackCalls", "cacheHits"]) {
+  assert.ok(AI_DIAGNOSTIC_COUNTERS.includes(counter as (typeof AI_DIAGNOSTIC_COUNTERS)[number]), `missing diagnostics counter ${counter}`);
+}
+const emptyReadiness = evaluateAiV3Readiness({
+  prompts: [],
+  stages: [],
+  providers: [],
+  knowledgeCount: 0,
+  openReviewCount: 2,
+  queuedEvents: 3,
+  runningEvents: 4,
+});
+assert.equal(emptyReadiness.metrics.openHumanReviews, 2);
+assert.equal(emptyReadiness.metrics.queuedReanalysisEvents, 3);
+assert.equal(emptyReadiness.metrics.runningReanalysisEvents, 4);
 
 // Appendix C/H: user belief must not become confirmed IRS fact.
 assert.match(promptBody("RESP-FACT-v3"), /belief/);

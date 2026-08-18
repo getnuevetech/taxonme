@@ -51,6 +51,8 @@ export DATABASE_URL="postgresql://USER:PASSWORD@HOST:5432/DBNAME?schema=public"
 npm ci
 npx prisma migrate deploy   # apply schema migrations
 npx prisma db seed          # idempotent defaults (admin, plans, pipelines, content)
+npm test                    # static AI v3/v3.1 acceptance checks
+npm run ai:v3:rollout-check # database-backed AI readiness check
 npm run build
 PORT=3000 npm run start
 ```

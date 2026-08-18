@@ -20,6 +20,7 @@ const NAV: { area: string; href: string; label: string; section: string }[] = [
   { area: "admin.pipelines", href: "/admin/pipelines", label: "AI pipelines", section: "Intelligence" },
   { area: "admin.pipelines", href: "/admin/prompts", label: "AI prompts", section: "Intelligence" },
   { area: "admin.ai", href: "/admin/ai-runs", label: "AI run audit", section: "Intelligence" },
+  { area: "admin.ai", href: "/admin/diagnostics", label: "Diagnostics", section: "Intelligence" },
   { area: "admin.ai", href: "/admin/ai-readiness", label: "AI readiness", section: "Intelligence" },
   { area: "admin.knowledge", href: "/admin/source-snapshots", label: "Source snapshots", section: "Intelligence" },
   { area: "admin.human_review", href: "/admin/human-review", label: "Human review", section: "Intelligence" },
