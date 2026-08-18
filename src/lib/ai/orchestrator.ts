@@ -9,6 +9,7 @@ import { readUpload } from "../uploads";
 import { verifyCaseProgress } from "../case-progress";
 import { buildCanonicalCaseState, upsertCanonicalCaseState } from "../canonical-case-state";
 import { recordCaseDiscovery } from "../case-discovery";
+import { retrieveAuthorityForCase } from "../authority-retrieval";
 import { composePromptForStep } from "./prompt-composer";
 import {
   completeCaseAnalysisVersion,
@@ -209,7 +210,21 @@ export async function runStage(
     const messages: ChatMessage[] = [{ role: "user", content: composed.text }];
     const started = Date.now();
     try {
-      const result = await callProvider(step.provider, messages, opts?.media ?? []);
+      let result: Awaited<ReturnType<typeof callProvider>> | null = null;
+      let lastProviderError: unknown = null;
+      for (let attempt = 0; attempt < 2; attempt++) {
+        try {
+          result = await callProvider(step.provider, messages, opts?.media ?? []);
+          break;
+        } catch (err) {
+          lastProviderError = err;
+          if (attempt === 0) {
+            const { logSystem } = await import("../syslog");
+            await logSystem("warning", "ai_call", `${step.provider.name} retrying stage "${stageKey}" (${step.role}) after provider failure`, String(err));
+          }
+        }
+      }
+      if (!result) throw lastProviderError ?? new Error("Provider returned no result after retry.");
       const data = extractJson(result.text);
       const validation = validateAiJson(stageKey, data);
       if (!validation.ok && data) {
@@ -421,7 +436,7 @@ export async function runCaseAnalysis(caseId: string, opts?: { trigger?: string;
       current_canonical_case_state: canonicalState ? JSON.stringify(canonicalState) : JSON.stringify({ case_id: caseId, case_version: caseAnalysisVersion }),
       case_version: String(canonicalState?.case_version ?? caseAnalysisVersion),
       evidence_ids: caseEvidenceIds,
-      source_ids: sourceId,
+      source_ids: [vars.source_ids, sourceId].filter(Boolean).join(","),
     };
     const run = await db.analysisRun.create({
       data: {
@@ -522,7 +537,8 @@ export async function runCaseAnalysis(caseId: string, opts?: { trigger?: string;
   const goalFacts = usedAi ? goalOut.merged : { user_goal: c.goal };
 
   // Layer 4: situation analysis grounded in the IRS knowledge base.
-  const knowledge = await retrieveKnowledge(`${c.situation} ${c.goal} ${docText}`);
+  const authority = await retrieveAuthorityForCase(caseId, `${c.situation} ${c.goal} ${docText}`);
+  const knowledge = authority.text;
   let situationMerged: Json = {};
   let situationConflicts: Conflict[] = [];
   if (usedAi) {
@@ -532,8 +548,10 @@ export async function runCaseAnalysis(caseId: string, opts?: { trigger?: string;
       document_findings: documentOut ? JSON.stringify(documentOut.merged) : "(no documents uploaded)",
       knowledge: knowledge || "(no matching reference material)",
       irs_sources: knowledge || "(no matching reference material)",
+      authority_queries: authority.queries.join("\n"),
       goal: JSON.stringify(goalFacts),
       system_calculations: "(none supplied)",
+      source_ids: authority.sourceIds.join(","),
     });
     situationMerged = situationOut.merged;
     situationConflicts = situationOut.conflicts;
