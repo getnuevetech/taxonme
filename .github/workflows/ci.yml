@@ -1,0 +1,47 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: taxonme
+          POSTGRES_PASSWORD: taxonme_dev_password
+          POSTGRES_DB: taxonme
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U taxonme -d taxonme"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      DATABASE_URL: postgresql://taxonme:taxonme_dev_password@localhost:5432/taxonme?schema=public
+      AUTH_SECRET: ci-auth-secret-change-in-production
+      CRON_SECRET: ci-cron-secret-change-in-production
+      SEED_ADMIN_EMAIL: admin@example.com
+      SEED_ADMIN_PASSWORD: ChangeMe123!
+      ALLOW_MANUAL_BILLING: "true"
+      NEXT_TELEMETRY_DISABLED: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npx prisma generate
+      - run: npm run db:migrate
+      - run: npm run db:seed
+      - run: npm test
+      - run: npm run lint
+      - run: npm run build
+      - run: npm run ai:v3:rollout-check

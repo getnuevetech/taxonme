@@ -75,6 +75,36 @@ export function validateImageUploadFile(file: File): string | null {
   return null;
 }
 
+function hasSignature(buf: Buffer, signature: number[]): boolean {
+  return signature.every((byte, index) => buf[index] === byte);
+}
+
+function looksLikeText(buf: Buffer): boolean {
+  const sample = buf.subarray(0, Math.min(buf.length, 4096));
+  return !sample.includes(0);
+}
+
+function contentMatchesMime(buf: Buffer, mimeType: string): boolean {
+  const mime = normalizeMimeType(mimeType);
+  if (mime === "application/pdf") return hasSignature(buf, [0x25, 0x50, 0x44, 0x46]); // %PDF
+  if (mime === "image/jpeg" || mime === "image/jpg") return hasSignature(buf, [0xff, 0xd8, 0xff]);
+  if (mime === "image/png") return hasSignature(buf, [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+  if (mime === "image/gif") return hasSignature(buf, [0x47, 0x49, 0x46, 0x38]);
+  if (mime === "image/webp") return hasSignature(buf, [0x52, 0x49, 0x46, 0x46]) && buf.subarray(8, 12).toString("ascii") === "WEBP";
+  if (mime === "image/tiff") return hasSignature(buf, [0x49, 0x49, 0x2a, 0x00]) || hasSignature(buf, [0x4d, 0x4d, 0x00, 0x2a]);
+  if (mime === "application/vnd.openxmlformats-officedocument.wordprocessingml.document" || mime === "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet") {
+    return hasSignature(buf, [0x50, 0x4b, 0x03, 0x04]);
+  }
+  if (mime === "application/msword" || mime === "application/vnd.ms-excel") {
+    return hasSignature(buf, [0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1]);
+  }
+  if (mime === "text/plain" || mime === "text/csv" || mime === "application/csv") return looksLikeText(buf);
+  // HEIC/HEIF files are ISO BMFF containers with brand markers not always at
+  // byte zero; keep the MIME allowlist as the compatibility gate for those.
+  if (mime === "image/heic" || mime === "image/heif") return true;
+  return false;
+}
+
 export async function saveUpload(file: File): Promise<{ filePath: string; sizeBytes: number; contentHash: string }> {
   const validationError = validateUploadFile(file);
   if (validationError) throw new Error(validationError);
@@ -83,6 +113,9 @@ export async function saveUpload(file: File): Promise<{ filePath: string; sizeBy
   const name = `${crypto.randomBytes(16).toString("hex")}${ext}`;
   const buf = Buffer.from(await file.arrayBuffer());
   if (buf.length > MAX_UPLOAD_BYTES) throw new Error(`${file.name} is larger than 20 MB.`);
+  if (!contentMatchesMime(buf, file.type)) {
+    throw new Error(`${file.name}: the file content does not match the declared file type.`);
+  }
   await fs.writeFile(path.join(UPLOAD_ROOT, name), buf);
   return { filePath: name, sizeBytes: buf.length, contentHash: crypto.createHash("sha256").update(buf).digest("hex") };
 }
