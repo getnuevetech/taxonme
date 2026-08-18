@@ -33,17 +33,18 @@ export function ClarifyAnswerForm({ caseId, placeholder }: { caseId: string; pla
         />
         <Submit />
       </div>
-      <div className="mt-2 flex flex-wrap items-center gap-3">
+      <div className="mt-3 rounded-xl bg-white/70 p-3 ring-1 ring-indigo-100">
+        <label className="block text-xs font-medium text-slate-600">Add documents to this answer</label>
         <input
           type="file"
           name="files"
           multiple
           accept="image/*,.pdf,.doc,.docx,.txt,.csv,.png,.jpg,.jpeg,.heic,.webp"
-          className="text-xs text-slate-500 file:mr-2 file:rounded-lg file:border-0 file:bg-white file:px-2.5 file:py-1.5 file:text-xs file:font-medium file:text-indigo-700 file:ring-1 file:ring-indigo-200"
+          className="mt-2 block w-full text-xs text-slate-500 file:mr-3 file:rounded-lg file:border-0 file:bg-indigo-50 file:px-3 file:py-2 file:text-xs file:font-medium file:text-indigo-700 file:ring-1 file:ring-indigo-200"
         />
-        <span className="text-[11px] text-slate-400">
-          Attach documents or photos — they join your document vault and the analysis automatically.
-        </span>
+        <p className="mt-2 text-[11px] leading-relaxed text-slate-500">
+          Optional: upload notices, transcripts, or photos that answer this question. They are added to your vault and included in the next analysis pass.
+        </p>
       </div>
       <p className="mt-1.5 text-[11px] text-slate-400">
         Sending re-runs your analysis with this answer included — findings above update immediately.
