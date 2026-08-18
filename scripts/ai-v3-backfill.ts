@@ -1,4 +1,5 @@
 import { PrismaClient } from "@prisma/client";
+import { upsertCanonicalCaseState } from "../src/lib/canonical-case-state";
 
 const db = new PrismaClient();
 
@@ -52,6 +53,7 @@ async function main() {
         },
       });
     }
+    await upsertCanonicalCaseState(c.id, "backfill");
     created++;
   }
   console.log(`Backfilled ${created} case analysis version(s).`);

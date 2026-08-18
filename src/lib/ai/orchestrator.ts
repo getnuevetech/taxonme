@@ -7,6 +7,7 @@ import { STAGE_KEYS } from "../constants";
 import { getNumberSetting } from "../settings";
 import { readUpload } from "../uploads";
 import { verifyCaseProgress } from "../case-progress";
+import { upsertCanonicalCaseState } from "../canonical-case-state";
 import { composePromptForStep } from "./prompt-composer";
 import {
   completeCaseAnalysisVersion,
@@ -706,6 +707,7 @@ export async function runCaseAnalysis(caseId: string, opts?: { trigger?: string;
       human_review: reviewReasons,
     },
   });
+  await upsertCanonicalCaseState(caseId, "case_analysis");
   await finishReanalysisEvent(reanalysisEventId, "complete");
 
   // Immediately verify path-step evidence (e.g. documents already uploaded at intake).

@@ -368,6 +368,8 @@ model Case {
   humanReviewItems HumanReviewItem[]
   presentations CasePresentation[]
   reanalysisEvents CaseReanalysisEvent[]
+  canonicalState CanonicalCaseState?
+  canonicalStateSnapshots CanonicalCaseStateSnapshot[]
 }
 
 // The clarifying-questions conversation: when the analysis lacks specific
@@ -420,6 +422,31 @@ model CaseAnalysisVersion {
   presentations  CasePresentation[]
   fieldVerifications DocumentFieldVerification[]
   humanReviewItems HumanReviewItem[]
+
+  @@unique([caseId, version])
+}
+
+model CanonicalCaseState {
+  id          String   @id @default(cuid())
+  caseId      String   @unique
+  version     Int      @default(1)
+  stateJson   String   @default("{}")
+  stateHash   String   @default("")
+  status      String   @default("current")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  case        Case     @relation(fields: [caseId], references: [id], onDelete: Cascade)
+}
+
+model CanonicalCaseStateSnapshot {
+  id        String   @id @default(cuid())
+  caseId    String
+  version   Int
+  trigger   String   @default("analysis")
+  stateJson String   @default("{}")
+  stateHash String   @default("")
+  createdAt DateTime @default(now())
+  case      Case     @relation(fields: [caseId], references: [id], onDelete: Cascade)
 
   @@unique([caseId, version])
 }
