@@ -41,6 +41,10 @@ export type ReconciliationResult = {
   currentBalanceByPeriod: Record<string, { factId: string; value: number; asOf: Date | null }>;
 };
 
+function formatUsd(value: number): string {
+  return value.toLocaleString("en-US", { style: "currency", currency: "USD" });
+}
+
 function periodsOf(events: LedgerEvent[], facts: LedgerFact[]): string[] {
   return Array.from(new Set([...events.map((e) => e.taxPeriod), ...facts.map((f) => f.taxPeriod)].filter(Boolean)));
 }
@@ -72,7 +76,7 @@ export function analyzeEvidenceRelationships(events: LedgerEvent[], facts: Ledge
         toTaxPeriod: match.taxPeriod,
         amount: roundCents(magnitude),
         status: "CONFIRMED",
-        description: `A credit of ${magnitude} left ${out.taxPeriod || "an earlier period"} and was applied to ${match.taxPeriod || "another period"}.`,
+        description: `A credit of ${formatUsd(magnitude)} left ${out.taxPeriod || "an earlier period"} and was applied to ${match.taxPeriod || "another period"}.`,
         supportingFactIds: [out.id, match.id],
       });
       continue;
@@ -83,7 +87,7 @@ export function analyzeEvidenceRelationships(events: LedgerEvent[], facts: Ledge
       toTaxPeriod: "",
       amount: roundCents(magnitude),
       status: "POSSIBLE",
-      description: `A credit of ${magnitude} left ${out.taxPeriod || "this period"}; the receiving period is not established by the available records.`,
+      description: `A credit of ${formatUsd(magnitude)} left ${out.taxPeriod || "this period"}; the receiving period is not established by the available records.`,
       supportingFactIds: [out.id],
     });
   }
@@ -135,7 +139,7 @@ export function analyzeEvidenceRelationships(events: LedgerEvent[], facts: Ledge
           toTaxPeriod: period,
           amount: roundCents(current.valueNumber as number),
           status: "CONFIRMED",
-          description: `An earlier record for ${period} showed ${older.valueNumber}; the most recent record shows ${current.valueNumber}. These are sequential account states, not conflicting figures.`,
+          description: `An earlier record for ${period} showed ${formatUsd(older.valueNumber as number)}; the most recent record shows ${formatUsd(current.valueNumber as number)}. These are sequential account states, not conflicting figures.`,
           supportingFactIds: [older.id, current.id],
         });
       }
