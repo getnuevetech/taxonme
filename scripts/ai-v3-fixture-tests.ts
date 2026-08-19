@@ -14,6 +14,7 @@ import { EXTRACTION_SCHEMA_VERSION, countPages, extractorSignature, isExtraction
 import { analyzeEvidenceRelationships } from "../src/lib/evidence/reconcile-core";
 import { auditEvidence, blocksAnalysis } from "../src/lib/evidence/audit-core";
 import { FACT_CLASSIFICATION, synthesizeCase } from "../src/lib/evidence/synthesize-core";
+import { ACTION_STATES, actionSatisfiedByEvidence, buildActionGraph, openActions } from "../src/lib/evidence/actions-core";
 import { EVIDENCE_AUDIT_STATUS } from "../src/lib/evidence/types";
 import { amountsEqual, reconcileRefundArithmetic } from "../src/lib/evidence/calculations";
 import { evaluateAiV3Readiness } from "../src/lib/ai/readiness-core";
@@ -50,6 +51,17 @@ assert.equal(isMaterialDifference("deadline"), true);
 assert.equal(isMaterialDifference("wording style"), false);
 assert.equal(normalizeActionPurpose("Review IRS notice and identify notice number"), "VERIFY_NOTICE");
 assert.equal(normalizeActionPurpose("Confirm notice details"), "VERIFY_NOTICE");
+// Same subject, different intent: these are different work and must not merge.
+assert.equal(normalizeActionPurpose("Verify the balance owed"), "VERIFY_AMOUNT");
+assert.equal(normalizeActionPurpose("Choose a resolution option for the remaining balance"), "SELECT_RESOLUTION");
+assert.notEqual(
+  normalizeActionPurpose("Verify the balance owed"),
+  normalizeActionPurpose("Choose a resolution option for the remaining balance"),
+);
+assert.equal(normalizeActionPurpose("Get your IRS account transcript"), "OBTAIN_TRANSCRIPT");
+assert.equal(normalizeActionPurpose("Draft a response letter to the IRS"), "DRAFT_CORRESPONDENCE");
+assert.equal(normalizeActionPurpose("File the past-due return"), "FILE_RETURN");
+assert.equal(normalizeActionPurpose("Have a CPA review this case"), "GET_PROFESSIONAL_REVIEW");
 assert.deepEqual(pipelinesForMaterialEvent("document_added"), ["document", "situation", "presenter"]);
 assert.deepEqual(pipelinesForMaterialEvent("professional_confirmed_fact"), ["situation", "presenter"]);
 assert.deepEqual(normalizeReanalysisPipelines(["presenter", "situation", "bogus", "presenter"]), ["situation", "presenter"]);
@@ -382,6 +394,60 @@ for (const [oldId, newId] of Object.entries(PROMPT_SUPERSEDES)) {
 // The evidence-first domain policy is what every model now inherits.
 assert.match(domainRules.body.toLowerCase(), /evidence already held by taxonme must be exhausted/);
 assert.match(domainRules.body.toLowerCase(), /a processing failure is never a taxpayer unknown/);
+
+// Action intelligence: work the evidence already did must not be shown as a
+// task the customer still owes.
+const actionSteps = [
+  { id: "s1", actionKey: "review_notice", title: "Review the IRS notice", description: "Confirm the notice number and date.", status: "current", sortOrder: 0 },
+  { id: "s2", actionKey: "confirm_notice", title: "Confirm notice details", description: "Check the notice code again.", status: "pending", sortOrder: 1 },
+  { id: "s3", actionKey: "verify_balance", title: "Verify the balance owed", description: "Establish the amount currently due.", status: "pending", sortOrder: 2 },
+  { id: "s4", actionKey: "professional_review", title: "Get professional review", description: "Have a licensed professional review the case.", status: "pending", sortOrder: 3 },
+];
+const noticeFacts = [
+  { id: "f-notice", factKey: FACT_KEYS.NOTICE_CODE, provenance: PROVENANCE.DOCUMENT_EXTRACTED, valueText: "CP2000" },
+];
+
+const actionGraph = buildActionGraph(actionSteps, noticeFacts);
+const noticeAction = actionGraph.find((n) => n.sourceStepId === "s1");
+assert.equal(noticeAction?.status, ACTION_STATES.COMPLETED, "an action the evidence already satisfies is complete");
+assert.deepEqual(noticeAction?.satisfiedByFactIds, ["f-notice"]);
+
+// The same intent stated twice is one action; the repeat becomes history.
+const duplicateAction = actionGraph.find((n) => n.sourceStepId === "s2");
+assert.equal(duplicateAction?.status, ACTION_STATES.SUPERSEDED);
+assert.equal(duplicateAction?.priority, 0, "a superseded action does not take a place in the path");
+
+// The path forward starts at the next genuinely unresolved action.
+const open = openActions(actionGraph);
+assert.equal(open[0].sourceStepId, "s3", "the customer path must begin at the next unresolved action");
+assert.equal(open[0].status, ACTION_STATES.READY);
+assert.ok(open.every((n) => n.status !== ACTION_STATES.COMPLETED), "completed work must not appear as future tasks");
+
+// Professional review is not required unless the case calls for it.
+assert.equal(actionGraph.find((n) => n.sourceStepId === "s4")?.status, ACTION_STATES.NOT_REQUIRED);
+assert.equal(
+  buildActionGraph(actionSteps, noticeFacts, { professionalReviewRecommended: true }).find((n) => n.sourceStepId === "s4")?.status,
+  ACTION_STATES.BLOCKED,
+  "professional review waits behind the unresolved work in front of it",
+);
+
+// Later work is blocked while earlier work is outstanding.
+const blockedGraph = buildActionGraph(actionSteps, []);
+assert.equal(blockedGraph.find((n) => n.sourceStepId === "s1")?.status, ACTION_STATES.READY);
+assert.equal(blockedGraph.find((n) => n.sourceStepId === "s3")?.status, ACTION_STATES.BLOCKED);
+assert.deepEqual(blockedGraph.find((n) => n.sourceStepId === "s3")?.dependsOnStepIds, ["s1"]);
+
+// The customer's own words never complete an investigation.
+assert.equal(
+  actionSatisfiedByEvidence("VERIFY_AMOUNT", [{ id: "u", factKey: FACT_KEYS.ACCOUNT_BALANCE, provenance: PROVENANCE.USER_REPORTED, valueNumber: 500 }]).satisfied,
+  false,
+);
+assert.equal(
+  actionSatisfiedByEvidence("VERIFY_AMOUNT", [{ id: "d", factKey: FACT_KEYS.ACCOUNT_BALANCE, provenance: PROVENANCE.DOCUMENT_EXTRACTED, valueNumber: 500 }]).satisfied,
+  true,
+);
+// An action with no evidence definition is never auto-completed.
+assert.equal(actionSatisfiedByEvidence("UNCLASSIFIED_ACTION", noticeFacts).satisfied, false);
 
 // Appendix C/H: user belief must not become confirmed IRS fact.
 assert.match(promptBody("RESP-FACT-v3"), /belief/);
