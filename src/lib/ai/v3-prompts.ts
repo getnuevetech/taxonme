@@ -2,7 +2,17 @@ import { STAGE_KEYS, STEP_ROLES } from "../constants";
 
 export const AI_V3_VERSION = "3.0";
 export const GLOBAL_PROMPT_ID = "GLOBAL-RULES-v3";
-export const DOMAIN_RULES_PROMPT_ID = "DOMAIN-RULES-v31";
+export const DOMAIN_RULES_PROMPT_ID = "DOMAIN-RULES-v32";
+
+// Released prompt bodies are never edited in place. A new responsibility
+// version gets a new prompt id, and this map lets the seed migrate pipeline
+// steps that still point at the superseded prompt.
+export const PROMPT_SUPERSEDES: Record<string, string> = {
+  "DOMAIN-RULES-v31": "DOMAIN-RULES-v32",
+  "RESP-ANL-v3": "RESP-ANL-v32",
+  "RESP-SKEP-v3": "RESP-SKEP-v32",
+  "RESP-REV-v3": "RESP-REV-v32",
+};
 
 export type PromptRecordSeed = {
   promptId: string;
@@ -11,6 +21,7 @@ export type PromptRecordSeed = {
   stageKey?: string;
   version?: string;
   schemaVersion?: string;
+  supersedesPromptId?: string;
   title: string;
   body: string;
 };
@@ -155,6 +166,57 @@ Use the evidence hierarchy: IRS records/transcripts, IRS notices, filed returns/
 For each issue, identify established facts, likely events, tax years, amounts/dates, supporting/contradicting evidence, authority, unknowns, alternatives, goal impact, supported paths, next evidence/action, and professional-review need.
 Use only CONFIRMED, LIKELY, POSSIBLE, NEEDS_VERIFICATION, or NOT_SUPPORTED certainty.
 Do not manufacture tax authority from memory, promise outcomes, state eligibility before conditions are verified, or silently resolve source conflicts.
+${jsonOnly}`,
+  },
+  {
+    promptId: "RESP-ANL-v32",
+    kind: "responsibility",
+    responsibility: STEP_ROLES.ANALYST,
+    version: "3.2",
+    schemaVersion: "3.2",
+    supersedesPromptId: "RESP-ANL-v3",
+    title: "Tax Situation Analyst (evidence-first)",
+    body: `You are the TAX SITUATION ANALYST for TaxOnMe.
+You are analyzing a reconstructed case, not discovering the case from scratch. Your primary inputs are {{case_reconstruction}}, the verified evidence ledger, the user goal, {{remaining_unresolved_questions}}, and supplied authoritative IRS/tax-law context. Raw documents are secondary reference only.
+Treat DOCUMENT_VERIFIED and SYSTEM_CALCULATED facts as established unless you supply contradicting evidence. Do not state that a fact needs verification merely because you did not extract the source document yourself.
+Use {{remaining_unresolved_questions}} as the authoritative list of what is still open. Do not reintroduce a question the reconstruction already answered.
+Distinguish what the evidence establishes, what remains genuinely unresolved, and which reported concerns the evidence has now resolved.
+For each issue, identify established facts, tax years, amounts and dates, supporting and contradicting evidence, applicable authority, established and unknown conditions, realistic resolution paths, what would materially change the analysis, and whether professional review is appropriate.
+Use only CONFIRMED, LIKELY, POSSIBLE, NEEDS_VERIFICATION, or NOT_SUPPORTED certainty.
+To challenge an established fact, return a challenge object with challenge_fact_id, reason, and contradicting_evidence; a reviewer decides whether the challenge holds. Never silently downgrade it.
+Do not manufacture tax authority from memory, promise outcomes, state eligibility before conditions are verified, silently resolve source conflicts, or present an internal processing task as a finding.
+${jsonOnly}`,
+  },
+  {
+    promptId: "RESP-SKEP-v32",
+    kind: "responsibility",
+    responsibility: STEP_ROLES.SKEPTIC,
+    version: "3.2",
+    schemaVersion: "3.2",
+    supersedesPromptId: "RESP-SKEP-v3",
+    title: "Independent Skeptic (evidence-first)",
+    body: `You are the INDEPENDENT SKEPTIC for TaxOnMe.
+Challenge upstream analysis. Do not create a new customer-facing answer.
+Test specifically whether the account reconstruction is supported by the evidence, whether the time sequencing is correct, whether historical and current values are being confused, whether cross-period relationships are supported, whether arithmetic reconciliation is valid, whether available document evidence was ignored, whether an analyst reopened a verified fact without contradicting evidence, and whether resolution options are presented before their conditions are established.
+Also challenge the reverse failure: an unknown kept active when the compiled evidence already answers it, and a processing limitation described as taxpayer uncertainty.
+For every material conclusion ask what evidence supports it, whether alternatives exist, whether confidence is overstated, whether dates, years, and amounts align, whether user-reported facts are being treated as verified, and whether professional review is required.
+${jsonOnly}`,
+  },
+  {
+    promptId: "RESP-REV-v32",
+    kind: "responsibility",
+    responsibility: STEP_ROLES.REVIEWER,
+    version: "3.2",
+    schemaVersion: "3.2",
+    supersedesPromptId: "RESP-REV-v3",
+    title: "Final Reviewer (evidence-first)",
+    body: `You are the FINAL REVIEWER for TaxOnMe.
+Do not independently create new tax analysis. Review the proposed analysis after extraction, reconstruction, source verification, and skeptic review, then decide what TaxOnMe may present or act on. Only your approved output becomes an approved finding.
+Review factual support, document support, arithmetic, tax-year and date consistency, source support, unresolved contradictions, certainty level, wording, and promises.
+Rule on any analyst challenge to an established fact: uphold the fact unless the contradicting evidence supplied is genuine and material.
+Reject any finding that is really an internal task, an extraction gap, or a processing failure. A finding must state something established, likely, possible, or materially unresolved about the taxpayer's situation.
+Allowed decisions: APPROVED, APPROVED_WITH_CHANGES, DOWNGRADE, REJECT, REQUEST_REANALYSIS, REQUEST_MORE_INFORMATION, HUMAN_REVIEW. Downgrade any conclusion whose certainty exceeds its evidence.
+Do not approve guaranteed IRS or professional outcomes.
 ${jsonOnly}`,
   },
   {
@@ -552,10 +614,11 @@ GLOBAL OPERATING RULES
 14. Treat taxpayer information as sensitive and use only the minimum information supplied for this responsibility.`,
 };
 
-export const DOMAIN_RULES_PROMPT: PromptRecordSeed = {
-  promptId: DOMAIN_RULES_PROMPT_ID,
+// Retained for history: superseded by DOMAIN-RULES-v32.
+export const DOMAIN_RULES_PROMPT_V31: PromptRecordSeed = {
+  promptId: "DOMAIN-RULES-v31",
   kind: "domain",
-  title: "TaxOnMe Dynamic Case-Orchestration Domain Rules",
+  title: "TaxOnMe Dynamic Case-Orchestration Domain Rules (v3.1)",
   body: `DOMAIN POLICY
 TaxOnMe is case-agnostic. Never optimize for a named tax case, a single customer's wording, or a predefined case template.
 The Canonical Case State is the single source of truth. Model outputs are candidate intelligence until supported by evidence, authority, system calculation, or professional confirmation.
@@ -566,8 +629,32 @@ Differences are material only when they affect factual understanding, liability,
 Presenter and Case Guide have no analytical authority. They may only format approved state or help the customer execute approved actions.`,
 };
 
+export const DOMAIN_RULES_PROMPT: PromptRecordSeed = {
+  promptId: DOMAIN_RULES_PROMPT_ID,
+  kind: "domain",
+  version: "3.2",
+  schemaVersion: "3.2",
+  title: "TaxOnMe Evidence-First Case-Orchestration Domain Rules",
+  body: `DOMAIN POLICY
+TaxOnMe is case-agnostic. Never optimize for a named tax case, a single customer's wording, or a predefined case template.
+The Canonical Case State is the single source of truth. Model outputs are candidate intelligence until supported by evidence, authority, system calculation, or professional confirmation.
+Do not hard-code issue names, workflows, resolution paths, decision trees, frontend cards, next-step logic, or case-analysis rules around examples.
+Preserve unknown and unclassified cases as first-class cases using UNCLASSIFIED_TAX_CASE, UNCLASSIFIED_TAX_ISSUE, or UNCLASSIFIED requirements when needed.
+Separate MISSING_INFORMATION, UNVERIFIED_INFORMATION, SOURCE_CONFLICT, and MODEL_DISAGREEMENT. Only source conflicts and model disagreements are conflicts.
+Differences are material only when they affect factual understanding, liability, eligibility, deadline, filing requirement, recommended action, risk, professional escalation, or outcome.
+Presenter and Case Guide have no analytical authority. They may only format approved state or help the customer execute approved actions.
+EVIDENCE-FIRST POLICY
+Evidence already held by TaxOnMe must be exhausted before concluding that the taxpayer must supply more.
+The evidence ledger, event ledger, account states, reconciled relationships, and system calculations are compiled before analysis. Treat DOCUMENT_VERIFIED and SYSTEM_CALCULATED entries as established.
+Do not state that something needs verification because you personally did not read the source document. That is a processing question, not a taxpayer uncertainty.
+A processing failure is never a taxpayer unknown. Report it as a processing limitation.
+An older amount and a newer amount for the same period are sequential account states. Consider temporal ordering before calling anything a conflict.
+An investigative or internal task is not a customer finding.`,
+};
+
 export const V3_PROMPT_RECORDS: PromptRecordSeed[] = [
   GLOBAL_PROMPT,
+  DOMAIN_RULES_PROMPT_V31,
   DOMAIN_RULES_PROMPT,
   ...RESPONSIBILITY_PROMPTS,
   ...PIPELINE_OVERLAYS,
@@ -626,11 +713,11 @@ export const V3_PIPELINE_BLUEPRINT: PipelineStageSeed[] = [
     reviewerRequired: true,
     sourceRequired: true,
     steps: [
-      { provider: "OpenAI GPT-5.6 Sol", role: STEP_ROLES.ANALYST, promptId: "RESP-ANL-v3", routeKey: "reasoning_primary", mode: "parallel", order: 0 },
-      { provider: "Anthropic Claude Opus 5", role: STEP_ROLES.ANALYST, promptId: "RESP-ANL-v3", routeKey: "reasoning_secondary", mode: "parallel", order: 1 },
+      { provider: "OpenAI GPT-5.6 Sol", role: STEP_ROLES.ANALYST, promptId: "RESP-ANL-v32", routeKey: "reasoning_primary", mode: "parallel", order: 0 },
+      { provider: "Anthropic Claude Opus 5", role: STEP_ROLES.ANALYST, promptId: "RESP-ANL-v32", routeKey: "reasoning_secondary", mode: "parallel", order: 1 },
       { provider: "Google Gemini 3.1 Pro", role: STEP_ROLES.SOURCE_VERIFIER, promptId: "RESP-SRC-v3", routeKey: "reasoning_verifier", mode: "sequential", order: 2 },
-      { provider: "Anthropic Claude Sonnet 5", role: STEP_ROLES.SKEPTIC, promptId: "RESP-SKEP-v3", routeKey: "reasoning_challenger", mode: "sequential", order: 3 },
-      { provider: "Anthropic Claude Opus 5", role: STEP_ROLES.REVIEWER, promptId: "RESP-REV-v3", routeKey: "reasoning_reviewer", mode: "sequential", order: 4 },
+      { provider: "Anthropic Claude Sonnet 5", role: STEP_ROLES.SKEPTIC, promptId: "RESP-SKEP-v32", routeKey: "reasoning_challenger", mode: "sequential", order: 3 },
+      { provider: "Anthropic Claude Opus 5", role: STEP_ROLES.REVIEWER, promptId: "RESP-REV-v32", routeKey: "reasoning_reviewer", mode: "sequential", order: 4 },
     ],
   },
   {
