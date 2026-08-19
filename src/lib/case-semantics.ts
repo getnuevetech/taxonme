@@ -77,12 +77,42 @@ export function isMaterialDifference(topic: string): boolean {
   return /(amount|balance|refund|deadline|date|year|period|entity|identity|filing|eligibility|liability|risk|action|professional|outcome)/i.test(topic);
 }
 
+// An action's purpose is its intent applied to a subject. Two actions are the
+// same only when both match: "verify the balance" and "choose how to resolve
+// the balance" share a subject but are different work, and merging them would
+// hide something the customer still has to do.
+function actionIntent(text: string): string {
+  if (/(choose|select|decide|pick|elect)/.test(text)) return "SELECT";
+  if (/(draft|write|compose|prepare a letter)/.test(text)) return "DRAFT";
+  if (/(file|submit|mail|send)/.test(text)) return "SUBMIT";
+  if (/(get|obtain|request|download|upload|add|provide|gather)/.test(text)) return "OBTAIN";
+  return "VERIFY";
+}
+
+function actionSubject(text: string): string {
+  if (/(professional|consultant|cpa|enrolled agent|attorney)/.test(text)) return "PROFESSIONAL";
+  if (/(resolution|payment plan|installment|option|agreement|offer)/.test(text)) return "RESOLUTION";
+  if (/(transcript|account record|irs account)/.test(text)) return "TRANSCRIPT";
+  if (/(notice|letter|correspondence|cp\d+|lt\d+)/.test(text)) return "NOTICE";
+  if (/(deadline|respond by|due date)/.test(text)) return "DEADLINE";
+  if (/(balance|amount|liability|owe|refund)/.test(text)) return "AMOUNT";
+  if (/(return|filing|file taxes)/.test(text)) return "RETURN";
+  if (/(document|evidence|record)/.test(text)) return "DOCUMENTS";
+  return "";
+}
+
 export function normalizeActionPurpose(value: string): string {
   const text = value.toLowerCase();
-  if (/(notice|letter|correspondence|cp\d+|lt\d+)/i.test(text)) return "VERIFY_NOTICE";
-  if (/(transcript|account record|irs account)/i.test(text)) return "VERIFY_TRANSCRIPT";
-  if (/(balance|amount|liability|owe|refund)/i.test(text)) return "VERIFY_AMOUNT";
-  if (/(deadline|date|respond by)/i.test(text)) return "VERIFY_DEADLINE";
-  if (/(professional|consultant|cpa|ea|attorney)/i.test(text)) return "GET_PROFESSIONAL_REVIEW";
-  return value.toUpperCase().replace(/[^A-Z0-9]+/g, "_").replace(/^_+|_+$/g, "") || "UNCLASSIFIED_ACTION";
+  const subject = actionSubject(text);
+  if (!subject) {
+    return value.toUpperCase().replace(/[^A-Z0-9]+/g, "_").replace(/^_+|_+$/g, "") || "UNCLASSIFIED_ACTION";
+  }
+  if (subject === "PROFESSIONAL") return "GET_PROFESSIONAL_REVIEW";
+  const intent = actionIntent(text);
+  if (subject === "RESOLUTION") return intent === "SELECT" ? "SELECT_RESOLUTION" : "ASSESS_RESOLUTION_OPTIONS";
+  if (intent === "SELECT") return "SELECT_RESOLUTION";
+  if (intent === "DRAFT") return "DRAFT_CORRESPONDENCE";
+  if (intent === "SUBMIT") return subject === "RETURN" ? "FILE_RETURN" : "SUBMIT_RESPONSE";
+  if (intent === "OBTAIN") return subject === "TRANSCRIPT" ? "OBTAIN_TRANSCRIPT" : `OBTAIN_${subject}`;
+  return `VERIFY_${subject}`;
 }

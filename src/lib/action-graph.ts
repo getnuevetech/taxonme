@@ -1,6 +1,6 @@
 import "server-only";
 import { db } from "./db";
-import { normalizeActionPurpose } from "./case-semantics";
+import { buildActionGraph } from "./evidence/actions-core";
 
 const priorityRank: Record<string, number> = { urgent: 0, high: 1, medium: 2, low: 3 };
 
@@ -14,30 +14,64 @@ function safeArray(value: string): unknown[] {
 }
 
 export async function rebuildActionGraph(caseId: string): Promise<void> {
-  const steps = await db.pathStep.findMany({ where: { caseId }, orderBy: { sortOrder: "asc" } });
-  const deduped = new Map<string, typeof steps[number]>();
-  for (const step of steps) {
-    if (!step.title || !step.description) continue;
-    const purpose = normalizeActionPurpose(`${step.actionKey} ${step.title} ${step.description}`);
-    if (!deduped.has(purpose)) deduped.set(purpose, step);
-  }
+  const [steps, facts, c] = await Promise.all([
+    db.pathStep.findMany({ where: { caseId }, orderBy: { sortOrder: "asc" } }),
+    db.evidenceFact.findMany({
+      where: { caseId },
+      select: { id: true, factKey: true, provenance: true, valueText: true, valueNumber: true, taxPeriod: true },
+    }),
+    db.case.findUnique({ where: { id: caseId }, select: { status: true } }),
+  ]);
+
+  const graph = buildActionGraph(
+    steps.map((step) => ({
+      id: step.id,
+      actionKey: step.actionKey,
+      title: step.title,
+      description: step.description,
+      status: step.status,
+      sortOrder: step.sortOrder,
+    })),
+    facts,
+    { professionalReviewRecommended: c?.status === "consultant_recommended" },
+  );
+
   await db.caseActionNode.deleteMany({ where: { caseId } });
-  const nodes = Array.from(deduped.entries());
-  let previousActionNodeId: string | null = null;
-  for (const [index, [purpose, step]] of nodes.entries()) {
-    const created: { id: string } = await db.caseActionNode.create({
+  // Dependencies are recorded against action nodes, so the source step ids are
+  // mapped to node ids once every node exists.
+  const nodeIdByStepId = new Map<string, string>();
+  for (const node of graph) {
+    const created = await db.caseActionNode.create({
       data: {
         caseId,
-        actionKey: step.actionKey || purpose,
-        normalizedPurpose: purpose,
-        title: step.title,
-        description: step.description,
-        priority: index + 1,
-        dependsOnJson: previousActionNodeId ? JSON.stringify([previousActionNodeId]) : "[]",
-        status: step.status === "done" ? "DONE" : step.status === "current" ? "READY" : "PENDING",
+        actionKey: node.actionKey,
+        normalizedPurpose: node.normalizedPurpose,
+        title: node.title,
+        description: node.description,
+        priority: node.priority,
+        dependsOnJson: "[]",
+        resolvesJson: JSON.stringify(node.resolves),
+        requiresJson: JSON.stringify(node.requires),
+        status: node.status,
       },
     });
-    previousActionNodeId = created.id;
+    nodeIdByStepId.set(node.sourceStepId, created.id);
+  }
+  for (const node of graph) {
+    const dependsOn = node.dependsOnStepIds.map((stepId) => nodeIdByStepId.get(stepId)).filter(Boolean);
+    if (dependsOn.length === 0) continue;
+    const nodeId = nodeIdByStepId.get(node.sourceStepId);
+    if (!nodeId) continue;
+    await db.caseActionNode.update({ where: { id: nodeId }, data: { dependsOnJson: JSON.stringify(dependsOn) } });
+  }
+
+  // An investigation the evidence already completed must disappear from the
+  // customer's path forward, not linger as an unchecked task.
+  const completedStepIds = graph
+    .filter((node) => node.status === "COMPLETED" && node.satisfiedByFactIds.length > 0)
+    .map((node) => node.sourceStepId);
+  if (completedStepIds.length > 0) {
+    await db.pathStep.updateMany({ where: { id: { in: completedStepIds }, status: { not: "done" } }, data: { status: "done" } });
   }
 }
 

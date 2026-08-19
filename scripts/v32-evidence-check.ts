@@ -173,6 +173,34 @@ ACCOUNT BALANCE: 0.00
     assert.ok(resolvedUnknowns.length > 0, "unknowns answered by evidence must be retired before reaching the customer");
     assert.ok(resolvedUnknowns[0].supportingFactIdsJson.length > 2, "a resolved unknown must cite the evidence that answered it");
 
+    // An investigation the transcript already completed must not remain on the
+    // customer's path forward.
+    await db.pathStep.deleteMany({ where: { caseId: c.id } });
+    await db.pathStep.createMany({
+      data: [
+        { caseId: c.id, sortOrder: 0, title: "Verify the balance owed", description: "Establish the current amount due.", actionKey: "verify_balance", status: "current" },
+        { caseId: c.id, sortOrder: 1, title: "Confirm the balance amount", description: "Check the amount due again.", actionKey: "confirm_balance", status: "pending" },
+        { caseId: c.id, sortOrder: 2, title: "Choose a resolution option", description: "Decide how to resolve the remaining balance.", actionKey: "select_resolution", status: "pending" },
+      ],
+    });
+    const { rebuildActionGraph } = await import("../src/lib/action-graph");
+    await rebuildActionGraph(c.id);
+
+    const actionNodes = await db.caseActionNode.findMany({ where: { caseId: c.id }, orderBy: { priority: "asc" } });
+    const balanceAction = actionNodes.find((n) => n.normalizedPurpose === "VERIFY_AMOUNT" && n.status !== "SUPERSEDED");
+    assert.equal(balanceAction?.status, "COMPLETED", "the transcript balance completes the verify-balance action");
+    assert.ok(actionNodes.some((n) => n.status === "SUPERSEDED"), "a repeated action must be recorded as superseded, not shown twice");
+
+    const openNodes = actionNodes.filter((n) => n.status === "READY" || n.status === "BLOCKED");
+    assert.ok(openNodes.length > 0, "remaining work must still be tracked");
+    assert.ok(
+      openNodes.every((n) => n.normalizedPurpose !== "VERIFY_AMOUNT"),
+      "completed investigation must not appear as future work",
+    );
+
+    const collapsedStep = await db.pathStep.findFirst({ where: { caseId: c.id, actionKey: "verify_balance" } });
+    assert.equal(collapsedStep?.status, "done", "the customer-facing step must be marked done by the evidence");
+
     const stored = await db.caseReconstruction.findUnique({ where: { caseId: c.id } });
     assert.ok(stored, "the case reconstruction must be stored for analysts to consume");
     assert.equal(stored?.status, "established");
