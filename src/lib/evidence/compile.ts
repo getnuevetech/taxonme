@@ -4,6 +4,7 @@ import { classifyDocument } from "./classify";
 import { compileDocumentEvents, compileDocumentFacts, compileNarrativeFacts } from "./facts";
 import { countTransactionRowCandidates, parseTranscript } from "./transcript";
 import { countPages } from "./extraction-cache";
+import { reconcileCaseEvidence } from "./reconcile";
 import { PROCESSING_STATUS, PROVENANCE, FACT_KEYS, type EvidenceFactInput } from "./types";
 
 // Evidence compilation runs before any tax reasoning. It is deterministic on
@@ -28,6 +29,9 @@ export type EvidenceCompileResult = {
   eventsCompiled: number;
   periodsReconstructed: number;
   processingFailures: string[];
+  relationshipsFound: number;
+  confirmedRelationships: number;
+  calculationsPerformed: number;
 };
 
 function storedText(doc: { extractedJson: string }): string {
@@ -55,7 +59,18 @@ export async function compileCaseEvidence(
     include: { documents: { where: { deletedAt: null }, orderBy: { uploadedAt: "asc" } } },
   });
   if (!c) {
-    return { documentsTotal: 0, documentsProcessed: 0, duplicatesResolved: 0, factsCompiled: 0, eventsCompiled: 0, periodsReconstructed: 0, processingFailures: [] };
+    return {
+      documentsTotal: 0,
+      documentsProcessed: 0,
+      duplicatesResolved: 0,
+      factsCompiled: 0,
+      eventsCompiled: 0,
+      periodsReconstructed: 0,
+      processingFailures: [],
+      relationshipsFound: 0,
+      confirmedRelationships: 0,
+      calculationsPerformed: 0,
+    };
   }
 
   // Identical uploads are one piece of evidence, not two.
@@ -194,6 +209,7 @@ export async function compileCaseEvidence(
   }
 
   const periods = await reconstructAccountStates(caseId);
+  const reconciliation = await reconcileCaseEvidence(caseId);
 
   return {
     documentsTotal: c.documents.length,
@@ -203,6 +219,9 @@ export async function compileCaseEvidence(
     eventsCompiled: eventRows.length,
     periodsReconstructed: periods,
     processingFailures,
+    relationshipsFound: reconciliation.relationshipsFound,
+    confirmedRelationships: reconciliation.confirmedRelationships,
+    calculationsPerformed: reconciliation.calculationsPerformed,
   };
 }
 

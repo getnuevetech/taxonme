@@ -11,6 +11,8 @@ import { countTransactionRowCandidates, parseTranscript } from "../src/lib/evide
 import { resolveQuestionFromFacts, resolveUnknownTextFromFacts } from "../src/lib/evidence/unknowns";
 import { DOCUMENT_TYPES, FACT_KEYS, PROVENANCE } from "../src/lib/evidence/types";
 import { EXTRACTION_SCHEMA_VERSION, countPages, extractorSignature, isExtractionCacheValid } from "../src/lib/evidence/extraction-cache";
+import { analyzeEvidenceRelationships } from "../src/lib/evidence/reconcile-core";
+import { amountsEqual, reconcileRefundArithmetic } from "../src/lib/evidence/calculations";
 import { evaluateAiV3Readiness } from "../src/lib/ai/readiness-core";
 import { redactSensitiveText } from "../src/lib/ai/privacy";
 import { DOMAIN_RULES_PROMPT_ID, RESPONSIBILITY_PROMPTS, V3_PIPELINE_BLUEPRINT, V3_PROMPT_RECORDS } from "../src/lib/ai/v3-prompts";
@@ -165,6 +167,48 @@ assert.equal(isExtractionCacheValid({ ...cachedDoc, contentHash: "" }, signature
 assert.deepEqual(countPages("Page 1 of 3\nfirst page text"), { expected: 3, processed: 1 });
 assert.deepEqual(countPages(""), { expected: 0, processed: 0 });
 assert.equal(countPages("single page of text").expected, 1);
+
+// Refund arithmetic is settled by calculation, not by a model's opinion.
+const refundMath = reconcileRefundArithmetic({ overpayment: 3048, transfersOut: 2620.07, refundIssued: 427.93 });
+assert.equal(refundMath.balanced, true, "overpayment - transfers must reconcile to the refund issued");
+assert.equal(reconcileRefundArithmetic({ overpayment: 3048, transfersOut: 2620.07, refundIssued: 500 }).balanced, false);
+assert.equal(amountsEqual(427.93, 427.934), true, "cent-level rounding must not break reconciliation");
+
+// A credit leaving one tax period and arriving in another is one relationship.
+const crossYear = analyzeEvidenceRelationships(
+  [
+    { id: "ev-out", taxPeriod: "2024", eventType: "CREDIT_TRANSFERRED_OUT", amount: -2620.07, eventDate: new Date("2024-05-01") },
+    { id: "ev-in", taxPeriod: "2023", eventType: "CREDIT_TRANSFERRED_IN", amount: 2620.07, eventDate: new Date("2024-05-01") },
+  ],
+  [],
+);
+const transferRelationship = crossYear.relationships.find((r) => r.relationshipType === "CROSS_PERIOD_TRANSFER");
+assert.ok(transferRelationship, "a matching cross-period transfer must be identified");
+assert.equal(transferRelationship?.status, "CONFIRMED");
+assert.equal(transferRelationship?.fromTaxPeriod, "2024");
+assert.equal(transferRelationship?.toTaxPeriod, "2023");
+
+// An unmatched transfer stays open rather than being invented into a match.
+const unmatchedTransfer = analyzeEvidenceRelationships(
+  [{ id: "ev-out", taxPeriod: "2024", eventType: "CREDIT_TRANSFERRED_OUT", amount: -900, eventDate: null }],
+  [],
+);
+assert.equal(unmatchedTransfer.relationships[0].relationshipType, "CREDIT_TRANSFERRED_OUT_UNMATCHED");
+assert.equal(unmatchedTransfer.relationships[0].status, "POSSIBLE");
+
+// An older notice amount and a newer transcript amount are sequential states.
+const timeline = analyzeEvidenceRelationships(
+  [],
+  [
+    { id: "old", factKey: FACT_KEYS.ACCOUNT_BALANCE, taxPeriod: "2023", valueNumber: 5000, effectiveDate: new Date("2025-01-01"), provenance: PROVENANCE.DOCUMENT_EXTRACTED, documentId: "doc-notice" },
+    { id: "new", factKey: FACT_KEYS.ACCOUNT_BALANCE, taxPeriod: "2023", valueNumber: 2879, effectiveDate: new Date("2026-03-10"), provenance: PROVENANCE.DOCUMENT_EXTRACTED, documentId: "doc-transcript" },
+  ],
+);
+assert.deepEqual(timeline.supersededFactIds, ["old"], "the earlier balance must become history, not a conflict");
+assert.equal(timeline.currentBalanceByPeriod["2023"].value, 2879);
+const supersededRelationship = timeline.relationships.find((r) => r.relationshipType === "BALANCE_SUPERSEDED");
+assert.equal(supersededRelationship?.status, "CONFIRMED");
+assert.doesNotMatch(String(supersededRelationship?.description), /conflict(?!ing figures)/i);
 
 // Appendix C/H: user belief must not become confirmed IRS fact.
 assert.match(promptBody("RESP-FACT-v3"), /belief/);
