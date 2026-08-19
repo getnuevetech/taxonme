@@ -740,14 +740,20 @@ export async function CaseAnalysisView({ caseId, viewer }: { caseId: string; vie
             <p className="mt-2 text-xs text-slate-500">
               How much of your case we can act on, based on the evidence we hold and have read.
             </p>
-            <div className="mt-3 space-y-2 border-t border-slate-100 pt-3">
-              <ProgressBar value={c.evidenceAvailableScore} label="Evidence you've provided" />
-              <ProgressBar value={c.evidenceProcessedScore} label="Evidence we've read" />
-            </div>
-            {c.evidenceProcessedScore < 100 && (
-              <p className="mt-2 text-xs text-amber-600">
-                Some of what you sent is still unread on our side. That is our gap to close, and it does not count against your case.
-              </p>
+            {/* Cases analyzed before the split have no stored dimensions, and an
+                unset score must not be shown as though nothing was provided. */}
+            {c.evidenceAvailableScore > 0 && (
+              <>
+                <div className="mt-3 space-y-2 border-t border-slate-100 pt-3">
+                  <ProgressBar value={c.evidenceAvailableScore} label="Evidence you've provided" />
+                  <ProgressBar value={c.evidenceProcessedScore} label="Evidence we've read" />
+                </div>
+                {c.evidenceProcessedScore < 100 && (
+                  <p className="mt-2 text-xs text-amber-600">
+                    Some of what you sent is still unread on our side. That is our gap to close, and it does not count against your case.
+                  </p>
+                )}
+              </>
             )}
           </CardBody>
         </Card>
