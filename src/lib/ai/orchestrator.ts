@@ -13,7 +13,9 @@ import { retrieveAuthorityForCase } from "../authority-retrieval";
 import { rebuildCaseIssueAndActionGraph } from "../action-graph";
 import { compileCaseEvidence } from "../evidence/compile";
 import { recordExtractionLineage, recordProcessingFailure } from "../evidence/document-processing";
-import { extractorSignature, isExtractionCacheValid } from "../evidence/extraction-cache";
+import { runEvidenceAudit } from "../evidence/audit";
+import { blocksAnalysis } from "../evidence/audit-core";
+import { extractorSignature, isExtractionCacheValid, storedRawText } from "../evidence/extraction-cache";
 import { pipelinesForMaterialEvent } from "../reanalysis-policy";
 import { composePromptForStep } from "./prompt-composer";
 import {
@@ -467,7 +469,9 @@ export async function runCaseAnalysis(caseId: string, opts?: { trigger?: string;
   const readableDocIds = new Set<string>();
   const documentTextById = new Map<string, string>();
   for (const d of c.documents) {
-    const content = await getDocumentText(d);
+    // Prefer a fresh read, but fall back to text we already extracted so a
+    // missing file cannot erase evidence we previously took from it.
+    const content = (await getDocumentText(d)) || storedRawText(d.extractedJson);
     documentTextById.set(d.id, content);
     if (content) {
       readableDocIds.add(d.id);
@@ -701,10 +705,26 @@ export async function runCaseAnalysis(caseId: string, opts?: { trigger?: string;
   const knowledge = authority.text;
   let situationMerged: Json = {};
   let situationConflicts: Conflict[] = [];
+  // v3.2 evidence gate: tax reasoning only runs once the evidence we hold has
+  // actually been processed. Partial evidence still produces an answer, with
+  // its limits passed downstream; a total processing failure blocks instead of
+  // being disguised as taxpayer uncertainty.
+  const evidenceGate = await runEvidenceAudit(caseId, analysisVersion.id, { persist: false }).catch(() => null);
+  const evidenceBlocked = evidenceGate ? blocksAnalysis(evidenceGate.status) : false;
+  if (evidenceBlocked) {
+    await queueHumanReview({
+      caseId,
+      analysisVersionId: analysisVersion.id,
+      reason: "Uploaded documents could not be processed",
+      severity: "high",
+      payload: { blocking_conditions: evidenceGate?.report.blockingConditions ?? [], processing_failures: evidenceGate?.report.processingFailures ?? [] },
+    });
+  }
+
   const priorSituationState = typeof priorSnapshot?.analysis === "object" && priorSnapshot.analysis !== null
     ? priorSnapshot.analysis as Json
     : null;
-  const shouldRunSituation = requestedPipelineSet.has(STAGE_KEYS.SITUATION) || !priorSituationState;
+  const shouldRunSituation = (requestedPipelineSet.has(STAGE_KEYS.SITUATION) || !priorSituationState) && !evidenceBlocked;
   if (shouldAttemptDownstreamAi && shouldRunSituation) {
     const situationOut = await stageRun(STAGE_KEYS.SITUATION, {
       facts: JSON.stringify(facts),
@@ -715,6 +735,7 @@ export async function runCaseAnalysis(caseId: string, opts?: { trigger?: string;
       authority_queries: authority.queries.join("\n"),
       goal: JSON.stringify(goalFacts),
       system_calculations: "(none supplied)",
+      evidence_limitations: (evidenceGate?.report.limitations ?? []).join("; ") || "(none)",
       source_ids: authority.sourceIds.join(","),
     });
     situationMerged = situationOut.merged;
@@ -730,7 +751,7 @@ export async function runCaseAnalysis(caseId: string, opts?: { trigger?: string;
   const priorPresentation = typeof priorSnapshot?.presentation === "object" && priorSnapshot.presentation !== null
     ? priorSnapshot.presentation as Json
     : null;
-  const shouldRunPresenter = requestedPipelineSet.has(STAGE_KEYS.PRESENTER) || !priorPresentation;
+  const shouldRunPresenter = (requestedPipelineSet.has(STAGE_KEYS.PRESENTER) || !priorPresentation) && !evidenceBlocked;
   if (shouldAttemptDownstreamAi && shouldRunPresenter) {
     const presenterOut = await stageRun(STAGE_KEYS.PRESENTER, {
       input: JSON.stringify({ facts, goal: goalFacts, documents: documentOut?.merged ?? null, analysis: situationMerged }),
@@ -830,6 +851,14 @@ export async function runCaseAnalysis(caseId: string, opts?: { trigger?: string;
   }
   await rebuildCaseIssueAndActionGraph(caseId, analysisVersion.id);
 
+  // Resolve the new cycle's unknowns against the evidence before any of them
+  // can become a customer question.
+  const evidenceAudit = await runEvidenceAudit(caseId, analysisVersion.id).catch(async (err) => {
+    const { logSystem } = await import("../syslog");
+    await logSystem("error", "analysis", "Evidence audit failed", String(err));
+    return null;
+  });
+
   // Deterministic readiness score (our formula, not an AI's opinion).
   const unknowns = Array.isArray(facts.unknowns) ? (facts.unknowns as unknown[]).length : 0;
   const allConflicts = [...summaryOut.conflicts, ...goalOut.conflicts, ...(documentOut?.conflicts ?? []), ...situationConflicts];
@@ -927,6 +956,15 @@ export async function runCaseAnalysis(caseId: string, opts?: { trigger?: string;
       requested_pipelines: requestedPipelines,
       reused_pipelines: reusedPipelines,
       evidence_state: evidenceSummary,
+      evidence_audit: evidenceAudit
+        ? {
+            status: evidenceAudit.status,
+            unknowns_resolved: evidenceAudit.unknownsResolved,
+            unknowns_remaining: evidenceAudit.unknownsRemaining,
+            limitations: evidenceAudit.report.limitations,
+            blocking_conditions: evidenceAudit.report.blockingConditions,
+          }
+        : null,
       status: needsConsultant ? "consultant_recommended" : "analyzed",
       readiness,
       facts,
