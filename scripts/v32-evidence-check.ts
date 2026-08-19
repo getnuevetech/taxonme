@@ -14,6 +14,7 @@ TAX PERIOD ENDING: Dec. 31, 2023
 ACCOUNT BALANCE: 2,879.00
 AS OF: Mar. 10, 2026
 150 Tax return filed 04-15-2024 $5,000.00
+806 W-2 withholding 04-15-2024 -$7,879.00
 826 Credit transferred out 05-01-2024 -$2,620.07
 846 Refund issued 05-10-2024 -$427.93`;
 
@@ -100,6 +101,39 @@ async function main() {
     const suppressed = await db.suppressedQuestion.findMany({ where: { caseId: c.id } });
     assert.ok(suppressed.length > 0, "suppressed questions must be recorded for audit");
 
+    // A credit that leaves one tax period should be matched to the period that
+    // received it, across separate documents.
+    await db.document.create({
+      data: {
+        userId: user.id,
+        caseId: c.id,
+        fileName: "account-transcript-2024.pdf",
+        filePath: "fake-3.pdf",
+        mimeType: "application/pdf",
+        docKind: "other",
+        contentHash: "second-period-hash",
+        extractedJson: JSON.stringify({
+          raw_text: `ACCOUNT TRANSCRIPT
+TAX PERIOD ENDING: Dec. 31, 2024
+ACCOUNT BALANCE: 0.00
+706 Credit transferred in 05-01-2024 $2,620.07`,
+        }),
+      },
+    });
+    const reconciled = await compileCaseEvidence(c.id);
+    assert.ok(reconciled.relationshipsFound > 0, "reconciliation must run over the compiled ledgers");
+
+    const transfer = await db.evidenceRelationship.findFirst({
+      where: { caseId: c.id, relationshipType: "CROSS_PERIOD_TRANSFER" },
+    });
+    assert.ok(transfer, "a credit transferred between tax periods must be identified");
+    assert.equal(transfer?.status, "CONFIRMED");
+    assert.equal(transfer?.amount, 2620.07);
+    assert.notEqual(transfer?.fromTaxPeriod, transfer?.toTaxPeriod, "a cross-period transfer must link two periods");
+
+    const calculated = await db.evidenceFact.findFirst({ where: { caseId: c.id, provenance: "SYSTEM_CALCULATED" } });
+    assert.ok(calculated, "deterministic calculations must be recorded as evidence");
+
     // A document we cannot read is a processing failure, not taxpayer doubt.
     const { runCaseAnalysis } = await import("../src/lib/ai/orchestrator");
     const unreadable = await db.document.create({
@@ -128,7 +162,7 @@ async function main() {
     assert.equal(snapshot.evidence_state.duplicatesResolved, 1, "duplicate accounting must survive a full analysis run");
 
     console.log(
-      `v3.2 evidence check passed — facts: ${result.factsCompiled}, events: ${result.eventsCompiled}, periods: ${result.periodsReconstructed}, suppressed: ${suppressed.length}, processing failures recorded: ${snapshot.evidence_state.processingFailures?.length ?? 0}`,
+      `v3.2 evidence check passed — facts: ${reconciled.factsCompiled}, events: ${reconciled.eventsCompiled}, periods: ${reconciled.periodsReconstructed}, suppressed: ${suppressed.length}, relationships: ${reconciled.relationshipsFound} (${reconciled.confirmedRelationships} confirmed), calculations: ${reconciled.calculationsPerformed}, processing failures recorded: ${snapshot.evidence_state.processingFailures?.length ?? 0}`,
     );
   } finally {
     if (userId) await db.user.delete({ where: { id: userId } }).catch(() => undefined);

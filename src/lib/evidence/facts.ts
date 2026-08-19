@@ -173,6 +173,8 @@ function eventTypeForCode(code: string): string {
       return "PENALTY_OR_INTEREST_ASSESSED";
     case "670":
       return "PAYMENT_RECEIVED";
+    case "806":
+      return "WITHHOLDING_CREDIT";
     case "150":
       return "RETURN_FILED";
     default:
