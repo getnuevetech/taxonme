@@ -17,6 +17,8 @@ import { recordExtractionLineage, recordProcessingFailure } from "../evidence/do
 import { runEvidenceAudit } from "../evidence/audit";
 import { synthesizeCaseReconstruction } from "../evidence/synthesize";
 import { blocksAnalysis } from "../evidence/audit-core";
+import { buildEvidenceBrief, buildLatestCaseBrief } from "../evidence/brief";
+import { letterCorrectionInstruction, statedAmounts, unsupportedAmounts } from "../evidence/letter-guard";
 import { extractorSignature, isExtractionCacheValid, storedRawText } from "../evidence/extraction-cache";
 import { PROCESSING_STATUS } from "../evidence/types";
 import { pipelinesForMaterialEvent } from "../reanalysis-policy";
@@ -1100,6 +1102,9 @@ export async function runQaChat(history: { role: string; content: string }[], us
   const steps = await getRunnableSteps(STAGE_KEYS.QA);
   const convo = history.map((m) => `${m.role === "user" ? "User" : "Assistant"}: ${m.content}`).join("\n");
   const userContext = await buildQaUserContext(userId);
+  // The assistant answers from the same evidence the analysis used, so it can
+  // never contradict the case it is discussing.
+  const { brief } = await buildLatestCaseBrief(userId);
   const knowledge = await retrieveKnowledge(`${userContext}\n${history.map((m) => m.content).join(" ")}`);
   if (steps.length === 0) {
     return "The assistant isn't available just yet. Meanwhile, you can upload your documents to your vault and browse the guides — everything you add will be analyzed as soon as the assistant comes online.";
@@ -1111,6 +1116,7 @@ export async function runQaChat(history: { role: string; content: string }[], us
       knowledge: knowledge || "(none)",
       irs_sources: knowledge || "(none)",
       user_context: userContext || "(none)",
+      case_evidence: brief.text,
       tax_year_or_context: "unknown unless stated by the user",
       claims: convo,
       verified_answer: "(use prior source verification output when present)",
@@ -1124,16 +1130,20 @@ export async function runQaChat(history: { role: string; content: string }[], us
   return "Our assistant couldn't respond just now — the issue has been reported to our team. Please try again in a moment, or open a support ticket if it keeps happening.";
 }
 
-export async function explainNoticeContent(content: string): Promise<Json | null> {
+export async function explainNoticeContent(content: string, caseId?: string): Promise<Json | null> {
   const knowledge = await retrieveKnowledge(content);
+  // A notice read against the account it belongs to can say what it changes;
+  // read alone it can only restate itself.
+  const brief = await buildEvidenceBrief(caseId);
   const outcome = await runTrackedStage(STAGE_KEYS.NOTICE, {
     input: content,
     notice_document: content,
-    case_context: "(no linked case context supplied)",
+    case_context: brief.hasEvidence ? brief.text : "(no linked case context supplied)",
+    case_evidence: brief.text,
     irs_sources: knowledge || "(no matching notice-specific reference material)",
     claims: content,
     review: "(use prior reviewer output when present)",
-  }, { sequentialContext: true, metadata: { helper: "notice" } });
+  }, { sequentialContext: true, metadata: { helper: "notice", caseId: caseId ?? "" } });
   const parsed = outcome.stepOutputs.at(-1)?.data ?? outcome.stepOutputs.find((o) => o.data)?.data ?? null;
   if (parsed) return parsed;
   // Deterministic fallback: identify notice code and match knowledge base.
@@ -1155,23 +1165,54 @@ export async function explainNoticeContent(content: string): Promise<Json | null
   };
 }
 
-export async function generateLetterDraft(context: string): Promise<string> {
+export async function generateLetterDraft(context: string, caseId?: string): Promise<string> {
   const steps = await getRunnableSteps(STAGE_KEYS.LETTER);
+  const brief = await buildEvidenceBrief(caseId);
+  // A figure is safe to write if the evidence establishes it or the customer
+  // themselves stated it. Anything else was invented by the model.
+  const allowedAmounts = [...brief.statableAmounts, ...statedAmounts(context)];
   // Try every configured model; log failures; fall back to the template letter.
   if (steps.length > 0) {
-    try {
+    const runLetter = async (requiredChanges: string) => {
       const outcome = await runTrackedStage(STAGE_KEYS.LETTER, {
         input: context,
-        facts: context,
+        facts: brief.text,
+        case_evidence: brief.text,
         notice: context,
         position: context,
-        supporting_documents: "(use only documents described in the approved context)",
+        supporting_documents: brief.hasEvidence
+          ? "Cite only the documents and figures listed in the established evidence."
+          : "(no verified documents on file — do not cite or quote any)",
         irs_sources: "(none supplied)",
         draft: "",
-        required_changes: "",
-      }, { sequentialContext: true, metadata: { helper: "letter" } });
+        required_changes: requiredChanges,
+      }, { sequentialContext: true, metadata: { helper: "letter", caseId: caseId ?? "" } });
       const final = outcome.stepOutputs.at(-1);
-      if (final?.rawText.trim()) return extractUserFacingText(final.data, final.rawText);
+      return final?.rawText.trim() ? extractUserFacingText(final.data, final.rawText) : "";
+    };
+    try {
+      let draft = await runLetter("");
+      // A figure the evidence does not establish must never leave the building
+      // over the customer's signature. One correction pass, then the template.
+      let unsupported = draft ? unsupportedAmounts(draft, allowedAmounts) : [];
+      if (draft && unsupported.length > 0) {
+        const corrected = await runLetter(letterCorrectionInstruction(unsupported));
+        const stillUnsupported = corrected ? unsupportedAmounts(corrected, allowedAmounts) : unsupported;
+        if (corrected && stillUnsupported.length === 0) {
+          draft = corrected;
+          unsupported = [];
+        } else {
+          const { logSystem } = await import("../syslog");
+          await logSystem(
+            "warning",
+            "ai_call",
+            "Response letter draft stated unverified amounts",
+            JSON.stringify({ caseId: caseId ?? null, amounts: stillUnsupported }),
+          );
+          draft = "";
+        }
+      }
+      if (draft) return draft;
     } catch (err) {
       const { logSystem } = await import("../syslog");
       await logSystem("error", "ai_call", "Response letter pipeline failed", String(err));
