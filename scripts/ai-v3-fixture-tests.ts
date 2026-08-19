@@ -13,6 +13,7 @@ import { DOCUMENT_TYPES, FACT_KEYS, PROVENANCE } from "../src/lib/evidence/types
 import { EXTRACTION_SCHEMA_VERSION, countPages, extractorSignature, isExtractionCacheValid, storedRawText } from "../src/lib/evidence/extraction-cache";
 import { analyzeEvidenceRelationships } from "../src/lib/evidence/reconcile-core";
 import { auditEvidence, blocksAnalysis } from "../src/lib/evidence/audit-core";
+import { FACT_CLASSIFICATION, synthesizeCase } from "../src/lib/evidence/synthesize-core";
 import { EVIDENCE_AUDIT_STATUS } from "../src/lib/evidence/types";
 import { amountsEqual, reconcileRefundArithmetic } from "../src/lib/evidence/calculations";
 import { evaluateAiV3Readiness } from "../src/lib/ai/readiness-core";
@@ -290,6 +291,63 @@ const auditWithUnknowns = auditEvidence({
 assert.equal(auditWithUnknowns.unknownsResolvedByExistingEvidence.length, 1);
 assert.equal(auditWithUnknowns.unknownsResolvedByExistingEvidence[0].key, "issue:1:0");
 assert.deepEqual(auditWithUnknowns.remainingMaterialUnknowns.map((u) => u.key), ["issue:1:1"]);
+
+// Case synthesis reconstructs what happened before anything is interpreted.
+const reconstruction = synthesizeCase({
+  events: [
+    { id: "e1", taxPeriod: "2023", eventType: "RETURN_FILED", transactionCode: "150", description: "Tax return filed", eventDate: new Date("2024-04-15"), amount: 5000 },
+    { id: "e2", taxPeriod: "2024", eventType: "CREDIT_TRANSFERRED_OUT", transactionCode: "826", description: "Credit transferred out", eventDate: new Date("2024-05-01"), amount: -2620.07 },
+    { id: "e3", taxPeriod: "2023", eventType: "CREDIT_TRANSFERRED_IN", transactionCode: "706", description: "Credit transferred in", eventDate: new Date("2024-05-01"), amount: 2620.07 },
+  ],
+  facts: [
+    { id: "f-old", factKey: FACT_KEYS.ACCOUNT_BALANCE, taxPeriod: "2023", valueNumber: 5000, valueText: "5000", effectiveDate: new Date("2025-01-01"), status: "superseded", provenance: PROVENANCE.DOCUMENT_EXTRACTED },
+    { id: "f-new", factKey: FACT_KEYS.ACCOUNT_BALANCE, taxPeriod: "2023", valueNumber: 2879, valueText: "2879", effectiveDate: new Date("2026-03-10"), status: "active", provenance: PROVENANCE.DOCUMENT_EXTRACTED },
+    { id: "f-deadline", factKey: FACT_KEYS.NOTICE_DEADLINE, taxPeriod: "2023", valueNumber: null, valueText: "April 1, 2026", effectiveDate: new Date("2026-04-01"), status: "active", provenance: PROVENANCE.DOCUMENT_EXTRACTED },
+  ],
+  accountStates: [
+    { taxPeriod: "2023", currentBalance: 2879, currentBalanceAsOf: new Date("2026-03-10"), currentStatus: "balance_established" },
+    { taxPeriod: "2024", currentBalance: null, currentBalanceAsOf: null, currentStatus: "activity_recorded" },
+  ],
+  relationships: [
+    { relationshipType: "CROSS_PERIOD_TRANSFER", fromTaxPeriod: "2024", toTaxPeriod: "2023", amount: 2620.07, status: "CONFIRMED", description: "Credit moved between periods." },
+    { relationshipType: "MATCHING_AMOUNT_ACROSS_DOCUMENTS", fromTaxPeriod: "2023", toTaxPeriod: "2023", amount: 2879, status: "POSSIBLE", description: "Same amount in two documents." },
+  ],
+  unknowns: [{ label: "Filing status", question: "Which filing status was used?", reason: "Not stated in the available records." }],
+});
+
+assert.deepEqual(reconstruction.affected_tax_periods, ["2023", "2024"]);
+// The timeline must be ordered, and dated documentary facts belong in it too.
+assert.deepEqual(
+  reconstruction.timeline.map((entry) => entry.date),
+  ["2024-04-15", "2024-05-01", "2024-05-01", "2026-04-01"],
+);
+assert.ok(reconstruction.timeline.some((entry) => entry.entry_type === "NOTICE_DEADLINE"));
+assert.ok(reconstruction.timeline.every((entry) => entry.classification === FACT_CLASSIFICATION.ESTABLISHED_EVENT));
+
+// Historical and current positions are separate, not competing.
+assert.deepEqual(reconstruction.historical_positions, [
+  { tax_period: "2023", value: 5000, as_of: "2025-01-01", classification: FACT_CLASSIFICATION.ESTABLISHED_HISTORICAL_STATE },
+]);
+assert.deepEqual(reconstruction.current_positions, [
+  { tax_period: "2023", value: 2879, as_of: "2026-03-10", classification: FACT_CLASSIFICATION.ESTABLISHED_CURRENT_STATE },
+]);
+
+// Confirmed relationships are established; the rest stay inferred.
+assert.equal(reconstruction.established_relationships.length, 1);
+assert.equal(reconstruction.inferred_relationships.length, 1);
+assert.equal(reconstruction.cross_period_events.length, 1);
+assert.equal(reconstruction.cross_period_events[0].fromTaxPeriod, "2024");
+
+// A period with activity but no balance is not silently treated as settled.
+const periodWithoutBalance = reconstruction.year_by_year_state.find((s) => s.tax_period === "2024");
+assert.equal(periodWithoutBalance?.current_balance, null);
+assert.equal(periodWithoutBalance?.classification, FACT_CLASSIFICATION.ESTABLISHED_EVENT);
+assert.equal(reconstruction.remaining_unresolved_questions[0].classification, FACT_CLASSIFICATION.UNRESOLVED);
+
+// An empty case reconstructs to nothing rather than inventing structure.
+const emptyReconstruction = synthesizeCase({ events: [], facts: [], accountStates: [], relationships: [], unknowns: [] });
+assert.deepEqual(emptyReconstruction.affected_tax_periods, []);
+assert.deepEqual(emptyReconstruction.timeline, []);
 
 // Appendix C/H: user belief must not become confirmed IRS fact.
 assert.match(promptBody("RESP-FACT-v3"), /belief/);

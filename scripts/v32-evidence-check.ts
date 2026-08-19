@@ -173,6 +173,15 @@ ACCOUNT BALANCE: 0.00
     assert.ok(resolvedUnknowns.length > 0, "unknowns answered by evidence must be retired before reaching the customer");
     assert.ok(resolvedUnknowns[0].supportingFactIdsJson.length > 2, "a resolved unknown must cite the evidence that answered it");
 
+    const stored = await db.caseReconstruction.findUnique({ where: { caseId: c.id } });
+    assert.ok(stored, "the case reconstruction must be stored for analysts to consume");
+    assert.equal(stored?.status, "established");
+    const reconstruction = JSON.parse(stored?.reconstructionJson || "{}");
+    assert.deepEqual(reconstruction.affected_tax_periods, ["2023", "2024"], "both tax periods must appear in the reconstruction");
+    assert.ok(reconstruction.timeline.length >= 4, "the timeline must carry the account events");
+    assert.equal(reconstruction.cross_period_events.length, 1, "the cross-period transfer must be part of what happened");
+    assert.equal(reconstruction.current_positions[0].value, 2879, "the current position must come from the latest record");
+
     const version = await db.caseAnalysisVersion.findFirst({ where: { caseId: c.id }, orderBy: { version: "desc" } });
     const snapshot = JSON.parse(version?.snapshotJson || "{}");
     assert.ok(snapshot.evidence_state, "analysis snapshot must record the evidence state");
@@ -181,7 +190,7 @@ ACCOUNT BALANCE: 0.00
     assert.equal(snapshot.evidence_audit.status, audit?.status);
 
     console.log(
-      `v3.2 evidence check passed — facts: ${reconciled.factsCompiled}, events: ${reconciled.eventsCompiled}, periods: ${reconciled.periodsReconstructed}, suppressed: ${suppressed.length}, relationships: ${reconciled.relationshipsFound} (${reconciled.confirmedRelationships} confirmed), calculations: ${reconciled.calculationsPerformed}, audit: ${audit?.status} (${resolvedUnknowns.length}/${trackedUnknowns.length} unknowns resolved by evidence)`,
+      `v3.2 evidence check passed — facts: ${reconciled.factsCompiled}, events: ${reconciled.eventsCompiled}, periods: ${reconciled.periodsReconstructed}, suppressed: ${suppressed.length}, relationships: ${reconciled.relationshipsFound} (${reconciled.confirmedRelationships} confirmed), calculations: ${reconciled.calculationsPerformed}, audit: ${audit?.status} (${resolvedUnknowns.length}/${trackedUnknowns.length} unknowns resolved by evidence), reconstruction: ${reconstruction.affected_tax_periods.length} period(s), ${reconstruction.timeline.length} timeline entries`,
     );
   } finally {
     if (userId) await db.user.delete({ where: { id: userId } }).catch(() => undefined);

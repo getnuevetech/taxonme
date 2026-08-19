@@ -14,6 +14,7 @@ import { rebuildCaseIssueAndActionGraph } from "../action-graph";
 import { compileCaseEvidence } from "../evidence/compile";
 import { recordExtractionLineage, recordProcessingFailure } from "../evidence/document-processing";
 import { runEvidenceAudit } from "../evidence/audit";
+import { synthesizeCaseReconstruction } from "../evidence/synthesize";
 import { blocksAnalysis } from "../evidence/audit-core";
 import { extractorSignature, isExtractionCacheValid, storedRawText } from "../evidence/extraction-cache";
 import { pipelinesForMaterialEvent } from "../reanalysis-policy";
@@ -721,6 +722,15 @@ export async function runCaseAnalysis(caseId: string, opts?: { trigger?: string;
     });
   }
 
+  // Reconstruct what happened before anyone reasons about what it means.
+  const caseReconstruction = evidenceBlocked
+    ? null
+    : await synthesizeCaseReconstruction(caseId, analysisVersion.id).catch(async (err) => {
+        const { logSystem } = await import("../syslog");
+        await logSystem("error", "analysis", "Case synthesis failed", String(err));
+        return null;
+      });
+
   const priorSituationState = typeof priorSnapshot?.analysis === "object" && priorSnapshot.analysis !== null
     ? priorSnapshot.analysis as Json
     : null;
@@ -734,7 +744,11 @@ export async function runCaseAnalysis(caseId: string, opts?: { trigger?: string;
       irs_sources: knowledge || "(no matching reference material)",
       authority_queries: authority.queries.join("\n"),
       goal: JSON.stringify(goalFacts),
-      system_calculations: "(none supplied)",
+      case_reconstruction: caseReconstruction ? JSON.stringify(caseReconstruction) : "(not yet reconstructed)",
+      remaining_unresolved_questions: JSON.stringify(caseReconstruction?.remaining_unresolved_questions ?? []),
+      system_calculations: JSON.stringify(
+        (await db.evidenceFact.findMany({ where: { caseId, provenance: "SYSTEM_CALCULATED" }, select: { valueText: true, valueNumber: true, taxPeriod: true, metadataJson: true } })).slice(0, 20),
+      ),
       evidence_limitations: (evidenceGate?.report.limitations ?? []).join("; ") || "(none)",
       source_ids: authority.sourceIds.join(","),
     });
@@ -754,7 +768,13 @@ export async function runCaseAnalysis(caseId: string, opts?: { trigger?: string;
   const shouldRunPresenter = (requestedPipelineSet.has(STAGE_KEYS.PRESENTER) || !priorPresentation) && !evidenceBlocked;
   if (shouldAttemptDownstreamAi && shouldRunPresenter) {
     const presenterOut = await stageRun(STAGE_KEYS.PRESENTER, {
-      input: JSON.stringify({ facts, goal: goalFacts, documents: documentOut?.merged ?? null, analysis: situationMerged }),
+      input: JSON.stringify({
+        facts,
+        goal: goalFacts,
+        documents: documentOut?.merged ?? null,
+        analysis: situationMerged,
+        case_reconstruction: caseReconstruction,
+      }),
     });
     const p = presenterOut.stepOutputs.find((o) => o.data)?.data ?? null;
     if (p) {
@@ -858,6 +878,8 @@ export async function runCaseAnalysis(caseId: string, opts?: { trigger?: string;
     await logSystem("error", "analysis", "Evidence audit failed", String(err));
     return null;
   });
+  // Refresh the stored reconstruction so it reflects this cycle's unknowns.
+  const finalReconstruction = await synthesizeCaseReconstruction(caseId, analysisVersion.id).catch(() => caseReconstruction);
 
   // Deterministic readiness score (our formula, not an AI's opinion).
   const unknowns = Array.isArray(facts.unknowns) ? (facts.unknowns as unknown[]).length : 0;
@@ -956,6 +978,16 @@ export async function runCaseAnalysis(caseId: string, opts?: { trigger?: string;
       requested_pipelines: requestedPipelines,
       reused_pipelines: reusedPipelines,
       evidence_state: evidenceSummary,
+      case_reconstruction: finalReconstruction
+        ? {
+            affected_tax_periods: finalReconstruction.affected_tax_periods,
+            timeline_entries: finalReconstruction.timeline.length,
+            current_positions: finalReconstruction.current_positions,
+            historical_positions: finalReconstruction.historical_positions,
+            cross_period_events: finalReconstruction.cross_period_events.length,
+            unresolved_questions: finalReconstruction.remaining_unresolved_questions.length,
+          }
+        : null,
       evidence_audit: evidenceAudit
         ? {
             status: evidenceAudit.status,
