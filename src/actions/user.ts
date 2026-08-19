@@ -118,14 +118,23 @@ export async function generateLetterAction(_prev: ActionState, formData: FormDat
 
   let noticeContext = "";
   let safeNoticeId: string | null = null;
+  let caseId: string | null = null;
   if (noticeId) {
-    const notice = await db.notice.findUnique({ where: { id: noticeId } });
+    const notice = await db.notice.findUnique({ where: { id: noticeId }, include: { document: { select: { caseId: true } } } });
     if (notice && notice.userId === user.id) {
       safeNoticeId = notice.id;
+      caseId = notice.document?.caseId ?? null;
       noticeContext = `Notice type: ${notice.noticeType}. Tax year: ${notice.taxYear ?? "unknown"}. Explanation: ${notice.explanation}`;
     }
   }
-  const body = await generateLetterDraft([noticeContext, context].filter(Boolean).join("\n\n"));
+  // The letter is grounded in a specific case's evidence. With several open
+  // cases we cannot tell which one this letter is about, so we ground it in
+  // none rather than the wrong one.
+  if (!caseId) {
+    const openCases = await db.case.findMany({ where: { userId: user.id, status: { not: "closed" } }, select: { id: true }, take: 2 });
+    if (openCases.length === 1) caseId = openCases[0].id;
+  }
+  const body = await generateLetterDraft([noticeContext, context].filter(Boolean).join("\n\n"), caseId ?? undefined);
   const letter = await db.responseLetter.create({
     data: { userId: user.id, noticeId: safeNoticeId, title: `Response letter — ${new Date().toLocaleDateString("en-US")}`, body },
   });

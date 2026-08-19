@@ -16,11 +16,13 @@ import { auditEvidence, blocksAnalysis } from "../src/lib/evidence/audit-core";
 import { FACT_CLASSIFICATION, synthesizeCase } from "../src/lib/evidence/synthesize-core";
 import { ACTION_STATES, actionSatisfiedByEvidence, buildActionGraph, openActions } from "../src/lib/evidence/actions-core";
 import { computeReadinessDimensions } from "../src/lib/evidence/readiness-core";
+import { formatEvidenceBrief } from "../src/lib/evidence/brief-core";
+import { letterCorrectionInstruction, statedAmounts, unsupportedAmounts } from "../src/lib/evidence/letter-guard";
 import { EVIDENCE_AUDIT_STATUS } from "../src/lib/evidence/types";
 import { amountsEqual, reconcileRefundArithmetic } from "../src/lib/evidence/calculations";
 import { evaluateAiV3Readiness } from "../src/lib/ai/readiness-core";
 import { redactSensitiveText } from "../src/lib/ai/privacy";
-import { DOMAIN_RULES_PROMPT_ID, PROMPT_SUPERSEDES, RESPONSIBILITY_PROMPTS, V3_PIPELINE_BLUEPRINT, V3_PROMPT_RECORDS } from "../src/lib/ai/v3-prompts";
+import { DOMAIN_RULES_PROMPT_ID, PROMPT_SUPERSEDES, RESPONSIBILITY_PROMPTS, V3_PIPELINE_BLUEPRINT, V3_PROMPT_RECORDS, overlayPromptIdForStage } from "../src/lib/ai/v3-prompts";
 
 function promptBody(promptId: string): string {
   const prompt = RESPONSIBILITY_PROMPTS.find((p) => p.promptId === promptId);
@@ -516,6 +518,82 @@ const emptyCase = computeReadinessDimensions({ ...readinessInput, documents: [],
 assert.equal(emptyCase.evidenceAvailable, 0);
 assert.equal(emptyCase.evidenceProcessed, 100, "with nothing uploaded there is nothing we failed to read");
 assert.equal(emptyCase.processingGap, false);
+
+// The evidence brief is the one view of the case every downstream surface reads.
+const briefFacts = [
+  { factKey: "account_balance", provenance: PROVENANCE.DOCUMENT_EXTRACTED, valueText: "", valueNumber: 2879, taxPeriod: "2023" },
+  { factKey: "refund_issued", provenance: PROVENANCE.DOCUMENT_EXTRACTED, valueText: "", valueNumber: 427.93, taxPeriod: "2023" },
+  { factKey: "balance_reported", provenance: PROVENANCE.USER_REPORTED, valueText: "", valueNumber: 5000, taxPeriod: "2023" },
+];
+const brief = formatEvidenceBrief({
+  periods: [{ taxPeriod: "2023", currentBalance: 2879, currentBalanceAsOf: new Date("2026-03-10T00:00:00Z") }],
+  facts: briefFacts,
+  events: [
+    { taxPeriod: "2023", eventType: "REFUND_ISSUED", description: "Refund issued", eventDate: new Date("2024-05-10T00:00:00Z"), amount: 427.93 },
+  ],
+  relationships: [
+    { relationshipType: "CROSS_PERIOD_TRANSFER", description: "A credit of $2,620.07 left 2023 and was applied to 2024.", status: "CONFIRMED" },
+    { relationshipType: "MATCHING_AMOUNT_ACROSS_DOCUMENTS", description: "Two documents share an amount.", status: "POSSIBLE" },
+  ],
+  unknowns: [
+    { label: "Whether a payment plan is already in place", status: "ACTIVE", reason: "No record establishes this." },
+    { label: "The 2023 balance", status: "RESOLVED_BY_EXISTING_EVIDENCE", reason: "The transcript states it." },
+  ],
+  limitations: ["scanned-notice.pdf could not be read."],
+});
+assert.equal(brief.hasEvidence, true);
+assert.match(brief.text, /\$2,879\.00/, "the established balance must be stated as currency");
+assert.match(brief.text, /as of 2026-03-10/, "an account position without its date invites a stale assertion");
+assert.match(brief.text, /REPORTED BY THE CUSTOMER, NOT ESTABLISHED/, "user-reported figures must be quarantined from established ones");
+assert.ok(!brief.openUnknowns.includes("The 2023 balance"), "an unknown the evidence answered is not still open");
+assert.deepEqual(brief.openUnknowns, ["Whether a payment plan is already in place"]);
+assert.match(brief.text, /A credit of \$2,620\.07 left 2023/, "confirmed relationships belong in the brief");
+assert.ok(!brief.text.includes("Two documents share an amount"), "an unconfirmed relationship must not read as established");
+assert.match(brief.text, /scanned-notice\.pdf could not be read/, "limits on the evidence travel with it");
+
+// A case with nothing on file must say so rather than inviting invention.
+const emptyBrief = formatEvidenceBrief({ periods: [], facts: [], events: [], relationships: [], unknowns: [], limitations: [] });
+assert.equal(emptyBrief.hasEvidence, false);
+assert.deepEqual(emptyBrief.statableAmounts, []);
+assert.match(emptyBrief.text, /Do not state any figure/);
+
+// Letter guard: a figure the evidence does not establish never reaches the IRS.
+const groundedLetter = "The account shows a balance of $2,879.00 for 2023 and a refund of $427.93 was issued.";
+assert.deepEqual(unsupportedAmounts(groundedLetter, brief.statableAmounts), [], "figures drawn from the evidence pass");
+
+const inventedLetter = "I believe I am owed a refund of $3,412.55 and the balance should be $2,879.00.";
+assert.deepEqual(
+  unsupportedAmounts(inventedLetter, brief.statableAmounts),
+  [3412.55],
+  "a figure absent from the evidence must be caught",
+);
+
+// The customer's own stated figures are their claim to make.
+assert.deepEqual(unsupportedAmounts(inventedLetter, [...brief.statableAmounts, ...statedAmounts("I paid $3,412.55 in March.")]), []);
+
+// A transcript records a refund as a credit; a letter calls it a payment owed.
+// That sign difference is presentation, not a contradiction.
+assert.deepEqual(unsupportedAmounts("A refund of $427.93 was issued.", [-427.93]), []);
+
+// The correction instruction names the offending figures so the retry is targeted.
+assert.match(letterCorrectionInstruction([3412.55]), /\$3,412\.55/);
+assert.match(letterCorrectionInstruction([3412.55]), /does not establish/);
+
+// Every customer-facing surface must be told to work from the evidence.
+for (const overlayId of ["QA-OVERLAY-v32", "NOTICE-OVERLAY-v32", "LETTER-OVERLAY-v32", "CASE-OVERLAY-v32", "CLOSE-OVERLAY-v32"]) {
+  const overlay = V3_PROMPT_RECORDS.find((p) => p.promptId === overlayId);
+  assert.ok(overlay, `${overlayId} must exist`);
+  assert.match(overlay!.body, /\{\{case_evidence\}\}/, `${overlayId} must consume the evidence brief`);
+  assert.ok(overlay!.supersedesPromptId, `${overlayId} must supersede its v3 predecessor rather than silently replacing it`);
+  assert.equal(PROMPT_SUPERSEDES[overlay!.supersedesPromptId!], overlayId, `${overlayId} must be reachable from the supersedes map`);
+}
+// The stage lookup must resolve to the evidence-first overlay, not the old one.
+assert.equal(overlayPromptIdForStage(STAGE_KEYS.LETTER), "LETTER-OVERLAY-v32");
+assert.equal(overlayPromptIdForStage(STAGE_KEYS.QA), "QA-OVERLAY-v32");
+// The letter overlay carries the reason the rule exists, not just the rule.
+const letterOverlay = V3_PROMPT_RECORDS.find((p) => p.promptId === "LETTER-OVERLAY-v32")!;
+assert.match(letterOverlay.body, /over the customer's name/);
+assert.match(letterOverlay.body, /Never estimate, round, or infer a figure/);
 
 // Appendix C/H: user belief must not become confirmed IRS fact.
 assert.match(promptBody("RESP-FACT-v3"), /belief/);

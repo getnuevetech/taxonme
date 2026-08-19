@@ -136,7 +136,14 @@ export async function uploadNoticeAction(_prev: ActionState, formData: FormData)
     data: { userId: user?.id ?? null, documentId, status: "analyzing" },
   });
 
-  const result = await explainNoticeContent(content);
+  // Explaining a notice against the account it affects is the difference
+  // between restating the letter and saying what it changes.
+  let noticeCaseId: string | null = null;
+  if (user) {
+    const openCases = await db.case.findMany({ where: { userId: user.id, status: { not: "closed" } }, select: { id: true }, take: 2 });
+    if (openCases.length === 1) noticeCaseId = openCases[0].id;
+  }
+  const result = await explainNoticeContent(content, noticeCaseId ?? undefined);
   if (result) {
     const noticeIdentity = typeof result.notice_identity === "object" && result.notice_identity !== null
       ? result.notice_identity as Record<string, unknown>

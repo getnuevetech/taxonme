@@ -41,6 +41,7 @@ type Snapshot = {
   text: string;
   currentStep: { title: string; actionKey: string; caseId: string } | null;
   planName: string;
+  evidenceText: string;
 };
 
 function money(cents: number | null): string {
@@ -99,7 +100,12 @@ export async function buildAccountSnapshot(userId: string): Promise<Snapshot> {
   for (const d of deadlines) {
     lines.push(`Deadline: "${d.title}" due ${d.dueDate.toLocaleDateString("en-US")}`);
   }
-  return { text: lines.join("\n"), currentStep, planName: plan?.name ?? "Free" };
+  // The guide coaches against established evidence, so it cannot ask the
+  // customer for something their documents already answered.
+  const { buildEvidenceBrief, emptyEvidenceBrief } = await import("./evidence/brief");
+  const primaryCaseId = currentStep?.caseId ?? cases[0]?.id ?? null;
+  const brief = primaryCaseId ? await buildEvidenceBrief(primaryCaseId) : emptyEvidenceBrief();
+  return { text: lines.join("\n"), currentStep, planName: plan?.name ?? "Free", evidenceText: brief.text };
 }
 
 function detectIntent(question: string): "new_case" | "tech" | "service" | null {
@@ -212,7 +218,8 @@ export async function guideRespond(
       case: snapshot.text,
       current_step: snapshot.currentStep ? `${snapshot.currentStep.title} (${snapshot.currentStep.actionKey})` : "(no active step)",
       allowed_actions: baseActions().map((a) => `${a.type}:${a.label}`).join(", "),
-      verified_documents: snapshot.text,
+      case_evidence: snapshot.evidenceText,
+      verified_documents: snapshot.evidenceText,
       irs_sources: "(none supplied)",
     }, { sequentialContext: true, metadata: { helper: "guide", userId } });
     const answerOutput = [...outcome.stepOutputs].reverse().find((output) => typeof output.data?.answer === "string") ?? outcome.stepOutputs.at(-1);

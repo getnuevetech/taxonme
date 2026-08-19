@@ -12,6 +12,11 @@ export const PROMPT_SUPERSEDES: Record<string, string> = {
   "RESP-ANL-v3": "RESP-ANL-v32",
   "RESP-SKEP-v3": "RESP-SKEP-v32",
   "RESP-REV-v3": "RESP-REV-v32",
+  "QA-OVERLAY-v3": "QA-OVERLAY-v32",
+  "NOTICE-OVERLAY-v3": "NOTICE-OVERLAY-v32",
+  "LETTER-OVERLAY-v3": "LETTER-OVERLAY-v32",
+  "CASE-OVERLAY-v3": "CASE-OVERLAY-v32",
+  "CLOSE-OVERLAY-v3": "CLOSE-OVERLAY-v32",
 };
 
 export type PromptRecordSeed = {
@@ -426,6 +431,8 @@ Input: {{input}}.
 Rules: no new reasoning; no provider/model references; return semantic UI content only; styling and layout are deterministic application code.
 Output should include finding_card, key_numbers, what_we_found, how_we_reached_this, what_is_still_unclear, next_step, alternative_actions, evidence_strength, source_documents, and professional_help.`,
   },
+  // The v3 overlays below are superseded but retained: a released prompt is
+  // never edited in place, and stage lookup skips anything superseded.
   {
     promptId: "QA-OVERLAY-v3",
     kind: "overlay",
@@ -465,6 +472,69 @@ Inputs: {{case}}, {{current_step}}, {{allowed_actions}}, {{verified_documents}},
 Rules: one primary provider with failover only on failure/quality rejection; guide cannot change issue status; new material fact means capture and requires_reanalysis=true; risk trigger means reviewer/human gate.`,
   },
   {
+    promptId: "CLOSE-OVERLAY-v3",
+    kind: "overlay",
+    stageKey: STAGE_KEYS.CLOSING,
+    title: "Closing Review Overlay",
+    body: `PIPELINE: CLOSING REMARKS AND FINAL REVIEW
+Inputs: {{input}}, {{full_case_history}}, {{final_issue_states}}, {{completed_actions}}, {{professional_updates}}, {{documents}}, {{future_obligations}}.
+Rules: Closure Reviewer mandatory; Presenter receives approved closure only; inactivity is not resolution; save an immutable closure snapshot when supported by storage.`,
+  },
+  {
+    promptId: "QA-OVERLAY-v32",
+    kind: "overlay",
+    stageKey: STAGE_KEYS.QA,
+    version: "3.2",
+    supersedesPromptId: "QA-OVERLAY-v3",
+    title: "AI Tax Q&A Overlay (evidence-first)",
+    body: `PIPELINE: AI TAX Q&A
+Inputs: {{input}}, {{tax_year_or_context}}, {{knowledge}}, {{case_evidence}}, optional {{user_context}}.
+{{case_evidence}} is the established record for this customer's case. When the question is about their own situation, answer from it and state no figure, period, or account position it does not contain.
+Never ask the customer for something {{case_evidence}} already establishes, and never contradict it. If the answer depends on something unresolved there, say what is missing.
+Rules: material answers require authoritative support; if tax year materially changes the answer and is unknown, request clarification or label the assumption; general Q&A must not silently import unrelated case facts.
+Output must include answer, key_conditions, source_references, assumptions, needs_clarification, and professional_review_recommended.`,
+  },
+  {
+    promptId: "NOTICE-OVERLAY-v32",
+    kind: "overlay",
+    stageKey: STAGE_KEYS.NOTICE,
+    version: "3.2",
+    supersedesPromptId: "NOTICE-OVERLAY-v3",
+    title: "IRS Notice Explanation Overlay (evidence-first)",
+    body: `PIPELINE: IRS NOTICE EXPLANATION
+Inputs: {{notice_document}}, {{input}}, {{case_context}}, {{case_evidence}}, {{irs_sources}}.
+Read the notice against {{case_evidence}}: say what this notice changes about the account position already on record, not merely what the notice says. Where the notice and the record disagree, report the disagreement rather than resolving it.
+State no amount or period that is not in the notice itself or in {{case_evidence}}.
+Rules: classify/extract first; independent verification for scans/photos or low-confidence critical fields; printed notice deadline controls; Reviewer is mandatory before Presenter.
+Output must include notice_identity, tax year/period, amounts, deadline, what_it_means, what_irs_wants, consequences if supported, response categories, documents_needed, next_step, and certainty.`,
+  },
+  {
+    promptId: "LETTER-OVERLAY-v32",
+    kind: "overlay",
+    stageKey: STAGE_KEYS.LETTER,
+    version: "3.2",
+    supersedesPromptId: "LETTER-OVERLAY-v3",
+    title: "Response Letter Overlay (evidence-first)",
+    body: `PIPELINE: RESPONSE LETTER DRAFTING
+Inputs: {{facts}}, {{case_evidence}}, {{notice}}, {{position}}, {{supporting_documents}}, {{irs_sources}}.
+This letter is sent to the IRS over the customer's name, so every figure in it becomes their own written assertion.
+State only amounts, dates, and account positions contained in {{case_evidence}} or in the customer's own supplied position. Never estimate, round, or infer a figure. Where an amount is needed but not established, describe the request in words instead of stating a number.
+Do not present a customer-reported figure as the IRS record, or an IRS record as the customer's agreement.
+Rules: no automatic sending; user approval required; every material date/amount/fact/request must be checked; source verification required when the letter cites/asserts a material rule; Final Editor cannot change substance.`,
+  },
+  {
+    promptId: "CASE-OVERLAY-v32",
+    kind: "overlay",
+    stageKey: STAGE_KEYS.GUIDE,
+    version: "3.2",
+    supersedesPromptId: "CASE-OVERLAY-v3",
+    title: "In-Account Case Guide Overlay (evidence-first)",
+    body: `PIPELINE: IN-ACCOUNT CASE GUIDE
+Inputs: {{case}}, {{current_step}}, {{allowed_actions}}, {{case_evidence}}, {{verified_documents}}, optional {{irs_sources}}, {{input}}.
+{{case_evidence}} is what the customer's documents already establish. Coach from it: never request a document or figure it already contains, and never state a number it does not contain.
+Rules: one primary provider with failover only on failure/quality rejection; guide cannot change issue status; new material fact means capture and requires_reanalysis=true; risk trigger means reviewer/human gate.`,
+  },
+  {
     promptId: "MATCH-OVERLAY-v3",
     kind: "overlay",
     stageKey: STAGE_KEYS.MATCH,
@@ -483,12 +553,15 @@ Inputs: {{selected_candidate}}, {{consultant}}, {{case_requirements}}, {{case}},
 Rules: create customer and professional summaries; no unsupported superiority or success claims; disclose only authorized customer information.`,
   },
   {
-    promptId: "CLOSE-OVERLAY-v3",
+    promptId: "CLOSE-OVERLAY-v32",
     kind: "overlay",
     stageKey: STAGE_KEYS.CLOSING,
-    title: "Closing Review Overlay",
+    version: "3.2",
+    supersedesPromptId: "CLOSE-OVERLAY-v3",
+    title: "Closing Review Overlay (evidence-first)",
     body: `PIPELINE: CLOSING REMARKS AND FINAL REVIEW
-Inputs: {{input}}, {{full_case_history}}, {{final_issue_states}}, {{completed_actions}}, {{professional_updates}}, {{documents}}, {{future_obligations}}.
+Inputs: {{input}}, {{full_case_history}}, {{case_evidence}}, {{final_issue_states}}, {{completed_actions}}, {{professional_updates}}, {{documents}}, {{future_obligations}}.
+Close on the record, not on the issue list: recount what {{case_evidence}} established, what it left unresolved, and where the account stood when the case closed. State no figure it does not contain.
 Rules: Closure Reviewer mandatory; Presenter receives approved closure only; inactivity is not resolution; save an immutable closure snapshot when supported by storage.`,
   },
 ];
@@ -827,7 +900,11 @@ export const V3_PIPELINE_BLUEPRINT: PipelineStageSeed[] = [
 ];
 
 export function overlayPromptIdForStage(stageKey: string): string {
-  return PIPELINE_OVERLAYS.find((p) => p.stageKey === stageKey)?.promptId ?? "";
+  // Superseded overlays stay in the record for history but must never be the
+  // one a stage actually runs, whatever order they appear in.
+  const forStage = PIPELINE_OVERLAYS.filter((p) => p.stageKey === stageKey);
+  const live = forStage.find((p) => !PROMPT_SUPERSEDES[p.promptId]);
+  return (live ?? forStage[0])?.promptId ?? "";
 }
 
 export function schemaPromptIdForStage(stageKey: string): string {

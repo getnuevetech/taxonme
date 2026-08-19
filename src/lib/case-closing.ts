@@ -66,6 +66,10 @@ export async function closeCase(caseId: string, reason: "completed" | "abandoned
   if (!c || c.status === "closed") return;
 
   let remarks = "";
+  // A closing summary is the last thing the customer reads, so it recounts the
+  // evidence the case was decided on rather than a list of issue titles.
+  const { buildEvidenceBrief } = await import("./evidence/brief");
+  const brief = await buildEvidenceBrief(caseId);
   try {
     const outcome = await runStage(STAGE_KEYS.CLOSING, {
       input: JSON.stringify({
@@ -79,6 +83,7 @@ export async function closeCase(caseId: string, reason: "completed" | "abandoned
         documents: c.documents.map((d) => d.docKind),
       }),
       full_case_history: JSON.stringify({ reason, situation: c.situation, goal: c.goal }),
+      case_evidence: brief.text,
       final_issue_states: JSON.stringify(c.issues.map((i) => ({ title: i.title, state: i.state, conclusion: i.conclusion, tax_year: i.taxYear }))),
       completed_actions: JSON.stringify(c.pathSteps.filter((s) => s.status === "done").map((s) => s.title)),
       professional_updates: "(none supplied)",
