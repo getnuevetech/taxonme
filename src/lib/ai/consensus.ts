@@ -72,8 +72,9 @@ export function mergeStructured(outputs: { source: string; data: Json }[]): {
 }
 
 /**
- * Case readiness is computed by our own formula, never by an AI opinion:
- * documents obtained + facts verified + IRS source confirmation − unresolved contradictions.
+ * Superseded by computeReadinessDimensions in evidence/readiness-core, which
+ * keeps our processing gaps out of the customer's score. Retained for the guest
+ * flow, which has no evidence layer to draw on.
  */
 export function computeReadiness(input: {
   documentsCount: number;

@@ -15,6 +15,7 @@ import { analyzeEvidenceRelationships } from "../src/lib/evidence/reconcile-core
 import { auditEvidence, blocksAnalysis } from "../src/lib/evidence/audit-core";
 import { FACT_CLASSIFICATION, synthesizeCase } from "../src/lib/evidence/synthesize-core";
 import { ACTION_STATES, actionSatisfiedByEvidence, buildActionGraph, openActions } from "../src/lib/evidence/actions-core";
+import { computeReadinessDimensions } from "../src/lib/evidence/readiness-core";
 import { EVIDENCE_AUDIT_STATUS } from "../src/lib/evidence/types";
 import { amountsEqual, reconcileRefundArithmetic } from "../src/lib/evidence/calculations";
 import { evaluateAiV3Readiness } from "../src/lib/ai/readiness-core";
@@ -449,6 +450,72 @@ assert.equal(
 );
 // An action with no evidence definition is never auto-completed.
 assert.equal(actionSatisfiedByEvidence("UNCLASSIFIED_ACTION", noticeFacts).satisfied, false);
+
+// Readiness: our own processing gaps must not be charged to the customer.
+const providedDocuments = [
+  { fileName: "transcript-2023.pdf", processingStatus: "complete" },
+  { fileName: "transcript-2024.pdf", processingStatus: "complete" },
+  { fileName: "scan.pdf", processingStatus: "failed" },
+];
+const evidenceFactsForReadiness = [
+  { provenance: PROVENANCE.DOCUMENT_EXTRACTED },
+  { provenance: PROVENANCE.DOCUMENT_EXTRACTED },
+  { provenance: PROVENANCE.SYSTEM_CALCULATED },
+  { provenance: PROVENANCE.USER_REPORTED },
+];
+const readinessInput = {
+  documents: providedDocuments,
+  documentsExpected: 3,
+  facts: evidenceFactsForReadiness,
+  unknowns: [
+    { status: "OPEN", label: "Whether a payment plan exists" },
+    { status: "RESOLVED_BY_EXISTING_EVIDENCE", label: "The 2023 balance" },
+  ],
+  unresolvedConflicts: 0,
+  irsSourcesMatched: 2,
+};
+const readiness = computeReadinessDimensions(readinessInput);
+assert.equal(readiness.evidenceAvailable, 100, "the customer provided everything the case expected");
+assert.equal(readiness.evidenceProcessed, 67, "our side reports honestly that one file is unread");
+assert.equal(readiness.processingGap, true);
+assert.equal(readiness.documentsUnread, 1);
+assert.match(readiness.limitations[0], /could not be read on our side/);
+
+// Reading the outstanding file raises readiness without changing what the
+// customer provided — proving the gap was ours, not theirs.
+const afterProcessing = computeReadinessDimensions({
+  ...readinessInput,
+  documents: providedDocuments.map((d) => ({ ...d, processingStatus: "complete" })),
+});
+assert.equal(afterProcessing.evidenceAvailable, readiness.evidenceAvailable, "closing our gap does not change what they gave us");
+assert.equal(afterProcessing.evidenceProcessed, 100);
+assert.equal(afterProcessing.processingGap, false);
+assert.ok(afterProcessing.caseReadiness > readiness.caseReadiness, "reading a document we already held must raise readiness");
+
+// An unknown the evidence already answered must not depress readiness.
+const withResolvedUnknowns = computeReadinessDimensions({
+  ...readinessInput,
+  unknowns: [
+    { status: "OPEN", label: "Whether a payment plan exists" },
+    ...Array.from({ length: 5 }, () => ({ status: "RESOLVED_BY_EXISTING_EVIDENCE", label: "Answered by a transcript" })),
+  ],
+});
+assert.equal(withResolvedUnknowns.caseReadiness, readiness.caseReadiness, "resolved unknowns must not count against readiness");
+assert.equal(withResolvedUnknowns.resolvedUnknowns, 5);
+
+// A duplicate upload is neither extra evidence nor an extra processing failure.
+const withDuplicate = computeReadinessDimensions({
+  ...readinessInput,
+  documents: [...providedDocuments, { fileName: "transcript-2023-copy.pdf", processingStatus: "failed", duplicateOfId: "doc-1" }],
+});
+assert.equal(withDuplicate.documentsProvided, 3, "duplicates are counted once");
+assert.equal(withDuplicate.evidenceProcessed, readiness.evidenceProcessed);
+
+// An empty case is not a processing failure on our side.
+const emptyCase = computeReadinessDimensions({ ...readinessInput, documents: [], facts: [], unknowns: [], irsSourcesMatched: 0 });
+assert.equal(emptyCase.evidenceAvailable, 0);
+assert.equal(emptyCase.evidenceProcessed, 100, "with nothing uploaded there is nothing we failed to read");
+assert.equal(emptyCase.processingGap, false);
 
 // Appendix C/H: user belief must not become confirmed IRS fact.
 assert.match(promptBody("RESP-FACT-v3"), /belief/);
