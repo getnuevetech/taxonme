@@ -1,7 +1,7 @@
 import { PrismaClient } from "@prisma/client";
 import bcrypt from "bcryptjs";
 import crypto from "crypto";
-import { AI_V3_VERSION, V3_PIPELINE_BLUEPRINT, V3_PROMPT_RECORDS } from "../src/lib/ai/v3-prompts";
+import { AI_V3_VERSION, PROMPT_SUPERSEDES, V3_PIPELINE_BLUEPRINT, V3_PROMPT_RECORDS } from "../src/lib/ai/v3-prompts";
 
 const db = new PrismaClient();
 
@@ -325,6 +325,7 @@ async function seedAiAndPipelines() {
         title: prompt.title,
         body: prompt.body,
         bodyHash,
+        supersedesPromptId: prompt.supersedesPromptId ?? "",
         isReleased: true,
         releasedAt: new Date(),
         isActive: true,
@@ -358,6 +359,7 @@ async function seedAiAndPipelines() {
           title: prompt.title,
           body: prompt.body,
           bodyHash,
+          supersedesPromptId: prompt.supersedesPromptId ?? existingPrompt.supersedesPromptId,
           isReleased: true,
           releasedAt: existingPrompt.releasedAt ?? new Date(),
           isActive: true,
@@ -417,15 +419,29 @@ async function seedAiAndPipelines() {
           where: { stageKey: stage.key, sortOrder: step.order },
         });
         if (!existing) continue;
+        // An admin's own prompt choice is preserved. A step still pointing at a
+        // prompt this blueprint explicitly supersedes is migrated forward.
+        const supersededBy = PROMPT_SUPERSEDES[existing.promptId ?? ""];
+        const migrates = Boolean(existing.promptId) && supersededBy === step.promptId;
+        const nextPromptId = existing.promptId && !migrates ? existing.promptId : step.promptId;
+        const nextPrompt = V3_PROMPT_RECORDS.find((p) => p.promptId === nextPromptId);
         await db.pipelineStep.update({
           where: { id: existing.id },
           data: {
             role: step.role,
             mode: step.mode,
             routeKey: step.routeKey,
-            promptId: existing.promptId || step.promptId,
-            promptVersion: existing.promptVersion || AI_V3_VERSION,
-            schemaVersion: existing.schemaVersion || AI_V3_VERSION,
+            promptId: nextPromptId,
+            ...(migrates && nextPrompt
+              ? {
+                  promptTemplate: nextPrompt.body,
+                  promptVersion: nextPrompt.version ?? AI_V3_VERSION,
+                  schemaVersion: nextPrompt.schemaVersion ?? AI_V3_VERSION,
+                }
+              : {
+                  promptVersion: existing.promptVersion || AI_V3_VERSION,
+                  schemaVersion: existing.schemaVersion || AI_V3_VERSION,
+                }),
             pipelineVersion: existing.pipelineVersion || AI_V3_VERSION,
             isConditional: step.isConditional ?? false,
             conditionsJson: existing.conditionsJson === "[]" ? JSON.stringify(step.conditions ?? []) : existing.conditionsJson,

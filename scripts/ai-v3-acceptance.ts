@@ -27,7 +27,7 @@ for (const role of requiredRoles) {
 }
 
 const promptIds = new Set(V3_PROMPT_RECORDS.map((p) => p.promptId));
-assert.ok(V3_PROMPT_RECORDS.every((p) => /-v3(1)?$/.test(p.promptId) || p.promptId === "GLOBAL-RULES-v3"), "all production prompts must be versioned v3/v31 IDs");
+assert.ok(V3_PROMPT_RECORDS.every((p) => /-v3(1|2)?$/.test(p.promptId) || p.promptId === "GLOBAL-RULES-v3"), "all production prompts must be versioned v3/v31/v32 IDs");
 for (const stage of V3_PIPELINE_BLUEPRINT) {
   for (const step of stage.steps) {
     assert.ok(promptIds.has(step.promptId), `${stage.key}/${step.role} references missing prompt ${step.promptId}`);

@@ -18,7 +18,7 @@ import { EVIDENCE_AUDIT_STATUS } from "../src/lib/evidence/types";
 import { amountsEqual, reconcileRefundArithmetic } from "../src/lib/evidence/calculations";
 import { evaluateAiV3Readiness } from "../src/lib/ai/readiness-core";
 import { redactSensitiveText } from "../src/lib/ai/privacy";
-import { DOMAIN_RULES_PROMPT_ID, RESPONSIBILITY_PROMPTS, V3_PIPELINE_BLUEPRINT, V3_PROMPT_RECORDS } from "../src/lib/ai/v3-prompts";
+import { DOMAIN_RULES_PROMPT_ID, PROMPT_SUPERSEDES, RESPONSIBILITY_PROMPTS, V3_PIPELINE_BLUEPRINT, V3_PROMPT_RECORDS } from "../src/lib/ai/v3-prompts";
 
 function promptBody(promptId: string): string {
   const prompt = RESPONSIBILITY_PROMPTS.find((p) => p.promptId === promptId);
@@ -349,6 +349,40 @@ const emptyReconstruction = synthesizeCase({ events: [], facts: [], accountState
 assert.deepEqual(emptyReconstruction.affected_tax_periods, []);
 assert.deepEqual(emptyReconstruction.timeline, []);
 
+// v3.2 analysis: analysts consume the reconstruction instead of rediscovering
+// the case, and a released prompt body is superseded rather than edited.
+assert.match(promptBody("RESP-ANL-v32"), /reconstructed case, not discovering/);
+assert.match(promptBody("RESP-ANL-v32"), /document_verified and system_calculated facts as established/);
+assert.match(promptBody("RESP-ANL-v32"), /challenge_fact_id/);
+assert.match(promptBody("RESP-ANL-v32"), /remaining_unresolved_questions/);
+assert.match(promptBody("RESP-SKEP-v32"), /historical and current values are being confused/);
+assert.match(promptBody("RESP-SKEP-v32"), /unknown kept active when the compiled evidence already answers it/);
+assert.match(promptBody("RESP-REV-v32"), /internal task, an extraction gap, or a processing failure/);
+assert.match(promptBody("RESP-REV-v32"), /request_reanalysis/);
+
+const situationSteps = V3_PIPELINE_BLUEPRINT.find((p) => p.key === STAGE_KEYS.SITUATION)!.steps;
+assert.deepEqual(
+  situationSteps.filter((s) => s.role === STEP_ROLES.ANALYST).map((s) => s.promptId),
+  ["RESP-ANL-v32", "RESP-ANL-v32"],
+  "both analysts must run the evidence-first prompt",
+);
+assert.equal(situationSteps.find((s) => s.role === STEP_ROLES.SKEPTIC)?.promptId, "RESP-SKEP-v32");
+assert.equal(situationSteps.find((s) => s.role === STEP_ROLES.REVIEWER)?.promptId, "RESP-REV-v32");
+
+// Every superseded prompt must still exist, and point at its replacement.
+for (const [oldId, newId] of Object.entries(PROMPT_SUPERSEDES)) {
+  assert.ok(V3_PROMPT_RECORDS.some((p) => p.promptId === oldId), `superseded prompt ${oldId} must be retained for history`);
+  const replacement = V3_PROMPT_RECORDS.find((p) => p.promptId === newId);
+  assert.ok(replacement, `replacement prompt ${newId} must exist`);
+  if (replacement?.kind === "responsibility") {
+    assert.equal(replacement.supersedesPromptId, oldId, `${newId} must record what it supersedes`);
+  }
+}
+
+// The evidence-first domain policy is what every model now inherits.
+assert.match(domainRules.body.toLowerCase(), /evidence already held by taxonme must be exhausted/);
+assert.match(domainRules.body.toLowerCase(), /a processing failure is never a taxpayer unknown/);
+
 // Appendix C/H: user belief must not become confirmed IRS fact.
 assert.match(promptBody("RESP-FACT-v3"), /belief/);
 assert.match(promptBody("RESP-FACT-v3"), /user_reported/);
@@ -367,9 +401,9 @@ assert.ok(doc.steps.some((s) => s.role === STEP_ROLES.REVIEWER && s.isConditiona
 assert.match(promptBody("RESP-REC-v3"), /never average/);
 
 // Missing source must block material tax conclusions.
-assert.match(promptBody("RESP-ANL-v3"), /do not manufacture/);
+assert.match(promptBody("RESP-ANL-v32"), /do not manufacture/);
 assert.match(promptBody("RESP-SRC-v3"), /source_missing/);
-assert.match(promptBody("RESP-REV-v3"), /downgrade/);
+assert.match(promptBody("RESP-REV-v32"), /downgrade/);
 
 // Reviewer controls presentation.
 assert.deepEqual(stageRoles(STAGE_KEYS.SITUATION).slice(-3), [
