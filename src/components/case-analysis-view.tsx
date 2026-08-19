@@ -1,6 +1,7 @@
 import { db } from "@/lib/db";
 import { Card, CardBody, StateMark, ProgressBar, Money, Badge, EvidenceStatusBadge, EvidenceStrengthLine, ItemKindBadge } from "@/components/ui";
 import { isVerifiable, VERIFIABLE_ACTIONS } from "@/lib/case-progress";
+import { normalizeActionPurpose } from "@/lib/case-semantics";
 import { reanalyzeCaseAction, completePathStepAction, checkCaseProgressAction } from "@/actions/case";
 import { startFormAction } from "@/actions/forms";
 import { InlineUpload } from "@/components/inline-upload";
@@ -22,6 +23,9 @@ export async function CaseAnalysisView({ caseId, viewer }: { caseId: string; vie
       documents: { where: { deletedAt: null } },
       runs: { orderBy: { startedAt: "desc" }, include: { consensus: true }, take: 10 },
       presentations: { orderBy: { createdAt: "desc" }, take: 1 },
+      reconstruction: true,
+      accountStates: { orderBy: { taxPeriod: "asc" } },
+      unknowns: { where: { status: "ACTIVE" } },
     },
   });
   if (!c) return null;
@@ -93,6 +97,39 @@ export async function CaseAnalysisView({ caseId, viewer }: { caseId: string; vie
   const v3NextStep = latestPresentation?.next_step && typeof latestPresentation.next_step === "object"
     ? latestPresentation.next_step as Record<string, unknown>
     : null;
+
+  // v3.2: what the evidence established, shown in plain language.
+  const reconstruction = (() => {
+    if (!c.reconstruction?.reconstructionJson) return null;
+    try {
+      return JSON.parse(c.reconstruction.reconstructionJson) as {
+        timeline?: { date: string | null; description: string; amount: number | null; entry_type: string }[];
+        affected_tax_periods?: string[];
+        cross_period_events?: { description: string }[];
+      };
+    } catch {
+      return null;
+    }
+  })();
+  const timelineEntries = (reconstruction?.timeline ?? []).filter((entry) => entry.description).slice(0, 8);
+  const establishedPositions = c.accountStates.filter((state) => state.currentBalance !== null);
+  const crossPeriodEvents = reconstruction?.cross_period_events ?? [];
+  const openUnknowns = c.unknowns.slice(0, 6);
+  const documentsInEvidence = c.documents.filter((d) => !d.duplicateOfId && d.docKind !== "avatar");
+  const processingLimits = documentsInEvidence.filter((d) => d.processingStatus === "partial" || d.processingStatus === "failed");
+  const documentTypeLabel = (value: string) =>
+    value ? value.replace(/^IRS_/, "").replace(/_/g, " ").toLowerCase().replace(/^./, (ch) => ch.toUpperCase()) : "Document";
+  const usd = (value: number | null) =>
+    typeof value === "number" ? value.toLocaleString("en-US", { style: "currency", currency: "USD" }) : "—";
+
+  // The same intent stated more than once is shown once.
+  const seenStepPurpose = new Set<string>();
+  const displayedPathSteps = c.pathSteps.filter((step) => {
+    const purpose = normalizeActionPurpose(`${step.actionKey} ${step.title} ${step.description}`);
+    if (seenStepPurpose.has(purpose)) return false;
+    seenStepPurpose.add(purpose);
+    return true;
+  });
 
   const form9465 = interactive
     ? await db.irsFormTemplate.findFirst({ where: { formNumber: "9465", isPublished: true }, select: { id: true } })
@@ -241,6 +278,70 @@ export async function CaseAnalysisView({ caseId, viewer }: { caseId: string; vie
             </CardBody>
           </Card>
         )}
+        {establishedPositions.length > 0 && (
+          <section>
+            <h2 className="mb-3 text-base font-semibold text-slate-900">Your current position</h2>
+            <Card>
+              <CardBody>
+                <div className="space-y-3">
+                  {establishedPositions.map((state) => (
+                    <div key={state.taxPeriod} className="flex flex-wrap items-baseline justify-between gap-2 rounded-xl bg-slate-50 px-4 py-3">
+                      <div>
+                        <p className="text-sm font-semibold text-slate-900">Tax year {state.taxPeriod}</p>
+                        <p className="text-xs text-slate-500">
+                          {state.currentBalanceAsOf
+                            ? `Based on the most recent record we have, dated ${state.currentBalanceAsOf.toLocaleDateString("en-US")}.`
+                            : "Based on the most recent record we have."}
+                        </p>
+                      </div>
+                      <p className="text-lg font-bold text-slate-900">{usd(state.currentBalance)}</p>
+                    </div>
+                  ))}
+                </div>
+                <p className="mt-3 text-xs text-slate-500">
+                  This reflects the records currently on file. Anything the IRS did after that date will not appear here yet.
+                </p>
+              </CardBody>
+            </Card>
+          </section>
+        )}
+
+        {timelineEntries.length > 0 && (
+          <section>
+            <h2 className="mb-3 text-base font-semibold text-slate-900">What happened</h2>
+            <Card>
+              <CardBody>
+                <ol className="space-y-3">
+                  {timelineEntries.map((entry, index) => (
+                    <li key={`${entry.date ?? "undated"}-${index}`} className="flex gap-3">
+                      <span className="mt-1.5 flex h-2 w-2 shrink-0 rounded-full bg-indigo-500" />
+                      <div>
+                        <p className="text-sm text-slate-800">
+                          {entry.date && <span className="font-semibold text-slate-900">{entry.date} · </span>}
+                          {entry.description}
+                          {typeof entry.amount === "number" && entry.amount !== 0 && (
+                            <span className="font-medium text-slate-900"> — {usd(Math.abs(entry.amount))}</span>
+                          )}
+                        </p>
+                      </div>
+                    </li>
+                  ))}
+                </ol>
+                {crossPeriodEvents.length > 0 && (
+                  <div className="mt-4 rounded-xl bg-indigo-50 p-4">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-indigo-500">Across tax years</p>
+                    <ul className="mt-2 space-y-1 text-sm text-slate-700">
+                      {crossPeriodEvents.slice(0, 3).map((event, index) => (
+                        <li key={index}>• {event.description}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </CardBody>
+            </Card>
+          </section>
+        )}
+
         {c.status === "analyzing" && (
           <div className="flex items-center gap-3 rounded-xl border border-indigo-200 bg-indigo-50 px-4 py-3 text-sm text-indigo-900">
             <span className="h-3 w-3 shrink-0 animate-ping rounded-full bg-indigo-500" />
@@ -504,6 +605,56 @@ export async function CaseAnalysisView({ caseId, viewer }: { caseId: string; vie
           </div>
         </section>
 
+        {openUnknowns.length > 0 && (
+          <section>
+            <h2 className="mb-3 text-base font-semibold text-slate-900">What still needs confirmation</h2>
+            <Card>
+              <CardBody>
+                <ul className="space-y-3">
+                  {openUnknowns.map((unknown) => (
+                    <li key={unknown.id}>
+                      <p className="text-sm font-semibold text-slate-900">{unknown.label}</p>
+                      <p className="text-sm text-slate-600">
+                        {unknown.reason || "We do not yet have a record that establishes this."}
+                      </p>
+                    </li>
+                  ))}
+                </ul>
+              </CardBody>
+            </Card>
+          </section>
+        )}
+
+        {documentsInEvidence.length > 0 && (
+          <section>
+            <h2 className="mb-3 text-base font-semibold text-slate-900">Evidence we used</h2>
+            <Card>
+              <CardBody>
+                <ul className="space-y-2 text-sm">
+                  {documentsInEvidence.slice(0, 8).map((doc) => (
+                    <li key={doc.id} className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-slate-50 px-3 py-2">
+                      <span className="text-slate-800">{doc.fileName}</span>
+                      <span className="flex items-center gap-2">
+                        <Badge>{documentTypeLabel(doc.documentType)}</Badge>
+                        {doc.processingStatus === "complete" && <Badge color="green">Read in full</Badge>}
+                        {doc.processingStatus === "partial" && <Badge color="amber">{doc.extractedJson ? "Partly read" : "Not read yet"}</Badge>}
+                        {doc.processingStatus === "failed" && <Badge color="red">Could not read</Badge>}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+                {processingLimits.length > 0 && (
+                  <p className="mt-3 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-900">
+                    We could not fully read {processingLimits.length} of your {documentsInEvidence.length} document
+                    {documentsInEvidence.length === 1 ? "" : "s"}. That is a limit on our side, not something missing from you —
+                    re-uploading a clearer copy usually resolves it.
+                  </p>
+                )}
+              </CardBody>
+            </Card>
+          </section>
+        )}
+
         <section>
           <div className="mb-3 flex items-center justify-between">
             <h2 className="text-base font-semibold text-slate-900">Path forward</h2>
@@ -517,7 +668,7 @@ export async function CaseAnalysisView({ caseId, viewer }: { caseId: string; vie
           </div>
           <Card>
             <CardBody className="space-y-1">
-              {c.pathSteps.map((step, i) => {
+              {displayedPathSteps.map((step, i) => {
                 const verifiable = isVerifiable(step.actionKey);
                 return (
                   <div key={step.id} className={`flex items-start gap-3 rounded-xl p-3 ${step.status === "current" ? "bg-indigo-50" : ""}`}>
@@ -576,7 +727,7 @@ export async function CaseAnalysisView({ caseId, viewer }: { caseId: string; vie
                   </div>
                 );
               })}
-              {c.pathSteps.length === 0 && <p className="p-3 text-sm text-slate-500">Steps appear after analysis completes.</p>}
+              {displayedPathSteps.length === 0 && <p className="p-3 text-sm text-slate-500">Steps appear after analysis completes.</p>}
             </CardBody>
           </Card>
         </section>
@@ -639,21 +790,27 @@ export async function CaseAnalysisView({ caseId, viewer }: { caseId: string; vie
             <h3 className="mb-2 text-sm font-semibold text-slate-900">Evidence ({c.documents.length} document{c.documents.length === 1 ? "" : "s"})</h3>
             <ul className="space-y-2">
               {c.documents.map((d) => {
-                const verified =
-                  d.mimeType.startsWith("text/") ||
-                  /\.(txt|csv|md|log)$/i.test(d.fileName) ||
-                  d.extractedJson.length > 0;
+                // Whether we could read a document is a processing outcome, and
+                // it is never described as something the customer must confirm.
+                const readInFull = d.processingStatus === "complete";
+                const unreadable = d.processingStatus === "failed";
                 return (
                   <li key={d.id} className="flex items-start gap-2">
-                    <span className={`mt-0.5 text-sm font-bold ${verified ? "text-emerald-600" : "text-amber-500"}`}>
-                      {verified ? "✓" : "⚠"}
+                    <span className={`mt-0.5 text-sm font-bold ${readInFull ? "text-emerald-600" : unreadable ? "text-red-500" : "text-amber-500"}`}>
+                      {readInFull ? "✓" : unreadable ? "!" : "⚠"}
                     </span>
                     <div className="min-w-0">
                       <a href={`/api/files/${d.id}`} target="_blank" className="break-words text-sm text-indigo-600 underline">
                         {d.fileName}
                       </a>{" "}
-                      <Badge>{d.docKind}</Badge>
-                      {!verified && <p className="text-[11px] text-amber-600">Verification needed — on file, figures not yet confirmed</p>}
+                      <Badge>{documentTypeLabel(d.documentType) || d.docKind}</Badge>
+                      {d.duplicateOfId && <p className="text-[11px] text-slate-400">Duplicate of another upload — counted once.</p>}
+                      {unreadable && <p className="text-[11px] text-red-600">We could not read this file yet — a clearer copy usually fixes it.</p>}
+                      {!readInFull && !unreadable && !d.duplicateOfId && (
+                        <p className="text-[11px] text-amber-600">
+                          {d.extractedJson ? "Partly read — some details are still being extracted." : "On file, not read yet — it is extracted on the next analysis pass."}
+                        </p>
+                      )}
                     </div>
                   </li>
                 );

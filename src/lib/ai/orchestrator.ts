@@ -17,6 +17,7 @@ import { runEvidenceAudit } from "../evidence/audit";
 import { synthesizeCaseReconstruction } from "../evidence/synthesize";
 import { blocksAnalysis } from "../evidence/audit-core";
 import { extractorSignature, isExtractionCacheValid, storedRawText } from "../evidence/extraction-cache";
+import { PROCESSING_STATUS } from "../evidence/types";
 import { pipelinesForMaterialEvent } from "../reanalysis-policy";
 import { composePromptForStep } from "./prompt-composer";
 import {
@@ -645,11 +646,18 @@ export async function runCaseAnalysis(caseId: string, opts?: { trigger?: string;
           extractorA: outcome.stepOutputs.find((o) => o.role === "extractor_a")?.source ?? "",
           extractorB: outcome.stepOutputs.find((o) => o.role === "extractor_b")?.source ?? "",
         });
-        // A scanned file read by a vision model counts as examined evidence.
-        if (outcome.usedAi && !text && docMedia.length > 0) {
+        // A scanned file read by a vision model counts as examined evidence,
+        // and a document we successfully extracted is no longer "partly read".
+        if (outcome.usedAi) {
           await db.document.update({
             where: { id: doc.id },
-            data: { extractedJson: JSON.stringify({ vision_reviewed: true }), status: "extracted" },
+            data: {
+              processingStatus: PROCESSING_STATUS.COMPLETE,
+              processingNotesJson: "[]",
+              ...(!text && docMedia.length > 0
+                ? { extractedJson: JSON.stringify({ vision_reviewed: true }), status: "extracted" }
+                : {}),
+            },
           });
         }
         perDocument.push({

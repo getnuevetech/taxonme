@@ -204,6 +204,7 @@ const crossYear = analyzeEvidenceRelationships(
 );
 const transferRelationship = crossYear.relationships.find((r) => r.relationshipType === "CROSS_PERIOD_TRANSFER");
 assert.ok(transferRelationship, "a matching cross-period transfer must be identified");
+assert.match(String(transferRelationship?.description), /\$2,620\.07/, "customer-visible amounts must be formatted, not raw numbers");
 assert.equal(transferRelationship?.status, "CONFIRMED");
 assert.equal(transferRelationship?.fromTaxPeriod, "2024");
 assert.equal(transferRelationship?.toTaxPeriod, "2023");
