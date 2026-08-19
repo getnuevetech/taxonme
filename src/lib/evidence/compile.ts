@@ -3,7 +3,7 @@ import { db } from "../db";
 import { classifyDocument } from "./classify";
 import { compileDocumentEvents, compileDocumentFacts, compileNarrativeFacts } from "./facts";
 import { countTransactionRowCandidates, parseTranscript } from "./transcript";
-import { countPages } from "./extraction-cache";
+import { countPages, storedRawText } from "./extraction-cache";
 import { reconcileCaseEvidence } from "./reconcile";
 import { PROCESSING_STATUS, PROVENANCE, FACT_KEYS, type EvidenceFactInput } from "./types";
 
@@ -35,13 +35,7 @@ export type EvidenceCompileResult = {
 };
 
 function storedText(doc: { extractedJson: string }): string {
-  try {
-    const parsed = JSON.parse(doc.extractedJson || "{}");
-    const raw = parsed?.raw_text;
-    return typeof raw === "string" ? raw : "";
-  } catch {
-    return "";
-  }
+  return storedRawText(doc.extractedJson);
 }
 
 function latestBalanceFact(facts: { valueNumber: number | null; effectiveDate: Date | null; id: string }[]) {

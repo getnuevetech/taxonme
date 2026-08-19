@@ -37,6 +37,17 @@ export function isExtractionCacheValid(doc: CacheableDocument, signature: string
   }
 }
 
+// Text we already extracted stays usable even if the stored file later becomes
+// unreadable — losing the file must not erase the evidence taken from it.
+export function storedRawText(extractedJson: string): string {
+  try {
+    const parsed = JSON.parse(extractedJson || "{}");
+    return typeof parsed?.raw_text === "string" ? parsed.raw_text : "";
+  } catch {
+    return "";
+  }
+}
+
 // Page accounting from the document's own text. When the document does not say
 // how many pages it has we record what we processed rather than guessing.
 export function countPages(text: string): { expected: number; processed: number } {

@@ -156,13 +156,32 @@ ACCOUNT BALANCE: 0.00
       "processing failures must carry an explanation",
     );
 
+    const audit = await db.evidenceAudit.findFirst({ where: { caseId: c.id }, orderBy: { createdAt: "desc" } });
+    assert.ok(audit, "an evidence audit must be recorded for the analysis cycle");
+    assert.equal(
+      audit?.status,
+      "EVIDENCE_READY_WITH_LIMITATIONS",
+      "one unreadable document must limit the analysis, not block a case that has usable evidence",
+    );
+    const auditReport = JSON.parse(audit?.reportJson || "{}");
+    assert.ok(auditReport.processingFailures?.length > 0, "the audit must name the document it could not process");
+    assert.equal(auditReport.blockingConditions?.length, 0, "usable evidence must not be blocked");
+
+    const trackedUnknowns = await db.caseUnknown.findMany({ where: { caseId: c.id } });
+    const resolvedUnknowns = trackedUnknowns.filter((u) => u.status === "RESOLVED_BY_EXISTING_EVIDENCE");
+    assert.ok(trackedUnknowns.length > 0, "case unknowns must be tracked explicitly");
+    assert.ok(resolvedUnknowns.length > 0, "unknowns answered by evidence must be retired before reaching the customer");
+    assert.ok(resolvedUnknowns[0].supportingFactIdsJson.length > 2, "a resolved unknown must cite the evidence that answered it");
+
     const version = await db.caseAnalysisVersion.findFirst({ where: { caseId: c.id }, orderBy: { version: "desc" } });
     const snapshot = JSON.parse(version?.snapshotJson || "{}");
     assert.ok(snapshot.evidence_state, "analysis snapshot must record the evidence state");
     assert.equal(snapshot.evidence_state.duplicatesResolved, 1, "duplicate accounting must survive a full analysis run");
+    assert.ok(snapshot.evidence_audit, "analysis snapshot must record the evidence audit outcome");
+    assert.equal(snapshot.evidence_audit.status, audit?.status);
 
     console.log(
-      `v3.2 evidence check passed — facts: ${reconciled.factsCompiled}, events: ${reconciled.eventsCompiled}, periods: ${reconciled.periodsReconstructed}, suppressed: ${suppressed.length}, relationships: ${reconciled.relationshipsFound} (${reconciled.confirmedRelationships} confirmed), calculations: ${reconciled.calculationsPerformed}, processing failures recorded: ${snapshot.evidence_state.processingFailures?.length ?? 0}`,
+      `v3.2 evidence check passed — facts: ${reconciled.factsCompiled}, events: ${reconciled.eventsCompiled}, periods: ${reconciled.periodsReconstructed}, suppressed: ${suppressed.length}, relationships: ${reconciled.relationshipsFound} (${reconciled.confirmedRelationships} confirmed), calculations: ${reconciled.calculationsPerformed}, audit: ${audit?.status} (${resolvedUnknowns.length}/${trackedUnknowns.length} unknowns resolved by evidence)`,
     );
   } finally {
     if (userId) await db.user.delete({ where: { id: userId } }).catch(() => undefined);

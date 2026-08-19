@@ -10,8 +10,10 @@ import { compileDocumentEvents, compileDocumentFacts } from "../src/lib/evidence
 import { countTransactionRowCandidates, parseTranscript } from "../src/lib/evidence/transcript";
 import { resolveQuestionFromFacts, resolveUnknownTextFromFacts } from "../src/lib/evidence/unknowns";
 import { DOCUMENT_TYPES, FACT_KEYS, PROVENANCE } from "../src/lib/evidence/types";
-import { EXTRACTION_SCHEMA_VERSION, countPages, extractorSignature, isExtractionCacheValid } from "../src/lib/evidence/extraction-cache";
+import { EXTRACTION_SCHEMA_VERSION, countPages, extractorSignature, isExtractionCacheValid, storedRawText } from "../src/lib/evidence/extraction-cache";
 import { analyzeEvidenceRelationships } from "../src/lib/evidence/reconcile-core";
+import { auditEvidence, blocksAnalysis } from "../src/lib/evidence/audit-core";
+import { EVIDENCE_AUDIT_STATUS } from "../src/lib/evidence/types";
 import { amountsEqual, reconcileRefundArithmetic } from "../src/lib/evidence/calculations";
 import { evaluateAiV3Readiness } from "../src/lib/ai/readiness-core";
 import { redactSensitiveText } from "../src/lib/ai/privacy";
@@ -163,6 +165,11 @@ assert.equal(isExtractionCacheValid({ ...cachedDoc, extractionSchemaVersion: "3.
 assert.equal(isExtractionCacheValid({ ...cachedDoc, processingStatus: "failed" }, signature), false, "failed processing is never a cache hit");
 assert.equal(isExtractionCacheValid({ ...cachedDoc, contentHash: "" }, signature), false);
 
+// Losing the stored file must not erase text we already extracted from it.
+assert.equal(storedRawText(JSON.stringify({ raw_text: "ACCOUNT BALANCE: 10.00" })), "ACCOUNT BALANCE: 10.00");
+assert.equal(storedRawText("{}"), "");
+assert.equal(storedRawText("not json"), "");
+
 // A document that declares more pages than we read is partial, not complete.
 assert.deepEqual(countPages("Page 1 of 3\nfirst page text"), { expected: 3, processed: 1 });
 assert.deepEqual(countPages(""), { expected: 0, processed: 0 });
@@ -209,6 +216,80 @@ assert.equal(timeline.currentBalanceByPeriod["2023"].value, 2879);
 const supersededRelationship = timeline.relationships.find((r) => r.relationshipType === "BALANCE_SUPERSEDED");
 assert.equal(supersededRelationship?.status, "CONFIRMED");
 assert.doesNotMatch(String(supersededRelationship?.description), /conflict(?!ing figures)/i);
+
+// The evidence gate decides whether tax reasoning may proceed.
+const auditDocument = {
+  id: "doc-1",
+  fileName: "transcript.pdf",
+  documentType: DOCUMENT_TYPES.IRS_ACCOUNT_TRANSCRIPT,
+  processingStatus: "complete",
+  verificationStatus: "verified",
+  duplicateOfId: null,
+  transactionRowsDetected: 3,
+  transactionRowsExtracted: 3,
+  factCount: 4,
+};
+const readyAudit = auditEvidence({ documents: [auditDocument], unknowns: [], facts: [], relationshipCount: 1, calculationCount: 1 });
+assert.equal(readyAudit.status, EVIDENCE_AUDIT_STATUS.EVIDENCE_READY);
+assert.equal(blocksAnalysis(readyAudit.status), false);
+
+// Partial evidence still produces an answer, with the limitation stated.
+const partialAudit = auditEvidence({
+  documents: [{ ...auditDocument, processingStatus: "partial", transactionRowsExtracted: 1 }],
+  unknowns: [],
+  facts: [],
+  relationshipCount: 0,
+  calculationCount: 0,
+});
+assert.equal(partialAudit.status, EVIDENCE_AUDIT_STATUS.EVIDENCE_READY_WITH_LIMITATIONS);
+assert.equal(blocksAnalysis(partialAudit.status), false, "partial evidence must not leave the customer with nothing");
+assert.ok(partialAudit.limitations.length > 0);
+
+// When nothing could be processed, analysis is blocked rather than dressed up
+// as taxpayer uncertainty.
+const blockedAudit = auditEvidence({
+  documents: [{ ...auditDocument, processingStatus: "failed" }],
+  unknowns: [],
+  facts: [],
+  relationshipCount: 0,
+  calculationCount: 0,
+});
+assert.equal(blockedAudit.status, EVIDENCE_AUDIT_STATUS.EVIDENCE_PROCESSING_INCOMPLETE);
+assert.equal(blocksAnalysis(blockedAudit.status), true);
+assert.ok(blockedAudit.blockingConditions.length > 0);
+assert.ok(blockedAudit.processingFailures.length > 0);
+
+// Extraction disagreement needs a person, but does not block the whole case.
+const humanReviewAudit = auditEvidence({
+  documents: [{ ...auditDocument, verificationStatus: "verification_required" }],
+  unknowns: [],
+  facts: [],
+  relationshipCount: 0,
+  calculationCount: 0,
+});
+assert.equal(humanReviewAudit.status, EVIDENCE_AUDIT_STATUS.HUMAN_DOCUMENT_REVIEW_REQUIRED);
+assert.equal(blocksAnalysis(humanReviewAudit.status), false);
+
+// A case with no documents has nothing left to exhaust.
+assert.equal(
+  auditEvidence({ documents: [], unknowns: [], facts: [], relationshipCount: 0, calculationCount: 0 }).status,
+  EVIDENCE_AUDIT_STATUS.EVIDENCE_READY,
+);
+
+// An unknown the evidence answers must not survive the audit.
+const auditWithUnknowns = auditEvidence({
+  documents: [auditDocument],
+  unknowns: [
+    { key: "issue:1:0", label: "Current balance", text: "Current account balance" },
+    { key: "issue:1:1", label: "Filing history", text: "Which years were filed by a preparer" },
+  ],
+  facts: [{ id: "f1", factKey: FACT_KEYS.ACCOUNT_BALANCE, provenance: PROVENANCE.DOCUMENT_EXTRACTED, valueNumber: 2879 }],
+  relationshipCount: 0,
+  calculationCount: 0,
+});
+assert.equal(auditWithUnknowns.unknownsResolvedByExistingEvidence.length, 1);
+assert.equal(auditWithUnknowns.unknownsResolvedByExistingEvidence[0].key, "issue:1:0");
+assert.deepEqual(auditWithUnknowns.remainingMaterialUnknowns.map((u) => u.key), ["issue:1:1"]);
 
 // Appendix C/H: user belief must not become confirmed IRS fact.
 assert.match(promptBody("RESP-FACT-v3"), /belief/);
