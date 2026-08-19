@@ -255,6 +255,8 @@ export async function buildCanonicalCaseState(caseId: string): Promise<Json | nu
     analysis_status: {
       case_status: c.status,
       readiness_score: c.readinessScore,
+      evidence_available_score: c.evidenceAvailableScore,
+      evidence_processed_score: c.evidenceProcessedScore,
       latest_analysis_version: latestVersion,
       latest_presentation_id: c.presentations[0]?.id ?? null,
     },

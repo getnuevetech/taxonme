@@ -1,7 +1,8 @@
 import "server-only";
 import { db } from "../db";
 import { callProvider, extractJson, type ChatMessage, type MediaAttachment } from "./adapters";
-import { mergeStructured, computeReadiness, type Conflict } from "./consensus";
+import { mergeStructured, type Conflict } from "./consensus";
+import { computeReadinessDimensions } from "../evidence/readiness-core";
 import { fallbackAnalyze } from "./fallback";
 import { STAGE_KEYS } from "../constants";
 import { getNumberSetting } from "../settings";
@@ -889,24 +890,28 @@ export async function runCaseAnalysis(caseId: string, opts?: { trigger?: string;
   // Refresh the stored reconstruction so it reflects this cycle's unknowns.
   const finalReconstruction = await synthesizeCaseReconstruction(caseId, analysisVersion.id).catch(() => caseReconstruction);
 
-  // Deterministic readiness score (our formula, not an AI's opinion).
-  const unknowns = Array.isArray(facts.unknowns) ? (facts.unknowns as unknown[]).length : 0;
+  // Deterministic readiness (our formula, not an AI's opinion), split so that a
+  // document we could not read is reported as our processing gap rather than
+  // deducted from the customer's case.
   const allConflicts = [...summaryOut.conflicts, ...goalOut.conflicts, ...(documentOut?.conflicts ?? []), ...situationConflicts];
   const expectedDocs = await getNumberSetting("analysis.expected_documents", 3);
-  const factKeys = Object.keys(facts).filter((k) => k !== "unknowns");
-  const verifiedFacts = factKeys.filter((k) => {
-    const v = facts[k];
-    return v !== null && v !== "" && !(typeof v === "object" && v !== null && (v as Json).__conflict);
-  }).length;
-  const readiness = computeReadiness({
-    documentsCount: c.documents.length,
+  const [readinessDocuments, readinessFacts, readinessUnknowns] = await Promise.all([
+    db.document.findMany({
+      where: { caseId, deletedAt: null },
+      select: { fileName: true, processingStatus: true, duplicateOfId: true },
+    }),
+    db.evidenceFact.findMany({ where: { caseId }, select: { provenance: true } }),
+    db.caseUnknown.findMany({ where: { caseId }, select: { status: true, label: true } }),
+  ]);
+  const readinessDimensions = computeReadinessDimensions({
+    documents: readinessDocuments,
     documentsExpected: expectedDocs,
-    factsVerified: verifiedFacts,
-    factsTotal: Math.max(factKeys.length, 1),
-    irsSourcesMatched: knowledge ? Math.min(3, knowledge.split("---").length) : 0,
+    facts: readinessFacts,
+    unknowns: readinessUnknowns,
     unresolvedConflicts: allConflicts.length,
-    unknowns,
+    irsSourcesMatched: knowledge ? Math.min(3, knowledge.split("---").length) : 0,
   });
+  const readiness = readinessDimensions.caseReadiness;
 
   // Information conflicts: contradictions between the customer's narrative and
   // their documents (fallback engine) or between analysis engines (AI path).
@@ -928,6 +933,8 @@ export async function runCaseAnalysis(caseId: string, opts?: { trigger?: string;
     data: {
       status: needsConsultant ? "consultant_recommended" : "analyzed",
       readinessScore: readiness,
+      evidenceAvailableScore: readinessDimensions.evidenceAvailable,
+      evidenceProcessedScore: readinessDimensions.evidenceProcessed,
       conflictsJson: JSON.stringify(displayConflicts),
     },
   });

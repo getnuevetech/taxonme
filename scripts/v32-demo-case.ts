@@ -116,7 +116,30 @@ async function main() {
   await synthesizeCaseReconstruction(c.id);
   await rebuildActionGraph(c.id);
 
-  console.log(JSON.stringify({ email, password: "ChangeMe123!", caseId: c.id, compiled }, null, 2));
+  const { computeReadinessDimensions } = await import("../src/lib/evidence/readiness-core");
+  const [docs, evidenceFacts, unknowns] = await Promise.all([
+    db.document.findMany({ where: { caseId: c.id, deletedAt: null }, select: { fileName: true, processingStatus: true, duplicateOfId: true } }),
+    db.evidenceFact.findMany({ where: { caseId: c.id }, select: { provenance: true } }),
+    db.caseUnknown.findMany({ where: { caseId: c.id }, select: { status: true, label: true } }),
+  ]);
+  const readiness = computeReadinessDimensions({
+    documents: docs,
+    documentsExpected: 3,
+    facts: evidenceFacts,
+    unknowns,
+    unresolvedConflicts: 0,
+    irsSourcesMatched: 2,
+  });
+  await db.case.update({
+    where: { id: c.id },
+    data: {
+      readinessScore: readiness.caseReadiness,
+      evidenceAvailableScore: readiness.evidenceAvailable,
+      evidenceProcessedScore: readiness.evidenceProcessed,
+    },
+  });
+
+  console.log(JSON.stringify({ email, password: "ChangeMe123!", caseId: c.id, compiled, readiness }, null, 2));
   await db.$disconnect();
 }
 
