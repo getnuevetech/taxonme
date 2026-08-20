@@ -30,10 +30,11 @@ export default async function CaseDetailPage({ params }: { params: Promise<{ id:
         actions={
           <div className="flex gap-2">
             <a
-              href={`/api/cases/${c.id}/report`}
-              target="_blank"
+              href={hasReportAccess ? `/api/cases/${c.id}/report` : "/app/billing?upgrade=report"}
+              target={hasReportAccess ? "_blank" : undefined}
+              rel={hasReportAccess ? "noreferrer" : undefined}
               className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
-              title={hasReportAccess ? "View the full case report (print for PDF)" : "Included in higher plans"}
+              title={hasReportAccess ? "View the full case report (print for PDF)" : "The printable report is included in Plus and Pro"}
             >
               {hasReportAccess ? "Case report ↗" : "Case report 🔒"}
             </a>

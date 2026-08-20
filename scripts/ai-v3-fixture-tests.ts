@@ -22,6 +22,7 @@ import { EVIDENCE_AUDIT_STATUS } from "../src/lib/evidence/types";
 import { amountsEqual, reconcileRefundArithmetic } from "../src/lib/evidence/calculations";
 import { evaluateAiV3Readiness } from "../src/lib/ai/readiness-core";
 import { redactSensitiveText } from "../src/lib/ai/privacy";
+import { sameOriginRedirect } from "../src/lib/http";
 import { DOMAIN_RULES_PROMPT_ID, PROMPT_SUPERSEDES, RESPONSIBILITY_PROMPTS, V3_PIPELINE_BLUEPRINT, V3_PROMPT_RECORDS, overlayPromptIdForStage } from "../src/lib/ai/v3-prompts";
 
 function promptBody(promptId: string): string {
@@ -658,5 +659,22 @@ assert.equal(
   redactSensitiveText("Taxpayer SSN 123-45-6789, EIN 12-3456789, account 123456789012."),
   "Taxpayer SSN [REDACTED_TIN], EIN [REDACTED_EIN], account [REDACTED_ACCOUNT_ID].",
 );
+
+// A billing upgrade must stay on the host the customer is already on. Building
+// the Location from request.url inherits localhost (or https://localhost when a
+// proxy sets X-Forwarded-Proto), which is how "download case report" used to
+// dump people on https://localhost:3000/app/billing?upgrade=report.
+const billingRedirect = sameOriginRedirect("/app/billing?upgrade=report");
+assert.equal(billingRedirect.status, 303);
+assert.equal(billingRedirect.headers.get("Location"), "/app/billing?upgrade=report");
+assert.equal(new URL(billingRedirect.headers.get("Location")!, "https://app.example.com").host, "app.example.com");
+assert.throws(() => sameOriginRedirect("https://localhost:3000/app/billing?upgrade=report"));
+assert.throws(() => sameOriginRedirect("//evil.example/phish"));
+const reportRoute = readFileSync("src/app/api/cases/[id]/report/route.ts", "utf8");
+assert.match(reportRoute, /sameOriginRedirect\("\/app\/billing\?upgrade=report"\)/);
+assert.doesNotMatch(reportRoute, /new URL\("\/app\/billing\?upgrade=report", request\.url\)/);
+const casePage = readFileSync("src/app/app/cases/[id]/page.tsx", "utf8");
+assert.match(casePage, /\/app\/billing\?upgrade=report/);
+assert.match(readFileSync("prisma/seed.ts", "utf8"), /key: "plus"[\s\S]*"case\.report": \{ enabled: true/);
 
 console.log("AI v3 fixture acceptance checks passed.");
