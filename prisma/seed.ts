@@ -182,6 +182,7 @@ async function seedPlansAndFeatures() {
         "vault.storage": { enabled: true, limit: null },
         "forms.wizard": { enabled: true, limit: null },
         "guide.chatbot": { enabled: true, limit: null },
+        "case.report": { enabled: true, limit: null },
         "forms.download": { enabled: true, limit: null },
       },
     },

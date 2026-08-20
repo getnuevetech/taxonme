@@ -10,9 +10,9 @@ export const metadata = { title: "Plan & billing" };
 export default async function BillingPage({
   searchParams,
 }: {
-  searchParams: Promise<{ subscribed?: string; canceled?: string; pending?: string }>;
+  searchParams: Promise<{ subscribed?: string; canceled?: string; pending?: string; upgrade?: string }>;
 }) {
-  const { subscribed, pending } = await searchParams;
+  const { subscribed, pending, upgrade } = await searchParams;
   const user = await requireUser();
   // Confirm any in-flight Stripe checkout directly with Stripe — no webhook required.
   const { reconcilePendingStripeTransactions } = await import("@/lib/payments");
@@ -38,6 +38,13 @@ export default async function BillingPage({
   return (
     <div>
       <PageHeader title="Plan & billing" subtitle="Upgrade or downgrade anytime. Access changes immediately." />
+      {(upgrade === "report" || upgrade === "forms-download") && (
+        <div className="mb-6 rounded-xl border border-indigo-200 bg-indigo-50 px-4 py-3 text-sm text-indigo-900">
+          {upgrade === "report"
+            ? "The printable case report is included with Plus and Pro. Upgrade below and the download will be waiting on your case."
+            : "Downloadable completed IRS forms are included with Plus and Pro. Upgrade below to save a copy."}
+        </div>
+      )}
       {(subscribed || justActivated) && (
         <div className="mb-6 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
           Your plan is active. Enjoy your new features!

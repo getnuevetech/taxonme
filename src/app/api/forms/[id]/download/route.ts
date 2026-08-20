@@ -4,6 +4,7 @@ import { getCurrentUser } from "@/lib/auth";
 import { hasFeature } from "@/lib/access";
 import { getBoolSetting, getSetting } from "@/lib/settings";
 import { FEATURE_KEYS } from "@/lib/constants";
+import { sameOriginRedirect } from "@/lib/http";
 
 const esc = (s: string) =>
   s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
@@ -38,7 +39,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
   // consultants download without the customer's plan gate).
   const paid = await getBoolSetting("forms.paid_downloads", true);
   if (isOwner && paid && !(await hasFeature(user.id, FEATURE_KEYS.FORMS_DOWNLOAD))) {
-    return NextResponse.redirect(new URL("/app/billing?upgrade=forms-download", request.url));
+    return sameOriginRedirect("/app/billing?upgrade=forms-download");
   }
 
   // Preferred output: the OFFICIAL IRS PDF with the customer's answers infused
