@@ -53,6 +53,17 @@ export const FEATURE_KEYS = {
   FORMS_DOWNLOAD: "forms.download",
 } as const;
 
+export const PAYMENT_KINDS = {
+  SUBSCRIPTION: "subscription",
+  CASE_REPORT_EXTRA: "case_report_extra",
+} as const;
+
+export const SETTINGS = {
+  CASE_REPORT_EXTRA_CENTS: "billing.case_report_extra_cents",
+} as const;
+
+export const DEFAULT_CASE_REPORT_EXTRA_CENTS = 499;
+
 export const STAGE_KEYS = {
   SUMMARY: "summary",
   GOAL: "goal",

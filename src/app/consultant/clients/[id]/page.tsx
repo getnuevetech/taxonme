@@ -4,6 +4,7 @@ import { db } from "@/lib/db";
 import { requireUser } from "@/lib/auth";
 import { PageHeader, Card, CardBody, Badge, StateMark, ProgressBar, EmptyState } from "@/components/ui";
 import { formatCaseNumber } from "@/lib/case-number";
+import { CaseReportCta } from "@/components/case-report-cta";
 
 export default async function ClientWorkspacePage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -66,9 +67,7 @@ export default async function ClientWorkspacePage({ params }: { params: Promise<
                       >
                         Open full analysis →
                       </Link>
-                      <a href={`/api/cases/${c.id}/report`} target="_blank" className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">
-                        Report ↗
-                      </a>
+                      <CaseReportCta caseId={c.id} returnPath={`/consultant/clients/${assignment.id}`} />
                     </div>
                   </CardBody>
                 </Card>

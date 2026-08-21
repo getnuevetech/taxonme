@@ -52,7 +52,7 @@ async function deterministicClosing(caseId: string, reason: "completed" | "aband
   lines.push(
     reason === "completed"
       ? "Keep your documents and any IRS confirmation letters safe — they're your proof if the IRS revisits the year. If a new notice arrives, start a new case and we'll pick up with everything we already know."
-      : "Your documents remain in your vault. When you're ready to continue, re-run the analysis or start a fresh case — everything you've provided carries over.",
+      : "Your documents remain in your vault. When you're ready to continue, start a fresh case or add new documents — everything you've provided carries over.",
   );
   return lines.join("\n");
 }

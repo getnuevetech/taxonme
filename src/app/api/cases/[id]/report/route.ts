@@ -1,16 +1,16 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { getCurrentUser, isAdmin } from "@/lib/auth";
-import { hasFeature } from "@/lib/access";
-import { FEATURE_KEYS } from "@/lib/constants";
+import { getCurrentUser } from "@/lib/auth";
 import { buildCaseReportHtml } from "@/lib/case-report";
+import { consumeCaseReportDownload, getCaseReportAccess } from "@/lib/case-report-quota";
 import { sameOriginRedirect } from "@/lib/http";
 
 // Full case report (view inline or ?download=1). Access:
-// - the case owner, when their plan includes the report feature (the "fee")
-// - a consultant with an ACTIVE connection to the owner (plus a partner plan
-//   when consultant subscriptions are enabled)
-// - admins
+// - the case owner, consuming their plan's included downloads (Free 1 / Plus 3 / Pro 7)
+// - extra downloads after the allowance, once the admin-set fee is paid
+// - a consultant with an ACTIVE connection (unmetered when partner subscriptions
+//   are off; otherwise against the consultant's plan allowance)
+// - admins (unmetered)
 export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const user = await getCurrentUser();
@@ -18,22 +18,22 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
   const c = await db.case.findUnique({ where: { id }, select: { userId: true } });
   if (!c) return new NextResponse("Not found", { status: 404 });
 
-  let allowed = false;
-  if (isAdmin(user)) allowed = true;
-  else if (c.userId === user.id) {
-    allowed = await hasFeature(user.id, FEATURE_KEYS.CASE_REPORT);
-    if (!allowed) return sameOriginRedirect("/app/billing?upgrade=report");
-  } else if (user.role === "consultant" && c.userId) {
-    const assignment = await db.consultantAssignment.findFirst({
-      where: { consultantId: user.id, userId: c.userId, status: "active" },
-    });
-    if (assignment) {
-      const { consultantSubscriptionsEnabled, hasActiveConsultantSubscription } = await import("@/lib/payments");
-      allowed = !(await consultantSubscriptionsEnabled()) || (await hasActiveConsultantSubscription(user.id));
-      if (!allowed) return sameOriginRedirect("/consultant/billing?required=1");
+  let access = await getCaseReportAccess(user, id);
+  if (access.paywall) {
+    const { reconcilePendingStripeTransactions } = await import("@/lib/payments");
+    await reconcilePendingStripeTransactions(user.id);
+    access = await getCaseReportAccess(user, id);
+  }
+  if (access.billingRedirect) return sameOriginRedirect(access.billingRedirect);
+  if (access.quotaRedirect && !access.allowed) return sameOriginRedirect(access.quotaRedirect);
+  if (!access.allowed) return new NextResponse("Forbidden", { status: 403 });
+
+  if (access.metered) {
+    const consumed = await consumeCaseReportDownload(user.id, id);
+    if (consumed === "payment_required") {
+      return sameOriginRedirect(access.quotaRedirect ?? `/app/cases/${id}?report_quota=1`);
     }
   }
-  if (!allowed) return new NextResponse("Forbidden", { status: 403 });
 
   const report = await buildCaseReportHtml(id);
   if (!report) return new NextResponse("Not found", { status: 404 });

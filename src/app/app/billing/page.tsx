@@ -41,7 +41,7 @@ export default async function BillingPage({
       {(upgrade === "report" || upgrade === "forms-download") && (
         <div className="mb-6 rounded-xl border border-indigo-200 bg-indigo-50 px-4 py-3 text-sm text-indigo-900">
           {upgrade === "report"
-            ? "The printable case report is included with Plus and Pro. Upgrade below and the download will be waiting on your case."
+            ? "Printable case reports are included on every plan (Free 1, Plus 3, Pro 7). Extra downloads after that allowance are a one-time fee set by the site admin."
             : "Downloadable completed IRS forms are included with Plus and Pro. Upgrade below to save a copy."}
         </div>
       )}

@@ -315,6 +315,29 @@ export async function resolveHumanReviewItemAction(formData: FormData) {
 
 // ---------- Plans & feature access control ----------
 
+export async function saveCaseReportExtraFeeAction(_prev: ActionState, formData: FormData): Promise<ActionState> {
+  await requireAdminArea("admin.plans");
+  const dollars = Number(formData.get("extraFeeUsd") ?? "");
+  if (!Number.isFinite(dollars) || dollars < 0) return { error: "Enter a valid extra-download fee of $0 or more." };
+  const cents = Math.round(dollars * 100);
+  const { SETTINGS } = await import("@/lib/constants");
+  await db.setting.upsert({
+    where: { key: SETTINGS.CASE_REPORT_EXTRA_CENTS },
+    update: { value: String(cents), type: "number", group: "billing" },
+    create: {
+      key: SETTINGS.CASE_REPORT_EXTRA_CENTS,
+      value: String(cents),
+      type: "number",
+      group: "billing",
+      label: "Extra case report download fee (cents)",
+      description: "Charged for each extra case report download after the plan allowance is used. Example: 499 = $4.99.",
+    },
+  });
+  revalidatePath("/admin/plans");
+  revalidatePath("/admin/settings");
+  return { ok: true };
+}
+
 export async function savePlanAction(_prev: ActionState, formData: FormData): Promise<ActionState> {
   await requireAdminArea("admin.plans");
   const id = String(formData.get("id") ?? "");
