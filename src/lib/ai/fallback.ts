@@ -144,7 +144,7 @@ export async function fallbackAnalyze(
       conflicts.push({
         topic: label,
         description: `Your description indicates approximately ${usd(narrativeVal.amount)}, while your uploaded document shows ${usd(docVal.amount)}. Difference: ${usd(Math.abs(docVal.amount - narrativeVal.amount))}.`,
-        resolution: `We are using ${usd(docVal.amount)} from your document as the current evidence. If that's not right, update your case summary and re-run the analysis.`,
+        resolution: `We are using ${usd(docVal.amount)} from your document as the current evidence. If that's not right, update your case summary — the analysis will refresh from the latest evidence.`,
       });
     }
     if (docVal) return { amount: docVal.amount, fromDocument: true };
@@ -238,7 +238,7 @@ export async function fallbackAnalyze(
       };
     }
     return {
-      what: `Your documents are on file. Re-run the analysis after adding anything new, and we'll verify every amount against them.`,
+      what: `Your documents are on file. Adding anything new refreshes the analysis automatically so we can verify every amount against them.`,
       action: "REVIEW",
       state: "review",
     };
@@ -316,7 +316,7 @@ export async function fallbackAnalyze(
       next_action: offsetConfirmed || hasTranscript ? "REVIEW" : "GET_TRANSCRIPT",
       alternative_action: "Have a TaxOnMe professional review the case with you.",
       analysis_outline: [
-        { heading: "Your situation", detail: `You reported that you expected a refund of ${usd(expectedRefund.amount)} for ${yearText} but received ${usd(receivedRefund.amount)} — leaving ${usd(diff)} unaccounted for.${documented ? " Part of these figures comes directly from your uploaded records." : " These amounts come from your own words — if either is off, update the summary and re-run."}` },
+        { heading: "Your situation", detail: `You reported that you expected a refund of ${usd(expectedRefund.amount)} for ${yearText} but received ${usd(receivedRefund.amount)} — leaving ${usd(diff)} unaccounted for.${documented ? " Part of these figures comes directly from your uploaded records." : " These amounts come from your own words — if either is off, update the summary and the analysis will refresh."}` },
         { heading: "Tax rules", detail: `Rule: refunds don't simply shrink — under IRS procedure the difference is an offset (refund applied to another debt), an adjustment (the IRS changed the return), or a hold (payment suspended for review). Why it matters to your case: each explanation has a different remedy, and your Account Transcript distinguishes them by transaction code (TC 826 credit transferred · CP12-type adjustment notices · TC 570 hold).`, source: "IRS Account Transcript transaction codes · Treasury Offset Program · CP12 notice guidance" },
         { heading: "Your evidence", detail: evidenceLine() },
         { heading: "Our conclusion", detail: offsetConfirmed
@@ -589,8 +589,8 @@ export async function fallbackAnalyze(
     });
   }
   pathSteps.push({
-    title: "Re-run the analysis with your documents",
-    description: "Once documents are in, re-run the analysis so every amount is verified against them.",
+    title: "Confirm the analysis against your documents",
+    description: "Once documents are in, the analysis refreshes automatically so every amount is verified against them.",
     action_key: "REVIEW_ANALYSIS",
   });
   if (noticeCodes.length > 0) {

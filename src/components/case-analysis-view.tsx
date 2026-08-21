@@ -2,7 +2,7 @@ import { db } from "@/lib/db";
 import { Card, CardBody, StateMark, ProgressBar, Money, Badge, EvidenceStatusBadge, EvidenceStrengthLine, ItemKindBadge } from "@/components/ui";
 import { isVerifiable, VERIFIABLE_ACTIONS } from "@/lib/case-progress";
 import { normalizeActionPurpose } from "@/lib/case-semantics";
-import { reanalyzeCaseAction, completePathStepAction, checkCaseProgressAction } from "@/actions/case";
+import { completePathStepAction, checkCaseProgressAction } from "@/actions/case";
 import { startFormAction } from "@/actions/forms";
 import { InlineUpload } from "@/components/inline-upload";
 import { CaseUpload } from "@/components/case-upload";
@@ -690,13 +690,7 @@ export async function CaseAnalysisView({ caseId, viewer }: { caseId: string; vie
                       )}
                       {interactive && step.status !== "done" && (
                         <div className="mt-2 flex flex-wrap gap-2">
-                          {(step.actionKey.toUpperCase() === "REVIEW_ANALYSIS" || step.actionKey.toUpperCase() === "RERUN_ANALYSIS") ? (
-                            <form action={reanalyzeCaseAction.bind(null, c.id)}>
-                              <button className="rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-indigo-700">
-                                Re-run the analysis now →
-                              </button>
-                            </form>
-                          ) : step.actionKey.toUpperCase() === "COMPLETE_FORM_9465" && form9465 ? (
+                          {(step.actionKey.toUpperCase() === "REVIEW_ANALYSIS" || step.actionKey.toUpperCase() === "RERUN_ANALYSIS") ? null : step.actionKey.toUpperCase() === "COMPLETE_FORM_9465" && form9465 ? (
                             <form action={startFormAction.bind(null, form9465.id)}>
                               <button className="rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-indigo-700">
                                 Start the payment plan form →

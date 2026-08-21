@@ -1,15 +1,16 @@
 import { db } from "@/lib/db";
 import { guardAdminPage } from "@/lib/admin-guard";
 import { PageHeader, Card, CardBody, Badge } from "@/components/ui";
-import { PlanForm, FeatureMatrix, ConsultantSubsToggle, ProrationToggle } from "@/components/admin/plan-forms";
+import { PlanForm, FeatureMatrix, ConsultantSubsToggle, ProrationToggle, CaseReportExtraFeeForm } from "@/components/admin/plan-forms";
 import { PlanDiscountForm } from "@/components/admin/plan-discount-forms";
-import { getBoolSetting } from "@/lib/settings";
+import { getBoolSetting, getNumberSetting } from "@/lib/settings";
+import { DEFAULT_CASE_REPORT_EXTRA_CENTS, SETTINGS } from "@/lib/constants";
 
 export const metadata = { title: "Plans & access control" };
 
 export default async function AdminPlansPage() {
   await guardAdminPage("admin.plans");
-  const [plans, features, consultantSubsEnabled, prorationEnabled, prorationDowngrade] = await Promise.all([
+  const [plans, features, consultantSubsEnabled, prorationEnabled, prorationDowngrade, extraReportFeeCents] = await Promise.all([
     db.subscriptionPlan.findMany({
       orderBy: [{ audience: "asc" }, { sortOrder: "asc" }],
       include: { features: true, discounts: { orderBy: { createdAt: "desc" } } },
@@ -18,6 +19,7 @@ export default async function AdminPlansPage() {
     getBoolSetting("consultants.subscriptions_enabled", false),
     getBoolSetting("billing.proration_enabled", true),
     getBoolSetting("billing.proration_downgrade_enabled", false),
+    getNumberSetting(SETTINGS.CASE_REPORT_EXTRA_CENTS, DEFAULT_CASE_REPORT_EXTRA_CENTS),
   ]);
 
   return (
@@ -36,6 +38,18 @@ export default async function AdminPlansPage() {
             new plan before billing starts. Downgrades only receive credit when explicitly allowed below.
           </p>
           <ProrationToggle enabled={prorationEnabled} downgradeEnabled={prorationDowngrade} />
+        </CardBody>
+      </Card>
+
+      <Card className="mb-8">
+        <CardBody>
+          <h2 className="mb-2 text-sm font-semibold text-slate-900">Extra case report downloads</h2>
+          <p className="mb-3 text-xs text-slate-500">
+            Each plan includes a set number of printable case reports (Free 1, Plus 3, Pro 7 — editable in the matrix
+            below). After that allowance is used, the customer (or consultant, when partner subscriptions are on) pays
+            this fee for each additional unique case report.
+          </p>
+          <CaseReportExtraFeeForm extraFeeCents={extraReportFeeCents} />
         </CardBody>
       </Card>
 

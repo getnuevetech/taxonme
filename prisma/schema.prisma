@@ -226,6 +226,7 @@ model User {
   notices             Notice[]
   tickets             Ticket[]
   assignedTickets     Ticket[] @relation("ticketAssignee")
+  caseReportDownloads CaseReportDownload[]
 }
 
 model AdminPermission {
@@ -312,9 +313,12 @@ model PaymentTransaction {
   status      String            @default("pending") // pending | succeeded | failed | refunded
   gateway     String
   gatewayRef  String            @default("")
+  kind        String            @default("subscription") // subscription | case_report_extra
   createdAt   DateTime          @default(now())
   user        User              @relation(fields: [userId], references: [id], onDelete: Cascade)
   plan        SubscriptionPlan? @relation(fields: [planId], references: [id])
+
+  @@index([userId, kind, status])
 }
 
 // ---------- Guest intake ----------
@@ -385,6 +389,22 @@ model Case {
   reconstruction CaseReconstruction?
   unknowns CaseUnknown[]
   suppressedQuestions SuppressedQuestion[]
+  reportDownloads CaseReportDownload[]
+}
+
+// One ledger row per user+case the first time that person retrieves the
+// printable report. Re-opening the same case does not consume another unit.
+model CaseReportDownload {
+  id        String   @id @default(cuid())
+  userId    String
+  caseId    String
+  source    String   @default("included") // included | extra
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  case      Case     @relation(fields: [caseId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, caseId])
+  @@index([userId])
 }
 
 // The clarifying-questions conversation: when the analysis lacks specific

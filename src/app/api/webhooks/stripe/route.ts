@@ -65,6 +65,33 @@ export async function POST(request: Request) {
     const paid =
       session.payment_status === "paid" ||
       (session.status === "complete" && session.payment_status === "no_payment_required");
+    const { PAYMENT_KINDS } = await import("@/lib/constants");
+    const kind = String(metadata.kind ?? PAYMENT_KINDS.SUBSCRIPTION);
+
+    if (kind === PAYMENT_KINDS.CASE_REPORT_EXTRA && userId && transactionId && sessionId && paid) {
+      const tx = await db.paymentTransaction.findFirst({
+        where: { id: transactionId, userId, kind: PAYMENT_KINDS.CASE_REPORT_EXTRA, gateway: "stripe" },
+      });
+      if (!tx) {
+        const { logSystem } = await import("@/lib/syslog");
+        await logSystem("warning", "webhook", "Stripe extra-report checkout rejected: no matching transaction", { sessionId, transactionId, userId });
+        return NextResponse.json({ received: true });
+      }
+      if (tx.status === "succeeded") return NextResponse.json({ received: true });
+      if (tx.status !== "pending") {
+        const { logSystem } = await import("@/lib/syslog");
+        await logSystem("warning", "webhook", "Stripe extra-report checkout rejected: transaction is not pending", { sessionId, transactionId, status: tx.status });
+        return NextResponse.json({ received: true });
+      }
+      const amountTotal = typeof session.amount_total === "number" ? session.amount_total : null;
+      if (amountTotal !== null && amountTotal > 0 && amountTotal !== tx.amountCents) {
+        const { logSystem } = await import("@/lib/syslog");
+        await logSystem("warning", "webhook", "Stripe extra-report checkout rejected: amount mismatch", { sessionId, transactionId, expected: tx.amountCents, actual: amountTotal });
+        return NextResponse.json({ received: true });
+      }
+      await db.paymentTransaction.update({ where: { id: tx.id }, data: { status: "succeeded" } });
+      return NextResponse.json({ received: true });
+    }
 
     if (userId && planId && transactionId && sessionId && paid) {
       const tx = await db.paymentTransaction.findFirst({

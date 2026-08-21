@@ -171,6 +171,137 @@ export async function subscribeAction(_prev: ActionState, formData: FormData): P
   return { error: "No payment method is available right now. Please contact support." };
 }
 
+function safeReturnPath(raw: string, fallback: string): string {
+  const path = raw.split("?")[0];
+  if (path.startsWith("/") && !path.startsWith("//")) return path;
+  return fallback;
+}
+
+// One-time extra case-report download after the plan allowance is used.
+// The fee is the admin-managed billing.case_report_extra_cents setting.
+export async function purchaseCaseReportExtraAction(_prev: ActionState, formData: FormData): Promise<ActionState> {
+  const user = await requireUser();
+  const caseId = String(formData.get("caseId") ?? "");
+  const fallbackPath = user.role === "consultant" ? "/consultant" : `/app/cases/${caseId}`;
+  const returnPath = safeReturnPath(String(formData.get("returnPath") ?? ""), fallbackPath);
+  const c = await db.case.findUnique({ where: { id: caseId }, select: { id: true, userId: true } });
+  if (!c) return { error: "Case not found." };
+
+  const { getCaseReportAccess, extraCaseReportFeeCents } = await import("@/lib/case-report-quota");
+  const access = await getCaseReportAccess(user, caseId);
+  if (access.forbidden) return { error: "You cannot download this case report." };
+  if (access.billingRedirect) redirect(access.billingRedirect);
+  if (access.allowed) redirect(`/api/cases/${caseId}/report`);
+
+  const extraFeeCents = await extraCaseReportFeeCents();
+  const { PAYMENT_KINDS } = await import("@/lib/constants");
+
+  const { reconcilePendingStripeTransactions } = await import("@/lib/payments");
+  await reconcilePendingStripeTransactions(user.id);
+
+  const inFlight = await db.paymentTransaction.findFirst({
+    where: {
+      userId: user.id,
+      kind: PAYMENT_KINDS.CASE_REPORT_EXTRA,
+      status: "pending",
+      createdAt: { gte: new Date(Date.now() - 30 * 60000) },
+    },
+  });
+  if (inFlight) {
+    return { error: "Your previous extra-download payment is still processing. Refresh in a moment — if it doesn't confirm, you can try again." };
+  }
+
+  const gateway = await db.paymentGatewayConfig.findFirst({
+    where: { isActive: true },
+    orderBy: [{ isDefault: "desc" }],
+  });
+
+  if (!gateway || gateway.kind === "manual" || extraFeeCents === 0) {
+    if (extraFeeCents > 0 && (!gateway || gateway.kind === "manual") && process.env.NODE_ENV === "production" && process.env.ALLOW_MANUAL_BILLING !== "true") {
+      return { error: "Online payment is required for extra downloads. Contact support if you need manual billing." };
+    }
+    await db.paymentTransaction.create({
+      data: {
+        userId: user.id,
+        amountCents: extraFeeCents,
+        gateway: gateway?.kind ?? "manual",
+        status: "succeeded",
+        kind: PAYMENT_KINDS.CASE_REPORT_EXTRA,
+        gatewayRef: `case:${caseId}`,
+      },
+    });
+    redirect(`/api/cases/${caseId}/report`);
+  }
+
+  if (gateway.kind === "stripe") {
+    const cfg = JSON.parse(gateway.configJson || "{}");
+    if (!cfg.secretKey) return { error: "Payment gateway is not fully configured. Contact support." };
+    if (typeof cfg.secretKey !== "string" || !/^sk_(live|test)_/.test(cfg.secretKey)) {
+      return { error: "Payment gateway secret key is invalid. Contact support." };
+    }
+
+    const stale = await db.paymentTransaction.findMany({
+      where: { userId: user.id, gateway: "stripe", status: "pending", gatewayRef: { not: "" } },
+    });
+    for (const tx of stale) {
+      await fetch(`https://api.stripe.com/v1/checkout/sessions/${tx.gatewayRef}/expire`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${cfg.secretKey}` },
+      }).catch(() => null);
+      await db.paymentTransaction.update({ where: { id: tx.id }, data: { status: "abandoned" } });
+    }
+
+    const tx = await db.paymentTransaction.create({
+      data: {
+        userId: user.id,
+        amountCents: extraFeeCents,
+        gateway: "stripe",
+        status: "pending",
+        kind: PAYMENT_KINDS.CASE_REPORT_EXTRA,
+        gatewayRef: "",
+      },
+    });
+    const { formatTransactionNumber } = await import("@/lib/ticket-number");
+    const txnRef = formatTransactionNumber(tx.number);
+    const appUrl = String(cfg.appUrl || (await import("@/lib/settings").then((m) => m.getSetting("app.url", "")))).replace(/\/$/, "");
+
+    const params = new URLSearchParams({
+      mode: "payment",
+      "line_items[0][quantity]": "1",
+      "line_items[0][price_data][currency]": cfg.currency || "usd",
+      "line_items[0][price_data][unit_amount]": String(extraFeeCents),
+      "line_items[0][price_data][product_data][name]": "Additional case report download",
+      success_url: `${appUrl}/api/cases/${caseId}/report`,
+      cancel_url: `${appUrl}${returnPath}?report_canceled=1`,
+      client_reference_id: user.id,
+      customer_email: user.email,
+      "metadata[kind]": PAYMENT_KINDS.CASE_REPORT_EXTRA,
+      "metadata[transactionId]": tx.id,
+      "metadata[transactionRef]": txnRef,
+      "metadata[caseId]": caseId,
+    });
+    const res = await fetch("https://api.stripe.com/v1/checkout/sessions", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${cfg.secretKey}`,
+        "Content-Type": "application/x-www-form-urlencoded",
+      },
+      body: params.toString(),
+    });
+    if (!res.ok) {
+      await db.paymentTransaction.update({ where: { id: tx.id }, data: { status: "failed" } });
+      const { logSystem } = await import("@/lib/syslog");
+      await logSystem("error", "payment", `Stripe extra-report checkout failed (HTTP ${res.status})`, (await res.text()).slice(0, 1000), user.id);
+      return { error: "Could not start checkout. Please try again or contact support." };
+    }
+    const session = await res.json();
+    await db.paymentTransaction.update({ where: { id: tx.id }, data: { gatewayRef: session.id ?? `case:${caseId}` } });
+    redirect(session.url);
+  }
+
+  return { error: "No payment method is available right now. Please contact support." };
+}
+
 export async function cancelSubscriptionAction() {
   const user = await requireUser();
   await db.subscription.updateMany({

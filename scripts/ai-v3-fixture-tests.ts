@@ -660,21 +660,35 @@ assert.equal(
   "Taxpayer SSN [REDACTED_TIN], EIN [REDACTED_EIN], account [REDACTED_ACCOUNT_ID].",
 );
 
-// A billing upgrade must stay on the host the customer is already on. Building
-// the Location from request.url inherits localhost (or https://localhost when a
-// proxy sets X-Forwarded-Proto), which is how "download case report" used to
-// dump people on https://localhost:3000/app/billing?upgrade=report.
-const billingRedirect = sameOriginRedirect("/app/billing?upgrade=report");
+// Extra-report and form-download paywalls must stay on the host the customer
+// is already on. Building Location from request.url inherits localhost.
+const billingRedirect = sameOriginRedirect("/app/billing?upgrade=forms-download");
 assert.equal(billingRedirect.status, 303);
-assert.equal(billingRedirect.headers.get("Location"), "/app/billing?upgrade=report");
+assert.equal(billingRedirect.headers.get("Location"), "/app/billing?upgrade=forms-download");
 assert.equal(new URL(billingRedirect.headers.get("Location")!, "https://app.example.com").host, "app.example.com");
 assert.throws(() => sameOriginRedirect("https://localhost:3000/app/billing?upgrade=report"));
 assert.throws(() => sameOriginRedirect("//evil.example/phish"));
 const reportRoute = readFileSync("src/app/api/cases/[id]/report/route.ts", "utf8");
-assert.match(reportRoute, /sameOriginRedirect\("\/app\/billing\?upgrade=report"\)/);
+assert.match(reportRoute, /sameOriginRedirect\(/);
+assert.match(reportRoute, /consumeCaseReportDownload/);
 assert.doesNotMatch(reportRoute, /new URL\("\/app\/billing\?upgrade=report", request\.url\)/);
+assert.doesNotMatch(reportRoute, /\/app\/billing\?upgrade=report/);
 const casePage = readFileSync("src/app/app/cases/[id]/page.tsx", "utf8");
-assert.match(casePage, /\/app\/billing\?upgrade=report/);
-assert.match(readFileSync("prisma/seed.ts", "utf8"), /key: "plus"[\s\S]*"case\.report": \{ enabled: true/);
+assert.doesNotMatch(casePage, /Re-run analysis/);
+assert.doesNotMatch(casePage, /reanalyzeCaseAction/);
+assert.match(casePage, /CaseReportCta/);
+const analysisView = readFileSync("src/components/case-analysis-view.tsx", "utf8");
+assert.doesNotMatch(analysisView, /Re-run the analysis now/);
+assert.doesNotMatch(analysisView, /reanalyzeCaseAction/);
+const consultantCasePage = readFileSync("src/app/consultant/clients/[id]/cases/[caseId]/page.tsx", "utf8");
+assert.doesNotMatch(consultantCasePage, /Re-run analysis/);
+assert.match(consultantCasePage, /CaseReportCta/);
+const seed = readFileSync("prisma/seed.ts", "utf8");
+assert.match(seed, /key: "free"[\s\S]*"case\.report": \{ enabled: true, limit: 1 \}/);
+assert.match(seed, /key: "plus"[\s\S]*"case\.report": \{ enabled: true, limit: 3 \}/);
+assert.match(seed, /key: "pro"[\s\S]*"case\.report": \{ enabled: true, limit: 7 \}/);
+assert.match(seed, /billing\.case_report_extra_cents/);
+assert.match(readFileSync("src/app/admin/plans/page.tsx", "utf8"), /CaseReportExtraFeeForm/);
+assert.match(readFileSync("src/app/api/webhooks/stripe/route.ts", "utf8"), /CASE_REPORT_EXTRA/);
 
 console.log("AI v3 fixture acceptance checks passed.");

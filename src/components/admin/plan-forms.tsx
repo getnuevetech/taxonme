@@ -1,7 +1,7 @@
 "use client";
 
 import { ActionForm, SubmitButton } from "../action-form";
-import { savePlanAction, saveFeatureMatrixAction, saveSettingsAction } from "@/actions/admin";
+import { savePlanAction, saveFeatureMatrixAction, saveSettingsAction, saveCaseReportExtraFeeAction } from "@/actions/admin";
 import { Field, inputClass } from "../ui";
 
 type Plan = {
@@ -83,6 +83,27 @@ export function ProrationToggle({ enabled, downgradeEnabled }: { enabled: boolea
   );
 }
 
+export function CaseReportExtraFeeForm({ extraFeeCents }: { extraFeeCents: number }) {
+  return (
+    <ActionForm action={saveCaseReportExtraFeeAction} successMessage="Extra report download fee saved.">
+      <div className="flex flex-wrap items-end gap-3">
+        <Field label="Fee per extra download (USD)" hint={`Currently ${(extraFeeCents / 100).toLocaleString("en-US", { style: "currency", currency: "USD" })}. Charged after Free (1), Plus (3), or Pro (7) included downloads are used.`}>
+          <input
+            name="extraFeeUsd"
+            type="number"
+            min="0"
+            step="0.01"
+            defaultValue={(extraFeeCents / 100).toFixed(2)}
+            required
+            className={`${inputClass} max-w-[10rem]`}
+          />
+        </Field>
+        <SubmitButton>Save fee</SubmitButton>
+      </div>
+    </ActionForm>
+  );
+}
+
 export function ConsultantSubsToggle({ enabled }: { enabled: boolean }) {
   return (
     <ActionForm action={saveSettingsAction} successMessage="Consultant subscription setting saved.">
@@ -151,7 +172,7 @@ export function FeatureMatrix({
                           defaultValue={v?.limitValue ?? ""}
                           placeholder="∞"
                           className="w-14 rounded border border-slate-200 px-1 py-0.5 text-center text-xs"
-                          title="Monthly limit (empty = unlimited)"
+                          title="Included allowance (empty = unlimited)"
                         />
                       </div>
                     </td>

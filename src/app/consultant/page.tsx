@@ -5,6 +5,7 @@ import { PageHeader, Card, CardBody, Badge, EmptyState, ButtonLink, StateMark, P
 import { consultantRespondAssignmentAction } from "@/actions/consultant";
 import { formatCaseNumber } from "@/lib/case-number";
 import { caseRoutingReason } from "@/lib/matching";
+import { CaseReportCta } from "@/components/case-report-cta";
 
 function money(cents: number | null): string | null {
   if (cents === null || cents === undefined) return null;
@@ -147,13 +148,7 @@ export default async function ConsultantDashboard({
 
                 {a.status === "active" && kase && (
                   <div className="mt-4 flex flex-wrap gap-2">
-                    <a
-                      href={`/api/cases/${kase.id}/report`}
-                      target="_blank"
-                      className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700"
-                    >
-                      Case report ↗
-                    </a>
+                    <CaseReportCta caseId={kase.id} returnPath="/consultant" />
                     <Link
                       href={`/consultant/clients/${a.id}/cases/${kase.id}`}
                       className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"

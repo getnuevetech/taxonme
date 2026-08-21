@@ -65,7 +65,11 @@ export default async function PricingPage() {
                         <span>
                           {pf.feature.name}
                           {pf.limitValue !== null && (
-                            <span className="text-slate-400"> · up to {pf.limitValue}/mo</span>
+                            <span className="text-slate-400">
+                              {pf.featureKey === "case.report"
+                                ? ` · ${pf.limitValue} included`
+                                : ` · up to ${pf.limitValue}/mo`}
+                            </span>
                           )}
                         </span>
                       </li>
