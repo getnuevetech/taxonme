@@ -422,17 +422,6 @@ async function seedAiAndPipelines() {
     }
   }
 
-  // A prompt that has been superseded and is referenced by nothing is retired,
-  // so the admin prompt library shows one live version per responsibility. A
-  // step still pointing at an old prompt keeps it active.
-  for (const [supersededId, replacementId] of Object.entries(PROMPT_SUPERSEDES)) {
-    const replacement = await db.aiPrompt.findUnique({ where: { promptId: replacementId } });
-    if (!replacement?.isActive) continue;
-    const stillReferenced = await db.pipelineStep.count({ where: { promptId: supersededId } });
-    if (stillReferenced > 0) continue;
-    await db.aiPrompt.updateMany({ where: { promptId: supersededId, isActive: true }, data: { isActive: false } });
-  }
-
   const stages = V3_PIPELINE_BLUEPRINT;
 
   for (const s of stages) {
@@ -514,6 +503,16 @@ async function seedAiAndPipelines() {
         });
       }
     }
+  }
+
+  // Retire superseded prompts only after pipelines exist, so a fresh seed does
+  // not deactivate ids that brand-new steps are about to reference.
+  for (const [supersededId, replacementId] of Object.entries(PROMPT_SUPERSEDES)) {
+    const replacement = await db.aiPrompt.findUnique({ where: { promptId: replacementId } });
+    if (!replacement?.isActive) continue;
+    const stillReferenced = await db.pipelineStep.count({ where: { promptId: supersededId } });
+    if (stillReferenced > 0) continue;
+    await db.aiPrompt.updateMany({ where: { promptId: supersededId, isActive: true }, data: { isActive: false } });
   }
 }
 
