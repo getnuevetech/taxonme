@@ -10,6 +10,7 @@ import { GuideWidget } from "@/components/guide-widget";
 const NAV = [
   { href: "/app", label: "Overview" },
   { href: "/app/cases", label: "My cases" },
+  { href: "/app/updates", label: "USCIS updates" },
   { href: "/app/notices", label: "IRS notices" },
   { href: "/app/documents", label: "Document vault" },
   { href: "/app/forms", label: "IRS forms" },

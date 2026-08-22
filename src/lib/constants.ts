@@ -51,6 +51,7 @@ export const FEATURE_KEYS = {
   GUIDE_CHATBOT: "guide.chatbot",
   CASE_REPORT: "case.report",
   FORMS_DOWNLOAD: "forms.download",
+  UPDATES_CASE_IMPACT: "updates.case_impact",
 } as const;
 
 export const PAYMENT_KINDS = {
@@ -60,9 +61,17 @@ export const PAYMENT_KINDS = {
 
 export const SETTINGS = {
   CASE_REPORT_EXTRA_CENTS: "billing.case_report_extra_cents",
+  USCIS_FEED_URL: "uscis.feed_url",
+  USCIS_ALERTS_URL: "uscis.alerts_url",
+  USCIS_SYNC_ENABLED: "uscis.sync_enabled",
+  USCIS_HOMEPAGE_COUNT: "uscis.homepage_count",
+  USCIS_AGENCY_LABEL: "uscis.agency_label",
 } as const;
 
 export const DEFAULT_CASE_REPORT_EXTRA_CENTS = 499;
+export const DEFAULT_USCIS_FEED_URL = "https://www.uscis.gov/news/rss-feed/34819";
+export const DEFAULT_USCIS_ALERTS_URL = "https://www.uscis.gov/newsroom/alerts";
+export const DEFAULT_USCIS_HOMEPAGE_COUNT = 3;
 
 export const STAGE_KEYS = {
   SUMMARY: "summary",

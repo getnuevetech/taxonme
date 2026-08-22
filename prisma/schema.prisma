@@ -227,6 +227,7 @@ model User {
   tickets             Ticket[]
   assignedTickets     Ticket[] @relation("ticketAssignee")
   caseReportDownloads CaseReportDownload[]
+  updateImpacts       CaseUpdateImpact[]
 }
 
 model AdminPermission {
@@ -390,6 +391,48 @@ model Case {
   unknowns CaseUnknown[]
   suppressedQuestions SuppressedQuestion[]
   reportDownloads CaseReportDownload[]
+  updateImpacts   CaseUpdateImpact[]
+}
+
+// Official agency news (USCIS by default). Synced from the configured feed and
+// shown on the homepage + /updates. Paid plans can request a case-impact analysis.
+model AgencyUpdate {
+  id            String   @id @default(cuid())
+  slug          String   @unique
+  title         String
+  summary       String   @default("")
+  body          String   @default("")
+  sourceUrl     String   @default("")
+  sourceAgency  String   @default("USCIS")
+  externalId    String   @default("")
+  tagsJson      String   @default("[]")
+  publishedAt   DateTime @default(now())
+  syncedAt      DateTime?
+  isPublished   Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  impacts       CaseUpdateImpact[]
+
+  @@unique([sourceAgency, externalId])
+  @@index([isPublished, publishedAt])
+}
+
+model CaseUpdateImpact {
+  id             String   @id @default(cuid())
+  userId         String
+  caseId         String
+  updateId       String
+  relevance      String   @default("unknown") // high | medium | low | none | unknown
+  summary        String   @default("")
+  analysisJson   String   @default("{}")
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  case           Case     @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  update         AgencyUpdate @relation(fields: [updateId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, caseId, updateId])
+  @@index([userId, updateId])
 }
 
 // One ledger row per user+case the first time that person retrieves the

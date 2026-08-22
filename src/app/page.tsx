@@ -3,8 +3,11 @@ import { SiteHeader, SiteFooter } from "@/components/site-nav";
 import { ButtonLink } from "@/components/ui";
 import { HeroCarousel } from "@/components/hero-carousel";
 import { Accent, Kicker } from "@/components/accent";
-import { getSettingsMap } from "@/lib/settings";
+import { getSettingsMap, getNumberSetting, getSetting } from "@/lib/settings";
 import { IconShield, IconSparkle, IconCheckCircle } from "@/components/icons";
+import { UpdatesSection } from "@/components/updates-section";
+import { listPublishedUpdates } from "@/lib/agency-updates/sync";
+import { DEFAULT_USCIS_HOMEPAGE_COUNT, SETTINGS } from "@/lib/constants";
 
 export default async function HomePage() {
   const s = await getSettingsMap([
@@ -16,6 +19,12 @@ export default async function HomePage() {
     "home.cta_secondary",
     "home.hero_images",
   ]);
+  const [agencyLabel, homepageCount, latestUpdates] = await Promise.all([
+    getSetting(SETTINGS.USCIS_AGENCY_LABEL, "USCIS"),
+    getNumberSetting(SETTINGS.USCIS_HOMEPAGE_COUNT, DEFAULT_USCIS_HOMEPAGE_COUNT),
+    listPublishedUpdates(12),
+  ]);
+  const homepageUpdates = latestUpdates.slice(0, Math.max(1, homepageCount || DEFAULT_USCIS_HOMEPAGE_COUNT));
   const appName = s["app.name"] ?? "TaxOnMe";
   let heroImages: string[] = [];
   try {
@@ -155,6 +164,19 @@ export default async function HomePage() {
             </div>
           </div>
         </section>
+
+        <UpdatesSection
+          agencyLabel={agencyLabel}
+          heading={`Latest ${agencyLabel} updates`}
+          items={homepageUpdates.map((u) => ({
+            slug: u.slug,
+            title: u.title,
+            summary: u.summary,
+            publishedAt: u.publishedAt,
+            sourceAgency: u.sourceAgency,
+            sourceUrl: u.sourceUrl,
+          }))}
+        />
 
         {/* Dark closing CTA, flowing into the dark footer */}
         <section className="bg-[#0b1322]">

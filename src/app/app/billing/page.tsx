@@ -38,10 +38,12 @@ export default async function BillingPage({
   return (
     <div>
       <PageHeader title="Plan & billing" subtitle="Upgrade or downgrade anytime. Access changes immediately." />
-      {(upgrade === "report" || upgrade === "forms-download") && (
+      {(upgrade === "report" || upgrade === "forms-download" || upgrade === "updates") && (
         <div className="mb-6 rounded-xl border border-indigo-200 bg-indigo-50 px-4 py-3 text-sm text-indigo-900">
           {upgrade === "report"
             ? "Printable case reports are included on every plan (Free 1, Plus 3, Pro 7). Extra downloads after that allowance are a one-time fee set by the site admin."
+            : upgrade === "updates"
+              ? "Personalized USCIS update impact analysis is included with Plus and Pro. Upgrade below, then reopen any update to see how it may affect your case."
             : "Downloadable completed IRS forms are included with Plus and Pro. Upgrade below to save a copy."}
         </div>
       )}

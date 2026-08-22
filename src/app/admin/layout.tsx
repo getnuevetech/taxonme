@@ -29,6 +29,7 @@ const NAV: { area: string; href: string; label: string; section: string }[] = [
   { area: "admin.payments", href: "/admin/payments", label: "Payment gateways", section: "Commerce" },
   { area: "admin.transactions", href: "/admin/transactions", label: "Transactions", section: "Commerce" },
   { area: "admin.content", href: "/admin/content", label: "Content & agreements", section: "Content" },
+  { area: "admin.content", href: "/admin/updates", label: "USCIS updates", section: "Content" },
   { area: "admin.messages", href: "/admin/messages", label: "System messages", section: "Content" },
   { area: "admin.forms", href: "/admin/forms", label: "IRS form templates", section: "Content" },
   { area: "admin.settings", href: "/admin/settings", label: "App settings", section: "System" },

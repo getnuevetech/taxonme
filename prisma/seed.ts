@@ -39,6 +39,11 @@ async function seedSettings() {
     ["billing.proration_enabled", "true", "billing", "Proration on plan changes", "Credit the unused value of the current plan when a subscriber upgrades (toggle on the Plans page)."],
     ["billing.proration_downgrade_enabled", "false", "billing", "Proration on downgrades", "Also apply the credit when subscribers downgrade (toggle on the Plans page)."],
     ["billing.case_report_extra_cents", "499", "billing", "Extra case report download fee (cents)", "Charged for each extra case report download after the plan allowance is used. Example: 499 = $4.99."],
+    ["uscis.feed_url", "https://www.uscis.gov/news/rss-feed/34819", "uscis", "USCIS news RSS URL", "Official USCIS RSS feed used to pull the latest news and alerts."],
+    ["uscis.alerts_url", "https://www.uscis.gov/newsroom/alerts", "uscis", "USCIS alerts page URL", "HTML fallback page when the RSS feed is unreachable."],
+    ["uscis.sync_enabled", "true", "uscis", "Auto-sync USCIS updates", "When enabled, the maintenance cron pulls the latest USCIS news."],
+    ["uscis.homepage_count", "3", "uscis", "Homepage updates count", "How many latest USCIS updates to show on the public homepage."],
+    ["uscis.agency_label", "USCIS", "uscis", "Agency label", "Shown on the homepage and updates pages."],
     ["forms.paid_downloads", "true", "forms", "Paid form downloads", "Whether downloading completed IRS forms requires a plan with the forms.download feature (toggle on the IRS form templates page)."],
     ["comments.customer_private_enabled", "true", "comments", "Customer private notes", "Allow customers to mark case comments as private (hidden from consultants AND admins)."],
     ["comments.consultant_hide_from_customer_enabled", "true", "comments", "Consultant hidden comments", "Allow consultants to hide case comments from the customer. Admins always see consultant comments."],
@@ -130,6 +135,7 @@ async function seedPlansAndFeatures() {
     ["guide.chatbot", "Personal case guide chatbot", "assistant", 13],
     ["case.report", "Downloadable case report (included downloads by plan)", "analysis", 14],
     ["forms.download", "Downloadable completed IRS forms", "forms", 15],
+    ["updates.case_impact", "Personalized USCIS update impact on your case", "updates", 16],
   ];
   for (const [key, name, category, sortOrder] of features) {
     await db.featureDef.upsert({ where: { key }, update: {}, create: { key, name, category, sortOrder } });
@@ -186,6 +192,7 @@ async function seedPlansAndFeatures() {
         "guide.chatbot": { enabled: true, limit: null },
         "case.report": { enabled: true, limit: 3 },
         "forms.download": { enabled: true, limit: null },
+        "updates.case_impact": { enabled: true, limit: null },
       },
     },
     {
@@ -212,6 +219,7 @@ async function seedPlansAndFeatures() {
         "guide.chatbot": { enabled: true, limit: null },
         "case.report": { enabled: true, limit: 7 },
         "forms.download": { enabled: true, limit: null },
+        "updates.case_impact": { enabled: true, limit: null },
       },
     },
   ];
@@ -1661,7 +1669,93 @@ async function main() {
   await seedFormTemplates();
   await seedCannedResponses();
   await seedMessageTemplates();
+  await seedUscisUpdates();
   console.log("Seed complete.");
+}
+
+async function seedUscisUpdates() {
+  const samples: {
+    slug: string;
+    title: string;
+    summary: string;
+    body: string;
+    sourceUrl: string;
+    externalId: string;
+    publishedAt: Date;
+  }[] = [
+    {
+      slug: "uscis-form-i-485-new-edition-seed",
+      title: "USCIS to Publish New Edition of Form I-485; Older Editions Will Be Rejected Starting Sept. 18",
+      summary: "A revised Form I-485 edition takes effect Sept. 18, 2026. Older editions will be rejected after that date.",
+      body: "On Sept. 18, 2026, USCIS will publish a revised edition of Form I-485, Application to Register Permanent Residence or Adjust Status (edition date: 09/18/26). Applicants should use the new edition once it is available. Filings using older editions may be rejected after the effective date.",
+      sourceUrl: "https://www.uscis.gov/newsroom/alerts",
+      externalId: "seed:i-485-edition-2026-09-18",
+      publishedAt: new Date("2026-08-19T12:00:00Z"),
+    },
+    {
+      slug: "uscis-public-charge-guidance-seed",
+      title: "USCIS Issues Guidance on Making Public Charge Inadmissibility Determination",
+      summary: "Updated Policy Manual guidance explains how USCIS evaluates public charge inadmissibility for adjustment applicants.",
+      body: "U.S. Citizenship and Immigration Services is issuing updated guidance in the USCIS Policy Manual explaining how the agency will determine whether an applicant for adjustment of status is likely at any time to become a public charge. Review the official alert for the full policy context.",
+      sourceUrl: "https://www.uscis.gov/newsroom/alerts",
+      externalId: "seed:public-charge-2026-08-18",
+      publishedAt: new Date("2026-08-18T12:00:00Z"),
+    },
+    {
+      slug: "uscis-i-539-i-765-new-editions-seed",
+      title: "USCIS to Publish New Editions of Form I-539 and Form I-765",
+      summary: "Revised I-539 and I-765 editions publish Sept. 15, 2026; older editions will be rejected starting that date.",
+      body: "On Sept. 15, 2026, USCIS will publish revised editions of Form I-539 and Form I-765 (edition date for both: 09/15/26). The forms align with recent nonimmigrant admission and extension rulemaking. Use the new editions once published.",
+      sourceUrl: "https://www.uscis.gov/newsroom/alerts",
+      externalId: "seed:i-539-i-765-2026-09-15",
+      publishedAt: new Date("2026-08-14T12:00:00Z"),
+    },
+    {
+      slug: "uscis-electronic-filing-seed",
+      title: "USCIS To Require Electronic Filing of Forms: Strengthening National Security",
+      summary: "USCIS is expanding mandatory electronic filing for selected benefit request forms.",
+      body: "USCIS announced expanded electronic filing requirements for certain immigration benefit requests. Check the official newsroom item for the forms covered, effective dates, and any paper-filing exceptions.",
+      sourceUrl: "https://www.uscis.gov/newsroom/all-news",
+      externalId: "seed:electronic-filing-2026",
+      publishedAt: new Date("2026-08-10T12:00:00Z"),
+    },
+  ];
+  for (const s of samples) {
+    await db.agencyUpdate.upsert({
+      where: { sourceAgency_externalId: { sourceAgency: "USCIS", externalId: s.externalId } },
+      update: {
+        title: s.title,
+        summary: s.summary,
+        body: s.body,
+        sourceUrl: s.sourceUrl,
+        publishedAt: s.publishedAt,
+        isPublished: true,
+      },
+      create: {
+        slug: s.slug,
+        title: s.title,
+        summary: s.summary,
+        body: s.body,
+        sourceUrl: s.sourceUrl,
+        sourceAgency: "USCIS",
+        externalId: s.externalId,
+        publishedAt: s.publishedAt,
+        isPublished: true,
+        syncedAt: new Date(),
+      },
+    });
+  }
+
+  // Ensure Plus/Pro include personalized impact analysis even on existing installs.
+  for (const key of ["plus", "pro"] as const) {
+    const plan = await db.subscriptionPlan.findUnique({ where: { key } });
+    if (!plan) continue;
+    await db.planFeature.upsert({
+      where: { planId_featureKey: { planId: plan.id, featureKey: "updates.case_impact" } },
+      update: { enabled: true, limitValue: null },
+      create: { planId: plan.id, featureKey: "updates.case_impact", enabled: true, limitValue: null },
+    });
+  }
 }
 
 main()
