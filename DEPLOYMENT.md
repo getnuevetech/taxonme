@@ -19,6 +19,21 @@ That's it. The app container waits for the database, applies migrations, seeds d
 - Logs: `docker compose logs -f app`
 - Backup: `docker compose exec db pg_dump -U taxonme taxonme > backup.sql`
 
+### Docker build runs out of memory (`signal: killed`)
+
+`npm run build` inside Docker needs roughly **2 GB free RAM**. If Compose dies during
+`Creating an optimized production build ...` with `failed to execute bake: signal: killed`,
+the host OOM-killed the builder (not an app code error).
+
+On a small VPS, add temporary swap before rebuilding:
+
+```bash
+sudo fallocate -l 2G /swapfile && sudo chmod 600 /swapfile
+sudo mkswap /swapfile && sudo swapon /swapfile
+docker compose --env-file .env.deploy build --no-cache app
+# optional: sudo swapoff /swapfile && sudo rm /swapfile
+```
+
 ## Option B — Bare metal (no Docker)
 
 Requirements: Ubuntu/Debian-like server with Node.js 20+.
