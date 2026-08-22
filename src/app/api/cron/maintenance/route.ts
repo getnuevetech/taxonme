@@ -33,5 +33,8 @@ export async function POST(request: Request) {
     oldLogsPurged: await purgeOldSystemLogs(30),
   };
 
-  return NextResponse.json({ ok: true, maintenance }, { headers: { "Cache-Control": "no-store" } });
+  const { syncAgencyUpdates } = await import("@/lib/agency-updates/sync");
+  const irsSync = await syncAgencyUpdates();
+
+  return NextResponse.json({ ok: true, maintenance, irsSync }, { headers: { "Cache-Control": "no-store" } });
 }

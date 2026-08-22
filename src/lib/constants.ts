@@ -51,6 +51,7 @@ export const FEATURE_KEYS = {
   GUIDE_CHATBOT: "guide.chatbot",
   CASE_REPORT: "case.report",
   FORMS_DOWNLOAD: "forms.download",
+  UPDATES_CASE_IMPACT: "updates.case_impact",
 } as const;
 
 export const PAYMENT_KINDS = {
@@ -60,9 +61,17 @@ export const PAYMENT_KINDS = {
 
 export const SETTINGS = {
   CASE_REPORT_EXTRA_CENTS: "billing.case_report_extra_cents",
+  IRS_FEED_URL: "irs.feed_url",
+  IRS_ALERTS_URL: "irs.alerts_url",
+  IRS_SYNC_ENABLED: "irs.sync_enabled",
+  IRS_HOMEPAGE_COUNT: "irs.homepage_count",
+  IRS_AGENCY_LABEL: "irs.agency_label",
 } as const;
 
 export const DEFAULT_CASE_REPORT_EXTRA_CENTS = 499;
+export const DEFAULT_IRS_FEED_URL = "";
+export const DEFAULT_IRS_ALERTS_URL = "https://www.irs.gov/newsroom/news-releases-for-current-month";
+export const DEFAULT_IRS_HOMEPAGE_COUNT = 3;
 
 export const STAGE_KEYS = {
   SUMMARY: "summary",
