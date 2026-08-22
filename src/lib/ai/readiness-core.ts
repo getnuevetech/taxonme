@@ -1,4 +1,4 @@
-import { V3_PIPELINE_BLUEPRINT, V3_PROMPT_RECORDS } from "./v3-prompts";
+import { PROMPT_SUPERSEDES, V3_PIPELINE_BLUEPRINT, V3_PROMPT_RECORDS } from "./v3-prompts";
 
 export type AiV3Readiness = {
   ok: boolean;
@@ -20,7 +20,10 @@ export function evaluateAiV3Readiness(input: {
   const warnings: string[] = [];
   const promptIds = new Set(input.prompts.filter((p) => p.isActive).map((p) => p.promptId));
 
+  // Released history keeps superseded prompt ids in V3_PROMPT_RECORDS, but only
+  // the live tip of each chain must stay active after seed.
   for (const required of V3_PROMPT_RECORDS) {
+    if (PROMPT_SUPERSEDES[required.promptId]) continue;
     if (!promptIds.has(required.promptId)) errors.push(`Missing active prompt ${required.promptId}`);
   }
 
@@ -31,8 +34,24 @@ export function evaluateAiV3Readiness(input: {
       continue;
     }
     for (const expected of blueprint.steps.filter((s) => !s.isConditional)) {
-      const match = stage.steps.find((s) => s.role === expected.role && s.promptId === expected.promptId && s.isEnabled);
+      const match = stage.steps.find((s) => {
+        if (s.role !== expected.role || !s.isEnabled) return false;
+        if (s.promptId === expected.promptId) return true;
+        // Accept either the blueprint id or its live replacement after supersession.
+        return PROMPT_SUPERSEDES[expected.promptId] === s.promptId || PROMPT_SUPERSEDES[s.promptId] === expected.promptId;
+      });
       if (!match) errors.push(`Pipeline ${blueprint.key} missing enabled ${expected.role} step with ${expected.promptId}`);
+    }
+  }
+
+  // Any prompt still wired into an enabled step must remain active.
+  for (const stage of input.stages) {
+    if (!stage.isEnabled) continue;
+    for (const step of stage.steps) {
+      if (!step.isEnabled || !step.promptId) continue;
+      if (!promptIds.has(step.promptId)) {
+        errors.push(`Pipeline ${stage.key} step ${step.role} references inactive prompt ${step.promptId}`);
+      }
     }
   }
 
