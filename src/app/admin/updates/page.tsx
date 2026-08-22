@@ -18,7 +18,7 @@ export default async function AdminUpdatesPage() {
     <div>
       <PageHeader
         title="IRS updates"
-        subtitle="Pull official IRS news into the homepage and /updates. Paid customers get case-impact analysis on each item."
+        subtitle="Pull official IRS news into the homepage and /irs-updates. Paid customers get case-impact analysis on each item."
       />
 
       <Card className="mb-8">
@@ -30,8 +30,8 @@ export default async function AdminUpdatesPage() {
               {lastStatus ? ` · ${lastStatus}` : ""}
             </p>
             <p className="mt-2 max-w-2xl text-xs text-slate-500">
-              Sync scrapes the IRS newsroom page (optional RSS if configured). When live sync fails, seeded samples
-              and manual entries still publish. Feed URLs live under App settings → irs.
+              Sync scrapes the IRS current-month newsroom plus the previous calendar month so the public list always
+              covers the current and previous week. Optional RSS lives under App settings → irs.
             </p>
           </div>
           <SyncIrsButton />

@@ -13,6 +13,7 @@ export async function syncIrsUpdatesAction(prev: ActionState, formData: FormData
   await requireAdminArea("admin.content");
   const result = await syncAgencyUpdates();
   revalidatePath("/admin/updates");
+  revalidatePath("/irs-updates");
   revalidatePath("/updates");
   revalidatePath("/");
   if (result.error && result.upserted === 0) {
@@ -56,6 +57,7 @@ export async function saveAgencyUpdateAction(_prev: ActionState, formData: FormD
     });
   }
   revalidatePath("/admin/updates");
+  revalidatePath("/irs-updates");
   revalidatePath("/updates");
   revalidatePath("/");
   return { ok: true };
@@ -68,6 +70,7 @@ export async function toggleAgencyUpdateAction(_prev: ActionState, formData: For
   if (!id) return { error: "Missing update." };
   await db.agencyUpdate.update({ where: { id }, data: { isPublished } });
   revalidatePath("/admin/updates");
+  revalidatePath("/irs-updates");
   revalidatePath("/updates");
   revalidatePath("/");
   return { ok: true };

@@ -96,7 +96,7 @@ export function parseIrsNewsroomHtml(html: string, baseUrl: string): ParsedFeedI
   const cardRe =
     /<h2>\s*<a[^>]+href=["']([^"']+)["'][^>]*>\s*(?:<span>)?([\s\S]*?)(?:<\/span>)?\s*<\/a>\s*<\/h2>[\s\S]{0,800}?field__item">([\s\S]*?)<\/div>/gi;
   let match: RegExpExecArray | null;
-  while ((match = cardRe.exec(html)) && items.length < 40) {
+  while ((match = cardRe.exec(html)) && items.length < 80) {
     const href = match[1].startsWith("http") ? match[1] : new URL(match[1], baseUrl).toString();
     const title = decodeXml(match[2]).replace(/\s+/g, " ").trim();
     const abstract = decodeXml(match[3]).replace(/\s+/g, " ").trim();
@@ -121,7 +121,7 @@ export function parseIrsNewsroomHtml(html: string, baseUrl: string): ParsedFeedI
 
   // Fallback: any newsroom article link with a meaningful title.
   const re = /<a[^>]+href=["'](\/newsroom\/[^"']+|https?:\/\/www\.irs\.gov\/newsroom\/[^"']+)["'][^>]*>([\s\S]*?)<\/a>/gi;
-  while ((match = re.exec(html)) && items.length < 40) {
+  while ((match = re.exec(html)) && items.length < 80) {
     const href = match[1].startsWith("http") ? match[1] : new URL(match[1], baseUrl).toString();
     const title = decodeXml(match[2]).replace(/\s+/g, " ").trim();
     if (!title || title.length < 12) continue;

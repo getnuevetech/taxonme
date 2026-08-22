@@ -4,6 +4,13 @@ const nextConfig: NextConfig = {
   // pdf-parse (pdfjs-dist) must run as a real Node dependency — bundling it
   // breaks its worker/DOM handling and silently kills PDF text extraction.
   serverExternalPackages: ["pdf-parse", "pdfjs-dist"],
+  async redirects() {
+    return [
+      { source: "/updates", destination: "/irs-updates", permanent: true },
+      { source: "/updates/:slug", destination: "/irs-updates/:slug", permanent: true },
+      { source: "/app/updates", destination: "/app/irs-updates", permanent: true },
+    ];
+  },
   experimental: {
     // Cap compile workers so Docker builds on 2GB hosts are less likely to OOM.
     cpus: 1,

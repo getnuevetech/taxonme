@@ -1674,7 +1674,7 @@ async function main() {
 
 async function seedIrsUpdates() {
   // Prefer a live sync when the newsroom is reachable; fall back to a few
-  // realistic samples so homepage /updates still render offline.
+  // realistic samples so homepage /irs-updates still render offline.
   try {
     const { syncAgencyUpdates } = await import("../src/lib/agency-updates/sync");
     const result = await syncAgencyUpdates();
