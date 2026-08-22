@@ -102,6 +102,7 @@ export function parseIrsNewsroomHtml(html: string, baseUrl: string): ParsedFeedI
     const abstract = decodeXml(match[3]).replace(/\s+/g, " ").trim();
     if (!title || title.length < 8) continue;
     if (/^(newsroom|subscribe|archive|topics in the news)$/i.test(title)) continue;
+    if (/\b(archive|subscribe|topics in the news)\b/i.test(title) && !/\bIR-\d{4}-\d+\b/i.test(abstract)) continue;
     if (seen.has(href)) continue;
     seen.add(href);
     const ir = abstract.match(/\bIR-\d{4}-\d+\b/);
@@ -125,6 +126,7 @@ export function parseIrsNewsroomHtml(html: string, baseUrl: string): ParsedFeedI
     const title = decodeXml(match[2]).replace(/\s+/g, " ").trim();
     if (!title || title.length < 12) continue;
     if (/^(newsroom|news releases|subscribe|archive|topics|fact sheets)/i.test(title)) continue;
+    if (/\b(archive|subscribe|fact sheet archive)\b/i.test(title)) continue;
     if (seen.has(href)) continue;
     seen.add(href);
     items.push({
