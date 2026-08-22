@@ -31,7 +31,7 @@ export default async function UpdateDetailPage({ params }: { params: Promise<{ s
     <div className="flex min-h-screen flex-col bg-[#fbfaf7]">
       <SiteHeader />
       <main className="mx-auto w-full max-w-3xl flex-1 px-4 py-12">
-        <Link href="/updates" className="text-sm font-medium text-indigo-600 hover:text-indigo-800">
+        <Link href="/irs-updates" className="text-sm font-medium text-indigo-600 hover:text-indigo-800">
           ← All updates
         </Link>
         <div className="mt-6">

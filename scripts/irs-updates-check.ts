@@ -54,10 +54,13 @@ async function main() {
 
   // Static surface checks.
   assert.match(readFileSync("src/app/page.tsx", "utf8"), /UpdatesSection/);
-  assert.match(readFileSync("src/app/updates/page.tsx", "utf8"), /listPublishedUpdates/);
-  assert.match(readFileSync("src/app/updates/[slug]/page.tsx", "utf8"), /CaseImpactPanel/);
-  assert.match(readFileSync("src/app/app/updates/page.tsx", "utf8"), /userCanSeeCaseImpact/);
-  assert.match(readFileSync("src/components/site-nav.tsx", "utf8"), /\/updates/);
+  assert.match(readFileSync("src/app/irs-updates/page.tsx", "utf8"), /listPublishedUpdatesForListing/);
+  assert.match(readFileSync("src/app/irs-updates/[slug]/page.tsx", "utf8"), /CaseImpactPanel/);
+  assert.match(readFileSync("src/app/app/irs-updates/page.tsx", "utf8"), /userCanSeeCaseImpact/);
+  assert.match(readFileSync("src/components/site-nav.tsx", "utf8"), /\/irs-updates/);
+  assert.match(readFileSync("src/components/updates-section.tsx", "utf8"), /variant/);
+  assert.doesNotMatch(readFileSync("src/components/updates-section.tsx", "utf8"), /Fresh notices and news from/);
+  assert.match(readFileSync("next.config.ts", "utf8"), /destination: "\/irs-updates"/);
   assert.match(readFileSync("src/app/api/cron/maintenance/route.ts", "utf8"), /syncAgencyUpdates/);
   assert.match(readFileSync("src/app/api/cron/maintenance/route.ts", "utf8"), /irsSync/);
   assert.match(readFileSync("prisma/seed.ts", "utf8"), /updates\.case_impact/);
@@ -65,6 +68,20 @@ async function main() {
   assert.match(readFileSync("src/lib/constants.ts", "utf8"), /IRS_ALERTS_URL/);
   assert.doesNotMatch(readFileSync("src/lib/constants.ts", "utf8"), /USCIS_/);
   assert.doesNotMatch(readFileSync("src/lib/agency-updates/parse.ts", "utf8"), /parseUscis/);
+
+  const {
+    irsNewsroomUrlsForRollingWeeks,
+    irsMonthNewsroomUrl,
+    startOfRollingTwoWeeks,
+    IRS_UPDATES_MIN_LOOKBACK_DAYS,
+  } = await import("../src/lib/agency-updates/sync");
+  assert.equal(IRS_UPDATES_MIN_LOOKBACK_DAYS, 14);
+  const urls = irsNewsroomUrlsForRollingWeeks("https://www.irs.gov/newsroom/news-releases-for-current-month", new Date("2026-08-22T12:00:00Z"));
+  assert.ok(urls.some((u) => /current-month/.test(u)));
+  assert.ok(urls.some((u) => u === irsMonthNewsroomUrl(new Date("2026-07-01T00:00:00Z"))));
+  assert.match(irsMonthNewsroomUrl(new Date("2026-07-15T00:00:00Z")), /news-releases-for-july-2026/);
+  const since = startOfRollingTwoWeeks(new Date("2026-08-22T12:00:00Z"));
+  assert.ok(since < new Date("2026-08-22T12:00:00Z"));
 
   const email = `irs-updates-${Date.now()}@example.com`;
   let userId: string | null = null;

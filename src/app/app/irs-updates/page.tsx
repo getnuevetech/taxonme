@@ -1,18 +1,18 @@
 import Link from "next/link";
 import { requireUser } from "@/lib/auth";
 import { PageHeader, Card, CardBody, Badge } from "@/components/ui";
-import { listPublishedUpdates } from "@/lib/agency-updates/sync";
+import { listPublishedUpdatesForListing } from "@/lib/agency-updates/sync";
 import { userCanSeeCaseImpact } from "@/lib/agency-updates/impact";
 import { getSetting } from "@/lib/settings";
 import { SETTINGS } from "@/lib/constants";
 
 export const metadata = { title: "IRS updates" };
 
-export default async function AppUpdatesPage() {
+export default async function AppIrsUpdatesPage() {
   const user = await requireUser();
   const [agency, updates, entitled] = await Promise.all([
     getSetting(SETTINGS.IRS_AGENCY_LABEL, "IRS"),
-    listPublishedUpdates(40),
+    listPublishedUpdatesForListing(200),
     userCanSeeCaseImpact(user.id),
   ]);
 
@@ -46,7 +46,7 @@ export default async function AppUpdatesPage() {
             <Card key={u.id}>
               <CardBody className="flex flex-wrap items-start justify-between gap-3">
                 <div className="min-w-0 flex-1">
-                  <Link href={`/updates/${u.slug}`} className="font-semibold text-slate-900 hover:text-indigo-600">
+                  <Link href={`/irs-updates/${u.slug}`} className="font-semibold text-slate-900 hover:text-indigo-600">
                     {u.title}
                   </Link>
                   {u.summary && <p className="mt-1 text-sm text-slate-600 line-clamp-2">{u.summary}</p>}

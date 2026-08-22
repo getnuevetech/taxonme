@@ -15,6 +15,8 @@ export async function analyzeUpdateImpactAction(_prev: ActionState, formData: Fo
   if (!updateId || !caseId) return { error: "Missing update or case." };
   const result = await analyzeUpdateImpactForCase({ userId: user.id, caseId, updateId, force: true });
   if (!result) return { error: "Could not analyze this update for that case." };
+  revalidatePath(`/irs-updates`);
+  revalidatePath(`/app/irs-updates`);
   revalidatePath(`/updates`);
   revalidatePath(`/app/updates`);
   return { ok: true };
