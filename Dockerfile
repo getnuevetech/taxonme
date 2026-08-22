@@ -16,8 +16,12 @@ ENV DATABASE_URL="postgresql://build:build@localhost:5432/build"
 ENV AUTH_SECRET="build-time-auth-secret-placeholder"
 ENV CRON_SECRET="build-time-cron-secret-placeholder"
 ENV NEXT_TELEMETRY_DISABLED=1
+# Keep the webpack build single-threaded so peak RSS stays lower on small VPS hosts.
 ENV NEXT_PRIVATE_BUILD_WORKER=1
-ENV NODE_OPTIONS="--max-old-space-size=768"
+ENV UV_THREADPOOL_SIZE=2
+# 768MB was OOM-killing Next 16 webpack builds (~3–4 min in, "signal: killed").
+# Need ~2GB free host RAM (or temporary swap) for `docker compose build`.
+ENV NODE_OPTIONS="--max-old-space-size=2048"
 RUN npx prisma generate
 RUN npm run build
 
