@@ -10,7 +10,7 @@ moduleAny._load = function (request: unknown, ...args: unknown[]) {
 };
 
 async function main() {
-  const { parseAgencyFeedXml, parseUscisNewsroomHtml, slugifyUpdateTitle } = await import("../src/lib/agency-updates/parse");
+  const { parseAgencyFeedXml, parseIrsNewsroomHtml, slugifyUpdateTitle } = await import("../src/lib/agency-updates/parse");
   const db = (await import("../src/lib/db")).db;
   const { FEATURE_KEYS } = await import("../src/lib/constants");
   const { userCanSeeCaseImpact, analyzeUpdateImpactForCase } = await import("../src/lib/agency-updates/impact");
@@ -19,35 +19,38 @@ async function main() {
   const rss = `<?xml version="1.0"?>
   <rss version="2.0"><channel>
     <item>
-      <title><![CDATA[USCIS Opens Asylum Office in Atlanta]]></title>
-      <link>https://www.uscis.gov/newsroom/news-releases/uscis-opens-asylum-office-in-atlanta</link>
-      <guid>https://www.uscis.gov/newsroom/news-releases/uscis-opens-asylum-office-in-atlanta</guid>
-      <pubDate>Mon, 11 Aug 2026 12:00:00 GMT</pubDate>
-      <description><![CDATA[USCIS opened a new asylum office in Atlanta to serve the Southeast.]]></description>
+      <title><![CDATA[Interest rates remain the same for the fourth quarter of 2026]]></title>
+      <link>https://www.irs.gov/newsroom/interest-rates-remain-the-same-for-the-fourth-quarter-of-2026</link>
+      <guid>IR-2026-98</guid>
+      <pubDate>Fri, 21 Aug 2026 12:00:00 GMT</pubDate>
+      <description><![CDATA[IR-2026-98, Aug. 21, 2026 — The IRS announced that interest rates will remain the same for the calendar quarter beginning Oct. 1, 2026.]]></description>
     </item>
     <item>
-      <title>USCIS Reaches Fiscal Year 2027 H-1B Cap</title>
-      <link>https://www.uscis.gov/newsroom/alerts/h1b-cap</link>
-      <guid>h1b-cap-2027</guid>
-      <description>The H-1B cap has been reached for FY2027.</description>
-      <pubDate>Tue, 12 Aug 2026 12:00:00 GMT</pubDate>
+      <title>IRS launches digitally authenticated tax compliance report</title>
+      <link>https://www.irs.gov/newsroom/irs-launches-digitally-authenticated-tax-compliance-report</link>
+      <guid>IR-2026-97</guid>
+      <description>The IRS announced a digitally authenticated tax compliance report.</description>
+      <pubDate>Thu, 20 Aug 2026 12:00:00 GMT</pubDate>
     </item>
   </channel></rss>`;
   const parsed = parseAgencyFeedXml(rss);
   assert.equal(parsed.length, 2);
-  assert.equal(parsed[0].title, "USCIS Opens Asylum Office in Atlanta");
-  assert.match(parsed[0].sourceUrl, /atlanta/);
-  assert.ok(slugifyUpdateTitle(parsed[0].title, parsed[0].externalId).includes("uscis-opens"));
+  assert.equal(parsed[0].title, "Interest rates remain the same for the fourth quarter of 2026");
+  assert.match(parsed[0].sourceUrl, /interest-rates/);
+  assert.ok(slugifyUpdateTitle(parsed[0].title, parsed[0].externalId).includes("interest-rates"));
 
   const html = `
     <html><body>
-      <a href="/newsroom/alerts/form-i-485">USCIS to Publish New Edition of Form I-485</a>
+      <h2><a href="/newsroom/interest-rates-remain-the-same-for-the-fourth-quarter-of-2026"><span>Interest rates remain the same for the fourth quarter of 2026</span></a></h2>
+      <div class="field__item">IR-2026-98, Aug. 21, 2026 — The IRS announced that interest rates will remain the same for the calendar quarter beginning Oct. 1, 2026.</div>
+      <h2><a href="/newsroom/irs-launches-digitally-authenticated-tax-compliance-report"><span>IRS launches digitally authenticated tax compliance report</span></a></h2>
+      <div class="field__item">IR-2026-97, Aug. 20, 2026 — The IRS announced a digitally authenticated tax compliance report for taxpayers and practitioners.</div>
       <a href="/newsroom">Newsroom</a>
-      <a href="https://www.uscis.gov/newsroom/alerts/public-charge">USCIS Issues Guidance on Making Public Charge Inadmissibility Determination</a>
     </body></html>`;
-  const scraped = parseUscisNewsroomHtml(html, "https://www.uscis.gov/newsroom/alerts");
+  const scraped = parseIrsNewsroomHtml(html, "https://www.irs.gov/newsroom/news-releases-for-current-month");
   assert.ok(scraped.length >= 2);
-  assert.ok(scraped.some((i) => /I-485/i.test(i.title)));
+  assert.ok(scraped.some((i) => /interest rates/i.test(i.title)));
+  assert.ok(scraped.some((i) => i.externalId === "IR-2026-98"));
 
   // Static surface checks.
   assert.match(readFileSync("src/app/page.tsx", "utf8"), /UpdatesSection/);
@@ -56,10 +59,14 @@ async function main() {
   assert.match(readFileSync("src/app/app/updates/page.tsx", "utf8"), /userCanSeeCaseImpact/);
   assert.match(readFileSync("src/components/site-nav.tsx", "utf8"), /\/updates/);
   assert.match(readFileSync("src/app/api/cron/maintenance/route.ts", "utf8"), /syncAgencyUpdates/);
+  assert.match(readFileSync("src/app/api/cron/maintenance/route.ts", "utf8"), /irsSync/);
   assert.match(readFileSync("prisma/seed.ts", "utf8"), /updates\.case_impact/);
-  assert.match(readFileSync("prisma/seed.ts", "utf8"), /seedUscisUpdates/);
+  assert.match(readFileSync("prisma/seed.ts", "utf8"), /seedIrsUpdates/);
+  assert.match(readFileSync("src/lib/constants.ts", "utf8"), /IRS_ALERTS_URL/);
+  assert.doesNotMatch(readFileSync("src/lib/constants.ts", "utf8"), /USCIS_/);
+  assert.doesNotMatch(readFileSync("src/lib/agency-updates/parse.ts", "utf8"), /parseUscis/);
 
-  const email = `uscis-updates-${Date.now()}@example.com`;
+  const email = `irs-updates-${Date.now()}@example.com`;
   let userId: string | null = null;
   let updateId: string | null = null;
   let caseId: string | null = null;
@@ -71,13 +78,13 @@ async function main() {
 
     const update = await db.agencyUpdate.create({
       data: {
-        slug: `test-i485-${Date.now()}`,
-        title: "USCIS to Publish New Edition of Form I-485",
-        summary: "New I-485 edition required for adjustment of status filings.",
-        body: "Applicants for adjustment of status must use the new Form I-485 edition after the effective date.",
-        sourceAgency: "USCIS",
+        slug: `test-interest-${Date.now()}`,
+        title: "Interest rates remain the same for the fourth quarter of 2026",
+        summary: "IR-2026-98 — Interest rates remain unchanged for Q4 2026.",
+        body: "The IRS announced that underpayment and overpayment interest rates remain the same for the calendar quarter beginning Oct. 1, 2026.",
+        sourceAgency: "IRS",
         externalId: `test:${Date.now()}`,
-        sourceUrl: "https://www.uscis.gov/newsroom/alerts",
+        sourceUrl: "https://www.irs.gov/newsroom/news-releases-for-current-month",
         isPublished: true,
         publishedAt: new Date(),
       },
@@ -87,9 +94,9 @@ async function main() {
     const c = await db.case.create({
       data: {
         userId: user.id,
-        title: "Adjustment of status with Form I-485",
-        situation: "I filed Form I-485 for adjustment of status and am waiting on a decision.",
-        goal: "Get my green card approved without rejection for the wrong form edition.",
+        title: "Balance due with accruing interest",
+        situation: "I owe a balance on my 2024 return and interest keeps adding each quarter.",
+        goal: "Understand whether the Q4 interest rate change affects what I owe.",
         status: "analyzed",
       },
     });
@@ -116,11 +123,13 @@ async function main() {
 
     const sync = await syncAgencyUpdates();
     assert.ok(["rss", "html", "none"].includes(sync.source));
-    // Live USCIS may be CDN-blocked in this environment; that is acceptable as long as seeded/manual updates remain.
-    const published = await db.agencyUpdate.count({ where: { isPublished: true } });
-    assert.ok(published >= 1, "at least the test update (and usually seed samples) must be published");
+    // Live IRS newsroom is preferred; HTML scrape or seeded/manual rows are both acceptable.
+    const published = await db.agencyUpdate.count({ where: { isPublished: true, sourceAgency: "IRS" } });
+    assert.ok(published >= 1, "at least the test IRS update (and usually seed samples) must be published");
+    const leftoverUscis = await db.agencyUpdate.count({ where: { sourceAgency: "USCIS" } });
+    assert.equal(leftoverUscis, 0, "no USCIS agency updates should remain after retarget");
 
-    console.log("USCIS updates check passed — feed parse, homepage/listing surfaces, paid case-impact gate");
+    console.log("IRS updates check passed — feed parse, homepage/listing surfaces, paid case-impact gate");
   } finally {
     if (subId) await db.subscription.delete({ where: { id: subId } }).catch(() => undefined);
     if (userId) await db.user.delete({ where: { id: userId } }).catch(() => undefined);

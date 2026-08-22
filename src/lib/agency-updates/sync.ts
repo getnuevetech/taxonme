@@ -1,12 +1,12 @@
 import "server-only";
 import { db } from "@/lib/db";
 import {
-  DEFAULT_USCIS_ALERTS_URL,
-  DEFAULT_USCIS_FEED_URL,
+  DEFAULT_IRS_ALERTS_URL,
+  DEFAULT_IRS_FEED_URL,
   SETTINGS,
 } from "@/lib/constants";
 import { getBoolSetting, getSetting } from "@/lib/settings";
-import { parseAgencyFeedXml, parseUscisNewsroomHtml, slugifyUpdateTitle, type ParsedFeedItem } from "./parse";
+import { parseAgencyFeedXml, parseIrsNewsroomHtml, slugifyUpdateTitle, type ParsedFeedItem } from "./parse";
 
 export type SyncResult = {
   fetched: number;
@@ -74,59 +74,54 @@ async function upsertItems(agency: string, items: ParsedFeedItem[]): Promise<num
   return upserted;
 }
 
+async function writeSyncMeta(status: string) {
+  const now = new Date().toISOString();
+  await db.setting.upsert({
+    where: { key: "irs.last_sync_at" },
+    update: { value: now, group: "irs", label: "Last IRS sync" },
+    create: { key: "irs.last_sync_at", value: now, group: "irs", label: "Last IRS sync", type: "text" },
+  });
+  await db.setting.upsert({
+    where: { key: "irs.last_sync_status" },
+    update: { value: status, group: "irs", label: "Last IRS sync status" },
+    create: { key: "irs.last_sync_status", value: status, group: "irs", label: "Last IRS sync status", type: "text" },
+  });
+}
+
 export async function syncAgencyUpdates(): Promise<SyncResult> {
-  const enabled = await getBoolSetting(SETTINGS.USCIS_SYNC_ENABLED, true);
+  const enabled = await getBoolSetting(SETTINGS.IRS_SYNC_ENABLED, true);
   if (!enabled) return { fetched: 0, upserted: 0, source: "none", error: "sync disabled" };
 
-  const agency = await getSetting(SETTINGS.USCIS_AGENCY_LABEL, "USCIS");
-  const feedUrl = await getSetting(SETTINGS.USCIS_FEED_URL, DEFAULT_USCIS_FEED_URL);
-  const alertsUrl = await getSetting(SETTINGS.USCIS_ALERTS_URL, DEFAULT_USCIS_ALERTS_URL);
+  const agency = await getSetting(SETTINGS.IRS_AGENCY_LABEL, "IRS");
+  const feedUrl = await getSetting(SETTINGS.IRS_FEED_URL, DEFAULT_IRS_FEED_URL);
+  const alertsUrl = await getSetting(SETTINGS.IRS_ALERTS_URL, DEFAULT_IRS_ALERTS_URL);
 
-  const feed = await fetchText(feedUrl);
-  if (feed.ok && /<(rss|feed|rdf:RDF)\b/i.test(feed.text)) {
-    const items = parseAgencyFeedXml(feed.text);
-    const upserted = await upsertItems(agency, items);
-    await db.setting.upsert({
-      where: { key: "uscis.last_sync_at" },
-      update: { value: new Date().toISOString() },
-      create: { key: "uscis.last_sync_at", value: new Date().toISOString(), group: "uscis", label: "Last USCIS sync", type: "text" },
-    });
-    await db.setting.upsert({
-      where: { key: "uscis.last_sync_status" },
-      update: { value: `ok:rss:${upserted}` },
-      create: { key: "uscis.last_sync_status", value: `ok:rss:${upserted}`, group: "uscis", label: "Last USCIS sync status", type: "text" },
-    });
-    return { fetched: items.length, upserted, source: "rss" };
+  // Prefer the HTML newsroom (IRS no longer ships a reliable public RSS file).
+  // Still try an optional RSS URL first when an admin configures one.
+  if (feedUrl && feedUrl !== alertsUrl) {
+    const feed = await fetchText(feedUrl);
+    if (feed.ok && /<(rss|feed|rdf:RDF)\b/i.test(feed.text)) {
+      const items = parseAgencyFeedXml(feed.text);
+      const upserted = await upsertItems(agency, items);
+      await writeSyncMeta(`ok:rss:${upserted}`);
+      return { fetched: items.length, upserted, source: "rss" };
+    }
   }
 
   const html = await fetchText(alertsUrl);
   if (html.ok && /<html/i.test(html.text)) {
-    const items = parseUscisNewsroomHtml(html.text, alertsUrl);
+    const items = parseIrsNewsroomHtml(html.text, alertsUrl);
     const upserted = await upsertItems(agency, items);
-    await db.setting.upsert({
-      where: { key: "uscis.last_sync_at" },
-      update: { value: new Date().toISOString() },
-      create: { key: "uscis.last_sync_at", value: new Date().toISOString(), group: "uscis", label: "Last USCIS sync", type: "text" },
-    });
-    await db.setting.upsert({
-      where: { key: "uscis.last_sync_status" },
-      update: { value: `ok:html:${upserted}` },
-      create: { key: "uscis.last_sync_status", value: `ok:html:${upserted}`, group: "uscis", label: "Last USCIS sync status", type: "text" },
-    });
+    await writeSyncMeta(`ok:html:${upserted}`);
     return { fetched: items.length, upserted, source: "html" };
   }
 
-  const error = `RSS HTTP ${feed.status}; HTML HTTP ${html.status}`;
-  await db.setting.upsert({
-    where: { key: "uscis.last_sync_status" },
-    update: { value: `error:${error.slice(0, 200)}` },
-    create: { key: "uscis.last_sync_status", value: `error:${error.slice(0, 200)}`, group: "uscis", label: "Last USCIS sync status", type: "text" },
-  });
+  const error = `newsroom HTML HTTP ${html.status}`;
+  await writeSyncMeta(`error:${error.slice(0, 200)}`);
   const { logSystem } = await import("@/lib/syslog");
-  await logSystem("warning", "uscis_sync", "USCIS update sync failed — feed unreachable from this host", {
-    feedStatus: feed.status,
+  await logSystem("warning", "irs_sync", "IRS update sync failed — newsroom unreachable from this host", {
     alertsStatus: html.status,
-    feedSnippet: feed.text.slice(0, 200),
+    snippet: html.text.slice(0, 200),
   });
   return { fetched: 0, upserted: 0, source: "none", error };
 }

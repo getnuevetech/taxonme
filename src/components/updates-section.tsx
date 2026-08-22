@@ -12,7 +12,7 @@ export type UpdateCardItem = {
 
 export function UpdatesSection({
   items,
-  agencyLabel = "USCIS",
+  agencyLabel = "IRS",
   heading = "Latest updates",
   seeAllHref = "/updates",
 }: {
@@ -23,7 +23,7 @@ export function UpdatesSection({
 }) {
   if (items.length === 0) return null;
   return (
-    <section id="uscis-updates" className="border-b border-slate-200 bg-[#fbfaf7]">
+    <section id="irs-updates" className="border-b border-slate-200 bg-[#fbfaf7]">
       <div className="mx-auto max-w-6xl px-4 py-20">
         <div className="flex flex-wrap items-end justify-between gap-4">
           <div className="max-w-xl">

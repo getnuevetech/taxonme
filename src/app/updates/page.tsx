@@ -2,18 +2,18 @@ import { SiteHeader, SiteFooter } from "@/components/site-nav";
 import { UpdatesSection } from "@/components/updates-section";
 import { listPublishedUpdates } from "@/lib/agency-updates/sync";
 import { getNumberSetting, getSetting } from "@/lib/settings";
-import { DEFAULT_USCIS_HOMEPAGE_COUNT, SETTINGS } from "@/lib/constants";
+import { DEFAULT_IRS_HOMEPAGE_COUNT, SETTINGS } from "@/lib/constants";
 import { Accent, Kicker } from "@/components/accent";
 import Link from "next/link";
 
-export const metadata = { title: "USCIS updates" };
+export const metadata = { title: "IRS updates" };
 
 export default async function UpdatesIndexPage() {
   const [agency, updates] = await Promise.all([
-    getSetting(SETTINGS.USCIS_AGENCY_LABEL, "USCIS"),
+    getSetting(SETTINGS.IRS_AGENCY_LABEL, "IRS"),
     listPublishedUpdates(100),
   ]);
-  const homepageCount = await getNumberSetting(SETTINGS.USCIS_HOMEPAGE_COUNT, DEFAULT_USCIS_HOMEPAGE_COUNT);
+  const homepageCount = await getNumberSetting(SETTINGS.IRS_HOMEPAGE_COUNT, DEFAULT_IRS_HOMEPAGE_COUNT);
 
   return (
     <div className="flex min-h-screen flex-col bg-[#fbfaf7]">

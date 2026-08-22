@@ -37,17 +37,17 @@ function deterministicImpact(args: {
       relevance,
       summary: "This update does not appear to change anything material in your current case.",
       whatChanged: "No clear overlap with your open issues or stated goal.",
-      recommendedActions: ["Keep watching for updates that mention your form, visa category, or filing type."],
+      recommendedActions: ["Keep watching for updates that mention your notice type, tax year, credits, or payment plan."],
       analysisJson: { mode: "deterministic", hits },
     };
   }
   return {
     relevance,
-    summary: `This update may touch topics related to your case (${hits.slice(0, 4).join(", ")}). Review the full notice and confirm whether your filing is affected.`,
+    summary: `This update may touch topics related to your case (${hits.slice(0, 4).join(", ")}). Review the full release and confirm whether your tax situation is affected.`,
     whatChanged: "Possible overlap with language in your case summary or open findings.",
     recommendedActions: [
-      "Read the official source linked on this update.",
-      "Check whether any deadline, form edition, or eligibility rule mentioned applies to your filing.",
+      "Read the official IRS source linked on this update.",
+      "Check whether any deadline, interest rate, credit, or collection rule mentioned applies to your case.",
       "If it does, add the detail to your case so the analysis can refresh.",
     ],
     analysisJson: { mode: "deterministic", hits },
@@ -139,7 +139,7 @@ export async function analyzeUpdateImpactForCase(opts: {
     }
   } catch (err) {
     const { logSystem } = await import("@/lib/syslog");
-    await logSystem("warning", "uscis_impact", "Case impact analysis fell back to deterministic scoring", String(err), opts.userId);
+    await logSystem("warning", "irs_impact", "Case impact analysis fell back to deterministic scoring", String(err), opts.userId);
   }
 
   await db.caseUpdateImpact.upsert({

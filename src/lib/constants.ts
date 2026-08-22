@@ -61,17 +61,17 @@ export const PAYMENT_KINDS = {
 
 export const SETTINGS = {
   CASE_REPORT_EXTRA_CENTS: "billing.case_report_extra_cents",
-  USCIS_FEED_URL: "uscis.feed_url",
-  USCIS_ALERTS_URL: "uscis.alerts_url",
-  USCIS_SYNC_ENABLED: "uscis.sync_enabled",
-  USCIS_HOMEPAGE_COUNT: "uscis.homepage_count",
-  USCIS_AGENCY_LABEL: "uscis.agency_label",
+  IRS_FEED_URL: "irs.feed_url",
+  IRS_ALERTS_URL: "irs.alerts_url",
+  IRS_SYNC_ENABLED: "irs.sync_enabled",
+  IRS_HOMEPAGE_COUNT: "irs.homepage_count",
+  IRS_AGENCY_LABEL: "irs.agency_label",
 } as const;
 
 export const DEFAULT_CASE_REPORT_EXTRA_CENTS = 499;
-export const DEFAULT_USCIS_FEED_URL = "https://www.uscis.gov/news/rss-feed/34819";
-export const DEFAULT_USCIS_ALERTS_URL = "https://www.uscis.gov/newsroom/alerts";
-export const DEFAULT_USCIS_HOMEPAGE_COUNT = 3;
+export const DEFAULT_IRS_FEED_URL = "";
+export const DEFAULT_IRS_ALERTS_URL = "https://www.irs.gov/newsroom/news-releases-for-current-month";
+export const DEFAULT_IRS_HOMEPAGE_COUNT = 3;
 
 export const STAGE_KEYS = {
   SUMMARY: "summary",

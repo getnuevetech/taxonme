@@ -1,13 +1,13 @@
 "use client";
 
 import { ActionForm, SubmitButton } from "../action-form";
-import { saveAgencyUpdateAction, syncUscisUpdatesAction, toggleAgencyUpdateAction } from "@/actions/admin-updates";
+import { saveAgencyUpdateAction, syncIrsUpdatesAction, toggleAgencyUpdateAction } from "@/actions/admin-updates";
 import { Field, inputClass } from "../ui";
 
-export function SyncUscisButton() {
+export function SyncIrsButton() {
   return (
-    <ActionForm action={syncUscisUpdatesAction} successMessage="USCIS sync finished.">
-      <SubmitButton>Sync from USCIS now</SubmitButton>
+    <ActionForm action={syncIrsUpdatesAction} successMessage="IRS sync finished.">
+      <SubmitButton>Sync from IRS now</SubmitButton>
     </ActionForm>
   );
 }
@@ -33,7 +33,7 @@ export function AgencyUpdateForm({
           <input name="title" defaultValue={update?.title} required className={inputClass} />
         </Field>
         <Field label="Agency">
-          <input name="sourceAgency" defaultValue={update?.sourceAgency ?? "USCIS"} className={inputClass} />
+          <input name="sourceAgency" defaultValue={update?.sourceAgency ?? "IRS"} className={inputClass} />
         </Field>
         <Field label="Source URL">
           <input name="sourceUrl" defaultValue={update?.sourceUrl} className={inputClass} />

@@ -7,7 +7,7 @@ import { getSettingsMap, getNumberSetting, getSetting } from "@/lib/settings";
 import { IconShield, IconSparkle, IconCheckCircle } from "@/components/icons";
 import { UpdatesSection } from "@/components/updates-section";
 import { listPublishedUpdates } from "@/lib/agency-updates/sync";
-import { DEFAULT_USCIS_HOMEPAGE_COUNT, SETTINGS } from "@/lib/constants";
+import { DEFAULT_IRS_HOMEPAGE_COUNT, SETTINGS } from "@/lib/constants";
 
 export default async function HomePage() {
   const s = await getSettingsMap([
@@ -20,11 +20,11 @@ export default async function HomePage() {
     "home.hero_images",
   ]);
   const [agencyLabel, homepageCount, latestUpdates] = await Promise.all([
-    getSetting(SETTINGS.USCIS_AGENCY_LABEL, "USCIS"),
-    getNumberSetting(SETTINGS.USCIS_HOMEPAGE_COUNT, DEFAULT_USCIS_HOMEPAGE_COUNT),
+    getSetting(SETTINGS.IRS_AGENCY_LABEL, "IRS"),
+    getNumberSetting(SETTINGS.IRS_HOMEPAGE_COUNT, DEFAULT_IRS_HOMEPAGE_COUNT),
     listPublishedUpdates(12),
   ]);
-  const homepageUpdates = latestUpdates.slice(0, Math.max(1, homepageCount || DEFAULT_USCIS_HOMEPAGE_COUNT));
+  const homepageUpdates = latestUpdates.slice(0, Math.max(1, homepageCount || DEFAULT_IRS_HOMEPAGE_COUNT));
   const appName = s["app.name"] ?? "TaxOnMe";
   let heroImages: string[] = [];
   try {

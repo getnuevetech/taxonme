@@ -1,24 +1,24 @@
 import { db } from "@/lib/db";
 import { guardAdminPage } from "@/lib/admin-guard";
 import { PageHeader, Card, CardBody, Badge } from "@/components/ui";
-import { AgencyUpdateForm, SyncUscisButton, ToggleAgencyUpdateButton } from "@/components/admin/agency-update-forms";
+import { AgencyUpdateForm, SyncIrsButton, ToggleAgencyUpdateButton } from "@/components/admin/agency-update-forms";
 import { getSetting } from "@/lib/settings";
 
-export const metadata = { title: "USCIS updates" };
+export const metadata = { title: "IRS updates" };
 
 export default async function AdminUpdatesPage() {
   await guardAdminPage("admin.content");
   const [updates, lastSync, lastStatus] = await Promise.all([
     db.agencyUpdate.findMany({ orderBy: { publishedAt: "desc" }, take: 100 }),
-    getSetting("uscis.last_sync_at", ""),
-    getSetting("uscis.last_sync_status", ""),
+    getSetting("irs.last_sync_at", ""),
+    getSetting("irs.last_sync_status", ""),
   ]);
 
   return (
     <div>
       <PageHeader
-        title="USCIS updates"
-        subtitle="Pull official USCIS news into the homepage and /updates. Paid customers get case-impact analysis on each item."
+        title="IRS updates"
+        subtitle="Pull official IRS news into the homepage and /updates. Paid customers get case-impact analysis on each item."
       />
 
       <Card className="mb-8">
@@ -30,11 +30,11 @@ export default async function AdminUpdatesPage() {
               {lastStatus ? ` · ${lastStatus}` : ""}
             </p>
             <p className="mt-2 max-w-2xl text-xs text-slate-500">
-              Some hosts are blocked by the USCIS CDN. When live sync fails, seeded samples and manual entries still
-              publish. Feed URLs live under App settings → uscis.
+              Sync scrapes the IRS newsroom page (optional RSS if configured). When live sync fails, seeded samples
+              and manual entries still publish. Feed URLs live under App settings → irs.
             </p>
           </div>
-          <SyncUscisButton />
+          <SyncIrsButton />
         </CardBody>
       </Card>
 

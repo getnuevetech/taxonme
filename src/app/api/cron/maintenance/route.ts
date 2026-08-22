@@ -34,7 +34,7 @@ export async function POST(request: Request) {
   };
 
   const { syncAgencyUpdates } = await import("@/lib/agency-updates/sync");
-  const uscisSync = await syncAgencyUpdates();
+  const irsSync = await syncAgencyUpdates();
 
-  return NextResponse.json({ ok: true, maintenance, uscisSync }, { headers: { "Cache-Control": "no-store" } });
+  return NextResponse.json({ ok: true, maintenance, irsSync }, { headers: { "Cache-Control": "no-store" } });
 }

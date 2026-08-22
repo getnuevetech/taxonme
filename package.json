@@ -15,7 +15,7 @@
     "v32:letter-guard-check": "tsx scripts/v32-letter-guard-e2e.ts",
     "v32:report-quota-check": "tsx scripts/v32-report-redirect-check.ts",
     "v32:report-redirect-check": "tsx scripts/v32-report-redirect-check.ts",
-    "uscis:updates-check": "tsx scripts/uscis-updates-check.ts",
+    "irs:updates-check": "tsx scripts/irs-updates-check.ts",
     "db:push": "prisma db push",
     "db:seed": "prisma db seed",
     "db:migrate": "prisma migrate deploy"

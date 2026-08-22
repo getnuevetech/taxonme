@@ -6,12 +6,12 @@ import { userCanSeeCaseImpact } from "@/lib/agency-updates/impact";
 import { getSetting } from "@/lib/settings";
 import { SETTINGS } from "@/lib/constants";
 
-export const metadata = { title: "USCIS updates" };
+export const metadata = { title: "IRS updates" };
 
 export default async function AppUpdatesPage() {
   const user = await requireUser();
   const [agency, updates, entitled] = await Promise.all([
-    getSetting(SETTINGS.USCIS_AGENCY_LABEL, "USCIS"),
+    getSetting(SETTINGS.IRS_AGENCY_LABEL, "IRS"),
     listPublishedUpdates(40),
     userCanSeeCaseImpact(user.id),
   ]);

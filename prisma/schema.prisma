@@ -394,7 +394,7 @@ model Case {
   updateImpacts   CaseUpdateImpact[]
 }
 
-// Official agency news (USCIS by default). Synced from the configured feed and
+// Official agency news (IRS by default). Synced from the configured feed and
 // shown on the homepage + /updates. Paid plans can request a case-impact analysis.
 model AgencyUpdate {
   id            String   @id @default(cuid())
@@ -403,7 +403,7 @@ model AgencyUpdate {
   summary       String   @default("")
   body          String   @default("")
   sourceUrl     String   @default("")
-  sourceAgency  String   @default("USCIS")
+  sourceAgency  String   @default("IRS")
   externalId    String   @default("")
   tagsJson      String   @default("[]")
   publishedAt   DateTime @default(now())

@@ -10,7 +10,7 @@ import { Kicker } from "@/components/accent";
 export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
   const update = await getPublishedUpdateBySlug(slug);
-  return { title: update ? update.title : "USCIS update" };
+  return { title: update ? update.title : "IRS update" };
 }
 
 export default async function UpdateDetailPage({ params }: { params: Promise<{ slug: string }> }) {

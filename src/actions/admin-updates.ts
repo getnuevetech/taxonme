@@ -7,7 +7,7 @@ import { syncAgencyUpdates } from "@/lib/agency-updates/sync";
 import { slugifyUpdateTitle } from "@/lib/agency-updates/parse";
 import type { ActionState } from "./auth";
 
-export async function syncUscisUpdatesAction(prev: ActionState, formData: FormData): Promise<ActionState> {
+export async function syncIrsUpdatesAction(prev: ActionState, formData: FormData): Promise<ActionState> {
   void prev;
   void formData;
   await requireAdminArea("admin.content");
@@ -16,7 +16,7 @@ export async function syncUscisUpdatesAction(prev: ActionState, formData: FormDa
   revalidatePath("/updates");
   revalidatePath("/");
   if (result.error && result.upserted === 0) {
-    return { error: `Sync could not reach USCIS (${result.error}). Seeded or manually added updates still show on the site.` };
+    return { error: `Sync could not reach IRS (${result.error}). Seeded or manually added updates still show on the site.` };
   }
   return { ok: true };
 }
@@ -26,7 +26,7 @@ export async function saveAgencyUpdateAction(_prev: ActionState, formData: FormD
   const id = String(formData.get("id") ?? "");
   const title = String(formData.get("title") ?? "").trim();
   if (!title) return { error: "Title is required." };
-  const sourceAgency = String(formData.get("sourceAgency") ?? "USCIS").trim() || "USCIS";
+  const sourceAgency = String(formData.get("sourceAgency") ?? "IRS").trim() || "IRS";
   const summary = String(formData.get("summary") ?? "");
   const body = String(formData.get("body") ?? "");
   const sourceUrl = String(formData.get("sourceUrl") ?? "");
