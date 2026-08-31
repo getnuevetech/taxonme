@@ -1,6 +1,6 @@
 # Wave 5 — Situation → Prep Plan → Agency Matter
 
-**Status:** implementing  
+**Status:** shipping  
 **Gate:** `npm run test:phase-s`  
 **Imm analogue:** Phase S (Situation / Filing Plan / Case lifecycle)
 
