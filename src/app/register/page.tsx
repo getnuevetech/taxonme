@@ -3,17 +3,23 @@ import { db } from "@/lib/db";
 import { SiteHeader } from "@/components/site-nav";
 import { RegisterForm } from "@/components/auth-forms";
 import { getSetting } from "@/lib/settings";
-import { getGuestSession } from "@/lib/guest";
+import { getGuestSession, sanitizeAuthNext, setAuthNextCookie } from "@/lib/guest";
 
 export const metadata = { title: "Create your account" };
 
 export default async function RegisterPage({
   searchParams,
 }: {
-  searchParams: Promise<{ type?: string }>;
+  searchParams: Promise<{ type?: string; next?: string; thread?: string }>;
 }) {
-  const { type } = await searchParams;
+  const { type, next: nextRaw, thread } = await searchParams;
   const asConsultant = type === "consultant";
+  const next =
+    sanitizeAuthNext(nextRaw) ||
+    (thread && /^[a-z0-9]+$/i.test(thread) ? `/app/qa/${thread}` : null) ||
+    "";
+  if (next) await setAuthNextCookie(next);
+
   const [googleClientId, guest] = await Promise.all([
     getSetting("auth.google_client_id", ""),
     getGuestSession(),
@@ -23,7 +29,11 @@ export default async function RegisterPage({
     orderBy: { version: "desc" },
     select: { slug: true, title: true },
   });
-  const hasGuestData = !!guest && (guest.situation.length > 0 || guest.goal.length > 0);
+  const guestQaCount = guest ? await db.qaThread.count({ where: { guestSessionId: guest.id } }) : 0;
+  const guestCaseCount = guest ? await db.case.count({ where: { guestSessionId: guest.id } }) : 0;
+  const hasGuestData =
+    !!guest &&
+    (guest.situation.length > 0 || guest.goal.length > 0 || guestQaCount > 0 || guestCaseCount > 0);
 
   return (
     <div className="min-h-screen">
@@ -39,7 +49,10 @@ export default async function RegisterPage({
         </p>
         {hasGuestData && !asConsultant && (
           <div className="mt-4 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
-            Your answers and uploads from before will be attached to your new account automatically.
+            Your questions, answers, and uploads from before will stay with your new account — you will not have to start over.
+            {next.startsWith("/app/qa/")
+              ? " After you create the account we will take you back to this conversation."
+              : ""}
           </div>
         )}
         <div className="mt-8 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
@@ -56,11 +69,21 @@ export default async function RegisterPage({
               </div>
             </>
           )}
-          <RegisterForm asConsultant={asConsultant} agreementSlug={agreement?.slug ?? ""} agreementTitle={agreement?.title ?? "Terms of Service"} />
+          <RegisterForm
+            asConsultant={asConsultant}
+            agreementSlug={agreement?.slug ?? ""}
+            agreementTitle={agreement?.title ?? "Terms of Service"}
+            next={next}
+          />
         </div>
         <p className="mt-4 text-center text-sm text-slate-500">
           Already have an account?{" "}
-          <Link href="/login" className="font-medium text-indigo-600 underline">Sign in</Link>
+          <Link
+            href={next ? `/login?next=${encodeURIComponent(next)}` : "/login"}
+            className="font-medium text-indigo-600 underline"
+          >
+            Sign in
+          </Link>
         </p>
       </main>
     </div>

@@ -5,7 +5,13 @@ import { headers } from "next/headers";
 import { z } from "zod";
 import { db } from "@/lib/db";
 import { createSession, destroySession, hashPassword, verifyPassword, getCurrentUser } from "@/lib/auth";
-import { claimGuestSession } from "@/lib/guest";
+import {
+  claimGuestSession,
+  continuePathAfterAuth,
+  consumeAuthNextCookie,
+  sanitizeAuthNext,
+  setAuthNextCookie,
+} from "@/lib/guest";
 import { checkRateLimit, rateLimitKey } from "@/lib/rate-limit";
 import { ROLES } from "@/lib/constants";
 
@@ -64,9 +70,13 @@ export async function registerAction(_prev: ActionState, formData: FormData): Pr
   await sendSystemMessage("account_created", user, { link: asConsultant ? "/consultant" : "/app" });
 
   // Attach any pre-registration guest data (cases, documents, Q&A) to the new account.
-  await claimGuestSession(user.id);
+  const claimed = await claimGuestSession(user.id);
   await createSession(user.id);
-  redirect(asConsultant ? "/consultant/onboarding" : "/app");
+  if (asConsultant) redirect("/consultant/onboarding");
+  const next =
+    sanitizeAuthNext(String(formData.get("next") ?? "")) ||
+    (await consumeAuthNextCookie());
+  redirect(continuePathAfterAuth({ next, claimed, fallback: "/app" }));
 }
 
 export async function loginAction(_prev: ActionState, formData: FormData): Promise<ActionState> {
@@ -81,11 +91,15 @@ export async function loginAction(_prev: ActionState, formData: FormData): Promi
     return { error: "Invalid email or password." };
   }
   if (user.status !== "active") return { error: "This account is not active." };
-  await claimGuestSession(user.id);
+  await setAuthNextCookie(String(formData.get("next") ?? ""));
+  const claimed = await claimGuestSession(user.id);
   await createSession(user.id);
   if (user.role === ROLES.SUPER_ADMIN || user.role === ROLES.ADMIN) redirect("/admin");
   if (user.role === ROLES.CONSULTANT) redirect("/consultant");
-  redirect("/app");
+  const next =
+    sanitizeAuthNext(String(formData.get("next") ?? "")) ||
+    (await consumeAuthNextCookie());
+  redirect(continuePathAfterAuth({ next, claimed, fallback: "/app" }));
 }
 
 export async function logoutAction() {
