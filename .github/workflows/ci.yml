@@ -46,3 +46,4 @@ jobs:
       - run: npm run build
       - run: npm run ai:v3:rollout-check
       - run: npm run v32:evidence-check
+      - run: npm run test:lightsail-healthz

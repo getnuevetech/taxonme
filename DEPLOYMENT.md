@@ -115,17 +115,44 @@ For internet-facing servers, put Caddy in front for automatic HTTPS:
 
 ```bash
 sudo apt install -y caddy
-# /etc/caddy/Caddyfile:
-#   yourdomain.com {
-#     reverse_proxy localhost:3000
-#   }
+# Prefer the Lightsail-ready example (HTTP /healthz, HTTPS for everything else):
+sudo cp deploy/Caddyfile.example /etc/caddy/Caddyfile
+# edit the domain, then:
 sudo systemctl reload caddy
+```
+
+### Lightsail load balancer health check (HTTP only)
+
+Lightsail instance health checks **cannot use HTTPS**. Do not point them at
+`https://…` or at a path that redirects to HTTPS.
+
+| Setting | Value |
+| --- | --- |
+| Protocol | **HTTP** |
+| Path | **`/healthz`** |
+| Port | **3000** (LB → app directly) **or** **80** (LB → Caddy with `/healthz` not redirected) |
+
+- `/healthz` — process liveness only (plain `ok`, no DB, no redirects). Safe for LB.
+- `/api/health` — deeper readiness (`schemaReady`, optional cron maintenance). Use from the host/cron over HTTP to localhost, not as the Lightsail HTTPS health URL.
+
+Verify on the instance:
+
+```bash
+curl -sS -i http://127.0.0.1:3000/healthz
+# HTTP/1.1 200 … body: ok
+npm run test:lightsail-healthz
+```
+
+Optional: run maintenance via deep health (Bearer secret) instead of POST cron:
+
+```bash
+curl -fsS -H "Authorization: Bearer YOUR_CRON_SECRET" http://localhost:3000/api/health
 ```
 
 ## Notes
 
 - **Session secret**: `AUTH_SECRET` is required in production. Generate it with `openssl rand -base64 32`.
-- **Maintenance cron**: `/api/cron/maintenance` requires `CRON_SECRET`; `/api/health` is read-only.
+- **Maintenance cron**: `/api/cron/maintenance` (POST) requires `CRON_SECRET`. `GET /api/health` is public for readiness fields; maintenance runs only when the same secret is presented.
 - **Uploads**: stored on disk (`var/uploads` or the `taxonme_uploads` volume) with access-controlled serving; include them in backups.
   - **Single-instance only**: the disk-based upload store is not shared between replicas. If you run more than one app instance (e.g. horizontal scaling in Kubernetes), you must back the volume with network storage (NFS, EFS, GCS Filestore, Azure Files, etc.) or migrate to an object-storage provider (S3, R2, GCS). All instances must resolve the same `var/uploads` path.
 - **Rate limiting**: basic app-level auth throttling is included. For internet-facing deployments, also add rate limiting at your reverse-proxy layer (e.g. Caddy's `rate_limit` directive, nginx's `limit_req_zone`, Cloudflare's WAF) before routing traffic to port 3000.

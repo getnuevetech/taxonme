@@ -16,6 +16,7 @@
     "v32:report-quota-check": "tsx scripts/v32-report-redirect-check.ts",
     "v32:report-redirect-check": "tsx scripts/v32-report-redirect-check.ts",
     "irs:updates-check": "tsx scripts/irs-updates-check.ts",
+    "test:lightsail-healthz": "tsx scripts/lightsail-healthz-check.ts",
     "db:push": "prisma db push",
     "db:seed": "prisma db seed",
     "db:migrate": "prisma migrate deploy"
