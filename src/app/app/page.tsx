@@ -8,12 +8,29 @@ import { formatCaseNumber } from "@/lib/case-number";
 
 export default async function DashboardPage() {
   const user = await requireUser();
+  // Isolate each query — a missing migration or transient DB error must not white-screen /app.
+  const emptyCases: Array<{
+    id: string;
+    number: number;
+    title: string;
+    status: string;
+    readinessScore: number;
+    issues: unknown[];
+  }> = [];
   const [cases, issues, deadlines, notifications, plan] = await Promise.all([
-    db.case.findMany({ where: { userId: user.id }, orderBy: { updatedAt: "desc" }, take: 5, include: { issues: true } }),
-    db.issue.findMany({ where: { case: { userId: user.id }, state: { not: "resolved" } } }),
-    db.deadline.findMany({ where: { userId: user.id, status: "open", dueDate: { gte: new Date() } }, orderBy: { dueDate: "asc" }, take: 5 }),
-    db.notification.findMany({ where: { userId: user.id, readAt: null }, orderBy: { createdAt: "desc" }, take: 5 }),
-    getActivePlan(user.id),
+    db.case
+      .findMany({ where: { userId: user.id }, orderBy: { updatedAt: "desc" }, take: 5, include: { issues: true } })
+      .catch(() => emptyCases),
+    db.issue
+      .findMany({ where: { case: { userId: user.id }, state: { not: "resolved" } } })
+      .catch(() => [] as Array<{ id: string; state: string; differenceCents: number | null }>),
+    db.deadline
+      .findMany({ where: { userId: user.id, status: "open", dueDate: { gte: new Date() } }, orderBy: { dueDate: "asc" }, take: 5 })
+      .catch(() => [] as Array<{ id: string; title: string; dueDate: Date }>),
+    db.notification
+      .findMany({ where: { userId: user.id, readAt: null }, orderBy: { createdAt: "desc" }, take: 5 })
+      .catch(() => [] as Array<{ id: string; title: string; body: string; link: string | null }>),
+    getActivePlan(user.id).catch(() => null),
   ]);
 
   const soon = new Date();

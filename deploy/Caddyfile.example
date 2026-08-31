@@ -1,0 +1,29 @@
+# Example Caddyfile for TaxOnMe behind a Lightsail load balancer.
+#
+# Lightsail health-checks instances over HTTP only. If Caddy redirects all HTTP
+# to HTTPS, the LB will fail. Keep /healthz on plain HTTP; redirect everything else.
+#
+# Usage:
+#   sudo cp deploy/Caddyfile.example /etc/caddy/Caddyfile
+#   # edit the domain, then:
+#   sudo systemctl reload caddy
+#
+# Lightsail LB health check settings:
+#   Protocol: HTTP
+#   Path:     /healthz
+#   Port:     80   (this Caddy HTTP site)  — OR attach LB to instance :3000 and skip Caddy for health
+#   Success:  200
+
+http://mytaxonme.com {
+	handle /healthz {
+		reverse_proxy 127.0.0.1:3000
+	}
+	handle {
+		redir https://{host}{uri} permanent
+	}
+}
+
+mytaxonme.com {
+	encode gzip
+	reverse_proxy 127.0.0.1:3000
+}
