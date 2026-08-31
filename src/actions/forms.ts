@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db";
 import { requireUser } from "@/lib/auth";
 import { hasFeature } from "@/lib/access";
+import { FEATURE_KEYS } from "@/lib/constants";
 import { verifyUserCasesProgress } from "@/lib/case-progress";
 import type { ActionState } from "./auth";
 
@@ -30,9 +31,19 @@ export async function startFormAction(templateId: string) {
   if (template.requiredFeature && !(await hasFeature(user.id, template.requiredFeature))) {
     redirect("/app/billing?upgrade=forms");
   }
+  if (!(await hasFeature(user.id, FEATURE_KEYS.FORMS))) {
+    redirect("/app/billing?upgrade=forms");
+  }
   const existing = await db.formSubmission.findFirst({
     where: { userId: user.id, templateId, status: "in_progress" },
   });
+  if (!existing) {
+    const { getFormWizardQuota } = await import("@/lib/billing-quotas");
+    const quota = await getFormWizardQuota(user.id);
+    if (quota.overLimit) {
+      redirect("/app/billing?upgrade=forms_limit");
+    }
+  }
   const submission =
     existing ??
     (await db.formSubmission.create({ data: { userId: user.id, templateId } }));
