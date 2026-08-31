@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { getSetting } from "@/lib/settings";
 import { createSession, secureCookiesEnabled } from "@/lib/auth";
-import { claimGuestSession } from "@/lib/guest";
+import { claimGuestSession, continuePathAfterAuth, sanitizeAuthNext, AUTH_NEXT_COOKIE } from "@/lib/guest";
 import { cookies } from "next/headers";
 
 export async function GET(request: Request) {
@@ -81,10 +81,13 @@ export async function GET(request: Request) {
   }
   if (user.status !== "active") return NextResponse.redirect(`${appUrl}/login?error=inactive`);
 
-  await claimGuestSession(user.id);
+  const claimed = await claimGuestSession(user.id);
   await createSession(user.id);
-  const response = NextResponse.redirect(`${appUrl}/app`);
+  const nextFromCookie = sanitizeAuthNext(cookieStore.get(AUTH_NEXT_COOKIE)?.value);
+  const dest = continuePathAfterAuth({ next: nextFromCookie, claimed, fallback: "/app" });
+  const response = NextResponse.redirect(`${appUrl}${dest}`);
   // Clear the state cookie after successful use.
   response.cookies.set("oauth_state", "", { httpOnly: true, secure: await secureCookiesEnabled(), maxAge: 0, path: "/" });
+  response.cookies.set(AUTH_NEXT_COOKIE, "", { httpOnly: true, secure: await secureCookiesEnabled(), maxAge: 0, path: "/" });
   return response;
 }

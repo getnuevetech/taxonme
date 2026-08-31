@@ -48,3 +48,4 @@ jobs:
       - run: npm run v32:evidence-check
       - run: npm run test:lightsail-healthz
       - run: npm run test:phase-billing
+      - run: npm run test:guest-continuity

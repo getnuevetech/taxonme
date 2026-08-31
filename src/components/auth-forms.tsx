@@ -5,9 +5,10 @@ import { ActionForm, SubmitButton } from "./action-form";
 import { loginAction, registerAction, requestPasswordResetAction, resetPasswordAction } from "@/actions/auth";
 import { inputClass } from "./ui";
 
-export function LoginForm() {
+export function LoginForm({ next = "" }: { next?: string }) {
   return (
     <ActionForm action={loginAction}>
+      {next ? <input type="hidden" name="next" value={next} /> : null}
       <div className="space-y-4">
         <input name="email" type="email" required placeholder="Email address" className={inputClass} />
         <input name="password" type="password" required placeholder="Password" className={inputClass} />
@@ -53,14 +54,17 @@ export function RegisterForm({
   asConsultant,
   agreementSlug,
   agreementTitle,
+  next = "",
 }: {
   asConsultant: boolean;
   agreementSlug: string;
   agreementTitle: string;
+  next?: string;
 }) {
   return (
     <ActionForm action={registerAction}>
       {asConsultant && <input type="hidden" name="asConsultant" value="1" />}
+      {next ? <input type="hidden" name="next" value={next} /> : null}
       <div className="space-y-4">
         <div className="grid grid-cols-2 gap-3">
           <input name="firstName" required placeholder="First name" className={inputClass} />

@@ -1,16 +1,32 @@
 import { db } from "@/lib/db";
+import { getCurrentUser } from "@/lib/auth";
 import { getGuestSession } from "@/lib/guest";
 import { SiteHeader, SiteFooter } from "@/components/site-nav";
 import { QaChat } from "@/components/qa-chat";
+import { redirect } from "next/navigation";
 
 export const metadata = { title: "Ask a tax question" };
 
 export default async function GuestQaPage({
   searchParams,
 }: {
-  searchParams: Promise<{ thread?: string }>;
+  searchParams: Promise<{ thread?: string; q?: string }>;
 }) {
-  const { thread: threadId } = await searchParams;
+  const user = await getCurrentUser();
+  const { thread: threadId, q: prefillQuestion } = await searchParams;
+  if (user) {
+    if (threadId) {
+      const owned = await db.qaThread.findFirst({
+        where: { id: threadId, userId: user.id },
+        select: { id: true },
+      });
+      if (owned) redirect(`/app/qa/${owned.id}`);
+    }
+    const qs = new URLSearchParams();
+    if (prefillQuestion?.trim()) qs.set("q", prefillQuestion.trim());
+    redirect(qs.size ? `/app/qa?${qs}` : "/app/qa");
+  }
+
   const guest = await getGuestSession();
   const thread =
     threadId && guest
@@ -26,9 +42,15 @@ export default async function GuestQaPage({
       <main className="mx-auto w-full max-w-2xl flex-1 px-4 py-12">
         <div className="mb-6 text-center">
           <h1 className="text-3xl font-extrabold text-slate-900">Ask anything about taxes</h1>
-          <p className="mt-2 text-slate-600">Plain-English answers. No question is too basic — that&apos;s the point.</p>
+          <p className="mt-2 text-slate-600">
+            Plain-English answers. No question is too basic — that&apos;s the point. Create an account to keep the thread.
+          </p>
         </div>
-        <QaChat threadId={thread?.id ?? ""} messages={thread?.messages.map((m) => ({ id: m.id, role: m.role, content: m.content })) ?? []} />
+        <QaChat
+          threadId={thread?.id ?? ""}
+          messages={thread?.messages.map((m) => ({ id: m.id, role: m.role, content: m.content })) ?? []}
+          showRegisterCta
+        />
       </main>
       <SiteFooter />
     </div>
