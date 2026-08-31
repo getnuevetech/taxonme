@@ -38,8 +38,15 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
   // Admin-controlled fee gate (applies to the customer; staff and connected
   // consultants download without the customer's plan gate).
   const paid = await getBoolSetting("forms.paid_downloads", true);
-  if (isOwner && paid && !(await hasFeature(user.id, FEATURE_KEYS.FORMS_DOWNLOAD))) {
-    return sameOriginRedirect("/app/billing?upgrade=forms-download");
+  if (isOwner && paid) {
+    if (!(await hasFeature(user.id, FEATURE_KEYS.FORMS_DOWNLOAD))) {
+      return sameOriginRedirect("/app/billing?upgrade=forms-download");
+    }
+    const { getFormDownloadQuota } = await import("@/lib/billing-quotas");
+    const quota = await getFormDownloadQuota(user.id);
+    if (quota.overLimit) {
+      return sameOriginRedirect("/app/billing?upgrade=forms_download_limit");
+    }
   }
 
   // Preferred output: the OFFICIAL IRS PDF with the customer's answers infused

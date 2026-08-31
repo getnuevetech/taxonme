@@ -52,6 +52,8 @@ export const FEATURE_KEYS = {
   CASE_REPORT: "case.report",
   FORMS_DOWNLOAD: "forms.download",
   UPDATES_CASE_IMPACT: "updates.case_impact",
+  /** Wave 3b/5 — build a Prep Plan from a Situation (seeded in Wave 3a). */
+  PREP_PLAN_BUILD: "prep_plan.build",
 } as const;
 
 export const PAYMENT_KINDS = {

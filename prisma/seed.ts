@@ -136,6 +136,7 @@ async function seedPlansAndFeatures() {
     ["case.report", "Downloadable case report (included downloads by plan)", "analysis", 14],
     ["forms.download", "Downloadable completed IRS forms", "forms", 15],
     ["updates.case_impact", "Personalized IRS update impact on your case", "updates", 16],
+    ["prep_plan.build", "Build a Prep Plan from a Situation", "filing", 17],
   ];
   for (const [key, name, category, sortOrder] of features) {
     await db.featureDef.upsert({ where: { key }, update: {}, create: { key, name, category, sortOrder } });
@@ -153,7 +154,7 @@ async function seedPlansAndFeatures() {
     {
       key: "free",
       name: "Free",
-      description: "Understand what's going on — no credit card needed.",
+      description: "Explore notices and tax Q&A before you file — no form wizards or Prep Plans.",
       priceMonthlyCents: 0,
       priceYearlyCents: 0,
       sortOrder: 0,
@@ -172,7 +173,7 @@ async function seedPlansAndFeatures() {
     {
       key: "plus",
       name: "Plus",
-      description: "The full toolkit for handling one tax situation end to end.",
+      description: "Capped Prep Plans and form wizards/downloads each month — even if you have not filed yet.",
       priceMonthlyCents: 1900,
       priceYearlyCents: 18900,
       sortOrder: 1,
@@ -188,17 +189,18 @@ async function seedPlansAndFeatures() {
         "letters.generate": { enabled: true, limit: 3 },
         "deadlines.reminders": { enabled: true, limit: null },
         "vault.storage": { enabled: true, limit: null },
-        "forms.wizard": { enabled: true, limit: null },
+        "forms.wizard": { enabled: true, limit: 2 },
         "guide.chatbot": { enabled: true, limit: null },
         "case.report": { enabled: true, limit: 3 },
-        "forms.download": { enabled: true, limit: null },
+        "forms.download": { enabled: true, limit: 1 },
         "updates.case_impact": { enabled: true, limit: null },
+        "prep_plan.build": { enabled: true, limit: 2 },
       },
     },
     {
       key: "pro",
       name: "Pro",
-      description: "Everything, unlimited — plus professional referrals.",
+      description: "Unlimited Prep Plans, form wizards, and downloads — plus CPA/EA referral.",
       priceMonthlyCents: 4900,
       priceYearlyCents: 49900,
       sortOrder: 2,
@@ -220,6 +222,7 @@ async function seedPlansAndFeatures() {
         "case.report": { enabled: true, limit: 7 },
         "forms.download": { enabled: true, limit: null },
         "updates.case_impact": { enabled: true, limit: null },
+        "prep_plan.build": { enabled: true, limit: null },
       },
     },
   ];
@@ -283,6 +286,54 @@ async function seedPlansAndFeatures() {
       create: { planId: partnerPlan.id, featureKey: "case.report", enabled: true, limitValue: 7 },
     });
   }
+
+  // Wave 3a / Phase Billing — Free explores only; Plus caps Prep Plan / forms; Pro unlimited.
+  // Corrective upserts so re-seed fixes existing installs (plan feature rows used update: {} above).
+  const billingMatrix: Array<{
+    planKey: string;
+    featureKey: string;
+    enabled: boolean;
+    limit: number | null;
+  }> = [
+    { planKey: "free", featureKey: "prep_plan.build", enabled: false, limit: null },
+    { planKey: "free", featureKey: "forms.wizard", enabled: false, limit: null },
+    { planKey: "free", featureKey: "forms.download", enabled: false, limit: null },
+    { planKey: "plus", featureKey: "prep_plan.build", enabled: true, limit: 2 },
+    { planKey: "plus", featureKey: "forms.wizard", enabled: true, limit: 2 },
+    { planKey: "plus", featureKey: "forms.download", enabled: true, limit: 1 },
+    { planKey: "pro", featureKey: "prep_plan.build", enabled: true, limit: null },
+    { planKey: "pro", featureKey: "forms.wizard", enabled: true, limit: null },
+    { planKey: "pro", featureKey: "forms.download", enabled: true, limit: null },
+  ];
+  for (const row of billingMatrix) {
+    const plan = await db.subscriptionPlan.findUnique({ where: { key: row.planKey } });
+    if (!plan) continue;
+    await db.planFeature.upsert({
+      where: { planId_featureKey: { planId: plan.id, featureKey: row.featureKey } },
+      update: { enabled: row.enabled, limitValue: row.limit },
+      create: {
+        planId: plan.id,
+        featureKey: row.featureKey,
+        enabled: row.enabled,
+        limitValue: row.limit,
+      },
+    });
+  }
+
+  // Keep public plan blurbs aligned with the matrix on re-seed.
+  await db.subscriptionPlan.updateMany({
+    where: { key: "free" },
+    data: { description: "Explore notices and tax Q&A before you file — no form wizards or Prep Plans." },
+  });
+  await db.subscriptionPlan.updateMany({
+    where: { key: "plus" },
+    data: { description: "Capped Prep Plans and form wizards/downloads each month — even if you have not filed yet." },
+  });
+  await db.subscriptionPlan.updateMany({
+    where: { key: "pro" },
+    data: { description: "Unlimited Prep Plans, form wizards, and downloads — plus CPA/EA referral." },
+  });
+
   await db.setting.upsert({
     where: { key: "billing.case_report_extra_cents" },
     update: {
