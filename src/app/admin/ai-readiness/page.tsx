@@ -2,7 +2,7 @@ import { guardAdminPage } from "@/lib/admin-guard";
 import { PageHeader, Card, CardBody, Badge } from "@/components/ui";
 import { checkAiV3Readiness } from "@/lib/ai/readiness";
 
-export const metadata = { title: "AI v3 readiness" };
+export const metadata = { title: "AI readiness" };
 
 export default async function AiReadinessPage() {
   await guardAdminPage("admin.ai");
@@ -12,7 +12,7 @@ export default async function AiReadinessPage() {
   return (
     <div>
       <PageHeader
-        title="AI v3 readiness"
+        title="AI readiness"
         subtitle="Runtime checks for prompt registry, pipeline steps, approved providers, source coverage, human review, and queued re-analysis."
       />
       <div className="space-y-6">
@@ -21,7 +21,7 @@ export default async function AiReadinessPage() {
             <div className="flex items-center gap-2">
               <Badge color={readiness.ok ? "green" : "red"}>{readiness.ok ? "ready" : "blocked"}</Badge>
               <p className="text-sm text-slate-600">
-                {readiness.ok ? "No blocking v3 configuration errors found." : `${readiness.errors.length} blocking issue(s) must be fixed.`}
+                {readiness.ok ? "No blocking configuration errors found." : `${readiness.errors.length} blocking issue(s) must be fixed.`}
               </p>
             </div>
           </CardBody>

@@ -46,4 +46,35 @@ const root = process.cwd();
   assert.ok(/S5|customer.?facing copy|silent/i.test(doc));
 }
 
+// Never surface application/pipeline version labels to customers, guests, or consultants.
+{
+  const noProductVersion = /\b(?:v3\.1|v3\.2|V5\.1|AI v3)\b/;
+  const noInternalWave = /Wave\s+[0-9]+/;
+  const resultPage = readFileSync(join(root, "src/app/start/result/page.tsx"), "utf8");
+  assert.ok(resultPage.includes("The full review is still checking"));
+  assert.doesNotMatch(resultPage, noProductVersion);
+  assert.doesNotMatch(resultPage, /full v3\.1 review/);
+
+  for (const rel of [
+    "src/app/admin/diagnostics/page.tsx",
+    "src/app/admin/ai-readiness/page.tsx",
+    "src/components/case-analysis-view.tsx",
+    "src/lib/guide.ts",
+    "src/components/intake-wizard.tsx",
+    "src/components/situation-workspace-view.tsx",
+  ]) {
+    const text = readFileSync(join(root, rel), "utf8");
+    assert.doesNotMatch(text, noProductVersion, `${rel} must not mention product versions`);
+  }
+
+  for (const rel of ["src/actions/experience-correction.ts", "src/actions/experience-outcome.ts"]) {
+    const text = readFileSync(join(root, rel), "utf8");
+    assert.doesNotMatch(text, noInternalWave, `${rel} must not mention internal wave labels`);
+  }
+
+  const globalRules = readFileSync(join(root, "src/lib/ai/v3-prompts.ts"), "utf8");
+  assert.ok(globalRules.includes("application/pipeline version labels"));
+  assert.ok(globalRules.includes("consultant-facing output"));
+}
+
 console.log("phase-s5-customer-copy-check: ok");

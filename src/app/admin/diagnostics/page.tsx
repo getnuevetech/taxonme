@@ -23,7 +23,7 @@ export default async function DiagnosticsPage() {
     <div>
       <PageHeader
         title="Diagnostics"
-        subtitle="Separate v3.1 case cycles, pipeline runs, model calls, queue health, failures, retries, cache hits, token use, and cost."
+        subtitle="Separate case cycles, pipeline runs, model calls, queue health, failures, retries, cache hits, token use, and cost."
       />
 
       <div className="mb-6 grid gap-4 md:grid-cols-3">
