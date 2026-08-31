@@ -49,3 +49,4 @@ jobs:
       - run: npm run test:lightsail-healthz
       - run: npm run test:phase-billing
       - run: npm run test:guest-continuity
+      - run: npm run test:phase-minus1

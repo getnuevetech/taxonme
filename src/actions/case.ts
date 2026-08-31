@@ -85,11 +85,28 @@ export async function startIntakeAction(_prev: ActionState, formData: FormData):
     });
   }
 
-  await db.case.update({ where: { id: caseId }, data: { status: "analyzing" } });
-  after(() => runCaseAnalysis(caseId).catch(async (err) => {
-    const { logSystem } = await import("@/lib/syslog");
-    await logSystem("error", "analysis", "Background intake analysis failed", String(err));
-  }));
+  const { runConversationIntelligence, mayPromoteAssistantToCase } = await import("@/lib/conversation");
+  const intel = runConversationIntelligence({
+    message: situation,
+    goal,
+    documentCount: files.length,
+  });
+  const promo = mayPromoteAssistantToCase({
+    contract: intel.question_contract,
+    userExplicitlyRequestsCase: false,
+    documentCount: files.length,
+    existingGovernmentCase: intel.route.existing_government_case,
+    responseMode: intel.route.response_mode,
+  });
+  const runEngine = intel.route.invokes_case_engine || promo.allowed;
+
+  await db.case.update({ where: { id: caseId }, data: { status: runEngine ? "analyzing" : "intake" } });
+  if (runEngine) {
+    after(() => runCaseAnalysis(caseId).catch(async (err) => {
+      const { logSystem } = await import("@/lib/syslog");
+      await logSystem("error", "analysis", "Background intake analysis failed", String(err));
+    }));
+  }
   redirect(user ? `/app/cases/${caseId}` : `/start/result?case=${caseId}`);
 }
 
@@ -98,13 +115,35 @@ export async function createCaseAction(_prev: ActionState, formData: FormData): 
   const situation = String(formData.get("situation") ?? "").trim();
   const goal = String(formData.get("goal") ?? "").trim();
   if (situation.length < 20) return { error: "Describe your situation in a few sentences." };
-  const c = await db.case.create({
-    data: { userId: user.id, title: situation.slice(0, 80), situation, goal, status: "analyzing" },
+
+  const { runConversationIntelligence, mayPromoteAssistantToCase } = await import("@/lib/conversation");
+  const intel = runConversationIntelligence({ message: situation, goal });
+  const promo = mayPromoteAssistantToCase({
+    contract: intel.question_contract,
+    userExplicitlyRequestsCase: true,
+    documentCount: 0,
+    existingGovernmentCase: intel.route.existing_government_case,
+    responseMode: intel.route.response_mode,
   });
-  after(() => runCaseAnalysis(c.id).catch(async (err) => {
-    const { logSystem } = await import("@/lib/syslog");
-    await logSystem("error", "analysis", "Background case analysis failed", String(err));
-  }));
+  // Silent workspace rule: Q&A / options without an agency matter still get a Case row today
+  // (Situation model arrives in Wave 5), but we never force the full case engine without signals.
+  const runEngine = intel.route.invokes_case_engine || promo.allowed;
+
+  const c = await db.case.create({
+    data: {
+      userId: user.id,
+      title: situation.slice(0, 80),
+      situation,
+      goal,
+      status: runEngine ? "analyzing" : "intake",
+    },
+  });
+  if (runEngine) {
+    after(() => runCaseAnalysis(c.id).catch(async (err) => {
+      const { logSystem } = await import("@/lib/syslog");
+      await logSystem("error", "analysis", "Background case analysis failed", String(err));
+    }));
+  }
   redirect(`/app/cases/${c.id}`);
 }
 

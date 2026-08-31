@@ -70,7 +70,39 @@ export async function askQuestionAction(_prev: ActionState, formData: FormData):
 
   await db.qaMessage.create({ data: { threadId: thread.id, role: "user", content: question } });
   const history = [...thread.messages.map((m) => ({ role: m.role, content: m.content })), { role: "user", content: question }];
-  const answer = await runQaChat(history, user?.id);
+
+  // Phase −1: router decides assistant vs case engine before any answer is shown.
+  const {
+    runConversationIntelligence,
+    composeAssistantReply,
+    mayPromoteAssistantToCase,
+  } = await import("@/lib/conversation");
+  const intel = runConversationIntelligence({
+    message: question,
+    goal: thread.title,
+    history,
+    documentCount: 0,
+  });
+  const promo = mayPromoteAssistantToCase({
+    contract: intel.question_contract,
+    userExplicitlyRequestsCase: false,
+    documentCount: 0,
+    existingGovernmentCase: intel.route.existing_government_case,
+    responseMode: intel.route.response_mode,
+  });
+
+  let answer: string;
+  if (intel.route.pipeline === "assistant" || !promo.allowed) {
+    // Pipeline A: structured deterministic scaffold + model polish when available.
+    const scaffold = composeAssistantReply(intel, question);
+    const modelAnswer = await runQaChat(history, user?.id);
+    answer = modelAnswer?.trim()
+      ? `${scaffold}\n\n---\n\n${modelAnswer}`
+      : scaffold;
+  } else {
+    answer = await runQaChat(history, user?.id);
+  }
+
   await db.qaMessage.create({ data: { threadId: thread.id, role: "assistant", content: answer } });
 
   if (!threadId) redirect(user ? `/app/qa/${thread.id}` : `/start/qa?thread=${thread.id}`);
