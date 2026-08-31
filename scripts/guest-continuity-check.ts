@@ -21,20 +21,26 @@ function read(path: string) {
 
   assert.equal(
     continuePathAfterAuth({
-      claimed: { sessionId: "s", threadId: "t1", caseId: "c1" },
+      claimed: { sessionId: "s", threadId: "t1", caseId: "c1", situationId: null },
     }),
     "/app/qa/t1",
   );
   assert.equal(
     continuePathAfterAuth({
       next: "/app/cases/c9",
-      claimed: { sessionId: "s", threadId: "t1", caseId: "c1" },
+      claimed: { sessionId: "s", threadId: "t1", caseId: "c1", situationId: "sit1" },
     }),
     "/app/cases/c9",
   );
   assert.equal(
     continuePathAfterAuth({
-      claimed: { sessionId: "s", threadId: null, caseId: "c1" },
+      claimed: { sessionId: "s", threadId: null, caseId: "c1", situationId: "sit9" },
+    }),
+    "/app/situations/sit9",
+  );
+  assert.equal(
+    continuePathAfterAuth({
+      claimed: { sessionId: "s", threadId: null, caseId: "c1", situationId: null },
     }),
     "/app/cases/c1",
   );
@@ -48,6 +54,8 @@ function read(path: string) {
   const guest = read("src/lib/guest.ts");
   assert.ok(guest.includes("ClaimedGuestWork"));
   assert.ok(guest.includes("threadId"));
+  assert.ok(guest.includes("situationId"));
+  assert.ok(guest.includes("db.situation.updateMany"));
 
   const startQa = read("src/app/start/qa/page.tsx");
   assert.ok(startQa.includes("/app/qa/"), "signed-in /start/qa must keep thread when owned");

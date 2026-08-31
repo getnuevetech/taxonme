@@ -30,21 +30,112 @@ export async function startIntakeAction(_prev: ActionState, formData: FormData):
   const user = await getCurrentUser();
   // Capture the guest session once so all documents reference the same session.
   const guest = user ? null : await getOrCreateGuestSession();
+  if (!user) {
+    await db.guestSession.update({ where: { id: guest!.id }, data: { situation, goal } });
+  }
+
+  const {
+    runConversationIntelligence,
+    composeAssistantReply,
+    mayPromoteAssistantToCase,
+    detectGovernmentMatter,
+  } = await import("@/lib/conversation");
+  const intel = runConversationIntelligence({
+    message: situation,
+    goal,
+    documentCount: files.length,
+    documentHints: files.map((f) => f.name),
+    forceCase: false,
+  });
+
+  // Wave 5: Situation / question paths never run V5.1 Case analysis.
+  if (!intel.route.invokes_case_engine) {
+    const answer = composeAssistantReply(
+      intel,
+      [situation, goal ? `Goal: ${goal}` : ""].filter(Boolean).join("\n\n"),
+    );
+
+    if (intel.route.workspace === "situation" || intel.route.workspace === "filing_plan") {
+      const { createSituationFromIntelligence } = await import("@/lib/situation-create");
+      const created = await createSituationFromIntelligence({
+        situation,
+        goal,
+        intel,
+        assistantReply: answer,
+        files,
+      });
+      redirect(created.userId ? `/app/situations/${created.id}` : `/start/situation?id=${created.id}`);
+    }
+
+    const opening = [situation, goal ? `Goal: ${goal}` : ""].filter(Boolean).join("\n\n");
+    const thread = await db.qaThread.create({
+      data: {
+        userId: user?.id ?? null,
+        guestSessionId: user ? null : guest!.id,
+        title: (intel.question_contract.explicit_question || situation).slice(0, 60),
+        kind: "qa",
+      },
+    });
+    for (const file of files.slice(0, 10)) {
+      const { filePath, sizeBytes, contentHash } = await saveUpload(file);
+      await db.document.create({
+        data: {
+          userId: user?.id ?? null,
+          guestSessionId: user ? null : guest!.id,
+          fileName: file.name,
+          filePath,
+          mimeType: file.type || "application/octet-stream",
+          sizeBytes,
+          contentHash,
+        },
+      });
+    }
+    await db.qaMessage.create({ data: { threadId: thread.id, role: "user", content: opening } });
+    await db.qaMessage.create({ data: { threadId: thread.id, role: "assistant", content: answer } });
+    redirect(user ? `/app/qa/${thread.id}` : `/start/qa?thread=${thread.id}`);
+  }
+
+  // response_mode = case_review → Case engine only
+  const promo = mayPromoteAssistantToCase({
+    contract: intel.question_contract,
+    userExplicitlyRequestsCase: false,
+    documentCount: files.length,
+    existingGovernmentCase: intel.route.existing_government_case,
+    responseMode: intel.route.response_mode,
+  });
+  const runEngine = intel.route.invokes_case_engine || promo.allowed;
+  const matter = detectGovernmentMatter([situation, goal].join("\n"), files.map((f) => f.name));
+  const { primaryGovernmentSystem } = await import("@/lib/situation-reclassify");
+  const governmentSystem =
+    primaryGovernmentSystem(matter.systems) || (matter.existing_government_case ? "irs" : "");
+
   let caseId: string;
   if (user) {
     const c = await db.case.create({
-      data: { userId: user.id, title: situation.slice(0, 80), situation, goal },
+      data: {
+        userId: user.id,
+        title: situation.slice(0, 80),
+        situation,
+        goal,
+        governmentSystem,
+        status: runEngine ? "analyzing" : "intake",
+      },
     });
     caseId = c.id;
   } else {
-    await db.guestSession.update({ where: { id: guest!.id }, data: { situation, goal } });
     const c = await db.case.create({
-      data: { guestSessionId: guest!.id, title: situation.slice(0, 80), situation, goal },
+      data: {
+        guestSessionId: guest!.id,
+        title: situation.slice(0, 80),
+        situation,
+        goal,
+        governmentSystem,
+        status: runEngine ? "analyzing" : "intake",
+      },
     });
     caseId = c.id;
   }
 
-  // Attach uploaded documents.
   for (const file of files.slice(0, 10)) {
     const { filePath, sizeBytes, contentHash } = await saveUpload(file);
     await db.document.create({
@@ -85,22 +176,6 @@ export async function startIntakeAction(_prev: ActionState, formData: FormData):
     });
   }
 
-  const { runConversationIntelligence, mayPromoteAssistantToCase } = await import("@/lib/conversation");
-  const intel = runConversationIntelligence({
-    message: situation,
-    goal,
-    documentCount: files.length,
-  });
-  const promo = mayPromoteAssistantToCase({
-    contract: intel.question_contract,
-    userExplicitlyRequestsCase: false,
-    documentCount: files.length,
-    existingGovernmentCase: intel.route.existing_government_case,
-    responseMode: intel.route.response_mode,
-  });
-  const runEngine = intel.route.invokes_case_engine || promo.allowed;
-
-  await db.case.update({ where: { id: caseId }, data: { status: runEngine ? "analyzing" : "intake" } });
   if (runEngine) {
     after(() => runCaseAnalysis(caseId).catch(async (err) => {
       const { logSystem } = await import("@/lib/syslog");
@@ -116,8 +191,44 @@ export async function createCaseAction(_prev: ActionState, formData: FormData): 
   const goal = String(formData.get("goal") ?? "").trim();
   if (situation.length < 20) return { error: "Describe your situation in a few sentences." };
 
-  const { runConversationIntelligence, mayPromoteAssistantToCase } = await import("@/lib/conversation");
-  const intel = runConversationIntelligence({ message: situation, goal });
+  const {
+    runConversationIntelligence,
+    composeAssistantReply,
+    mayPromoteAssistantToCase,
+    detectGovernmentMatter,
+  } = await import("@/lib/conversation");
+  const intel = runConversationIntelligence({
+    message: situation,
+    goal,
+    forceCase: false,
+  });
+
+  // Wave 5: options / Situation paths create a Situation, not a Case.
+  if (!intel.route.invokes_case_engine) {
+    const answer = composeAssistantReply(intel, [situation, goal].filter(Boolean).join("\n\n"));
+    if (intel.route.workspace === "situation" || intel.route.workspace === "filing_plan") {
+      const { createSituationFromIntelligence } = await import("@/lib/situation-create");
+      const created = await createSituationFromIntelligence({
+        situation,
+        goal,
+        intel,
+        assistantReply: answer,
+      });
+      redirect(`/app/situations/${created.id}`);
+    }
+    const thread = await db.qaThread.create({
+      data: {
+        userId: user.id,
+        title: (intel.question_contract.explicit_question || situation).slice(0, 60),
+        kind: "qa",
+      },
+    });
+    const opening = [situation, goal ? `Goal: ${goal}` : ""].filter(Boolean).join("\n\n");
+    await db.qaMessage.create({ data: { threadId: thread.id, role: "user", content: opening } });
+    await db.qaMessage.create({ data: { threadId: thread.id, role: "assistant", content: answer } });
+    redirect(`/app/qa/${thread.id}`);
+  }
+
   const promo = mayPromoteAssistantToCase({
     contract: intel.question_contract,
     userExplicitlyRequestsCase: true,
@@ -125,9 +236,11 @@ export async function createCaseAction(_prev: ActionState, formData: FormData): 
     existingGovernmentCase: intel.route.existing_government_case,
     responseMode: intel.route.response_mode,
   });
-  // Silent workspace rule: Q&A / options without an agency matter still get a Case row today
-  // (Situation model arrives in Wave 5), but we never force the full case engine without signals.
   const runEngine = intel.route.invokes_case_engine || promo.allowed;
+  const matter = detectGovernmentMatter([situation, goal].join("\n"));
+  const { primaryGovernmentSystem } = await import("@/lib/situation-reclassify");
+  const governmentSystem =
+    primaryGovernmentSystem(matter.systems) || (matter.existing_government_case ? "irs" : "");
 
   const c = await db.case.create({
     data: {
@@ -135,6 +248,7 @@ export async function createCaseAction(_prev: ActionState, formData: FormData): 
       title: situation.slice(0, 80),
       situation,
       goal,
+      governmentSystem,
       status: runEngine ? "analyzing" : "intake",
     },
   });
