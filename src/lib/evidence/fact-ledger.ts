@@ -250,7 +250,7 @@ export function ledgerFact(ledger: FactLedger | null | undefined, factId: string
   return ledger?.facts.find((f) => f.fact_id === factId);
 }
 
-export function dedupeDocumentsByHash<T extends { contentHash?: string | null; duplicateOfId?: string | null; id?: string }>(
+export function dedupeDocumentsByHash<T extends { contentHash?: string | null; duplicateOfId?: string | null; id?: string | null }>(
   docs: T[],
 ): T[] {
   const seen = new Set<string>();
