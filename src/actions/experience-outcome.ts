@@ -44,7 +44,7 @@ async function outcomeSource(
   if (!row) throw new Error("Situation not found or not assigned.");
   const record = JSON.parse(row.learningEventJson) as ExperienceRecordV0;
   if (record.schema_version !== "l0") {
-    throw new Error("Situation does not contain a Wave 7 experience record.");
+    throw new Error("Situation does not contain an experience record.");
   }
   return record;
 }

@@ -62,10 +62,10 @@ export async function CaseAnalysisView({ caseId, viewer }: { caseId: string; vie
         }
       })()
     : null;
-  const v3FindingCard = latestPresentation?.finding_card && typeof latestPresentation.finding_card === "object"
+  const findingCard = latestPresentation?.finding_card && typeof latestPresentation.finding_card === "object"
     ? latestPresentation.finding_card as Record<string, unknown>
     : null;
-  const v3WhatWeFound = Array.isArray(latestPresentation?.what_we_found) ? latestPresentation.what_we_found : [];
+  const whatWeFound = Array.isArray(latestPresentation?.what_we_found) ? latestPresentation.what_we_found : [];
   const textFrom = (value: unknown): string => {
     if (value === null || value === undefined) return "";
     if (typeof value === "string" || typeof value === "number") return String(value);
@@ -89,16 +89,16 @@ export async function CaseAnalysisView({ caseId, viewer }: { caseId: string; vie
     : textFrom(value)
       ? [textFrom(value)]
       : [];
-  const v3WhatWeFoundItems = listFrom(v3WhatWeFound).slice(0, 5);
-  const v3NeedItems = listFrom(latestPresentation?.what_is_still_unclear).slice(0, 5);
-  const v3How = latestPresentation?.how_we_reached_this && typeof latestPresentation.how_we_reached_this === "object"
+  const whatWeFoundItems = listFrom(whatWeFound).slice(0, 5);
+  const needItems = listFrom(latestPresentation?.what_is_still_unclear).slice(0, 5);
+  const howWeReached = latestPresentation?.how_we_reached_this && typeof latestPresentation.how_we_reached_this === "object"
     ? latestPresentation.how_we_reached_this as Record<string, unknown>
     : null;
-  const v3NextStep = latestPresentation?.next_step && typeof latestPresentation.next_step === "object"
+  const nextStepCard = latestPresentation?.next_step && typeof latestPresentation.next_step === "object"
     ? latestPresentation.next_step as Record<string, unknown>
     : null;
 
-  // v3.2: what the evidence established, shown in plain language.
+  // What the evidence established, shown in plain language.
   const reconstruction = (() => {
     if (!c.reconstruction?.reconstructionJson) return null;
     try {
@@ -218,22 +218,22 @@ export async function CaseAnalysisView({ caseId, viewer }: { caseId: string; vie
   return (
     <div className="grid gap-6 lg:grid-cols-3">
       <div className="space-y-6 lg:col-span-2">
-        {v3FindingCard && (
+        {findingCard && (
           <Card>
             <CardBody>
               <div className="flex flex-wrap items-center gap-2 text-xs">
                 <Badge color="indigo">Latest case analysis</Badge>
-                <Badge>{String(v3FindingCard.status ?? "review").replace(/_/g, " ")}</Badge>
-                <Badge color="amber">{String(v3FindingCard.priority ?? "medium").replace(/_/g, " ")}</Badge>
+                <Badge>{String(findingCard.status ?? "review").replace(/_/g, " ")}</Badge>
+                <Badge color="amber">{String(findingCard.priority ?? "medium").replace(/_/g, " ")}</Badge>
               </div>
-              <h2 className="mt-3 text-xl font-semibold text-slate-900">{textFrom(v3FindingCard.headline) || "Your case at a glance"}</h2>
-              {textFrom(v3FindingCard.summary) && <p className="mt-2 text-sm leading-relaxed text-slate-700">{textFrom(v3FindingCard.summary)}</p>}
+              <h2 className="mt-3 text-xl font-semibold text-slate-900">{textFrom(findingCard.headline) || "Your case at a glance"}</h2>
+              {textFrom(findingCard.summary) && <p className="mt-2 text-sm leading-relaxed text-slate-700">{textFrom(findingCard.summary)}</p>}
               <div className="mt-5 grid gap-4 md:grid-cols-2">
                 <div className="rounded-xl bg-slate-50 p-4">
                   <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">What we know so far</p>
-                  {v3WhatWeFoundItems.length > 0 ? (
+                  {whatWeFoundItems.length > 0 ? (
                     <ul className="mt-2 space-y-2 text-sm text-slate-700">
-                      {v3WhatWeFoundItems.map((item, idx) => <li key={idx} className="leading-relaxed">• {item}</li>)}
+                      {whatWeFoundItems.map((item, idx) => <li key={idx} className="leading-relaxed">• {item}</li>)}
                     </ul>
                   ) : (
                     <p className="mt-2 text-sm text-slate-500">We are still organizing the facts from your summary and documents.</p>
@@ -241,19 +241,19 @@ export async function CaseAnalysisView({ caseId, viewer }: { caseId: string; vie
                 </div>
                 <div className="rounded-xl bg-indigo-50 p-4">
                   <p className="text-xs font-semibold uppercase tracking-wide text-indigo-500">Your next useful step</p>
-                  <p className="mt-2 text-sm font-semibold text-slate-900">{textFrom(v3NextStep?.title) || "Review the findings below"}</p>
-                  <p className="mt-1 text-sm leading-relaxed text-slate-700">{textFrom(v3NextStep?.description) || "Use the checklist and open questions to confirm the facts that matter most."}</p>
+                  <p className="mt-2 text-sm font-semibold text-slate-900">{textFrom(nextStepCard?.title) || "Review the findings below"}</p>
+                  <p className="mt-1 text-sm leading-relaxed text-slate-700">{textFrom(nextStepCard?.description) || "Use the checklist and open questions to confirm the facts that matter most."}</p>
                 </div>
               </div>
-              {v3How && (
+              {howWeReached && (
                 <div className="mt-4 rounded-xl border border-slate-200 p-4">
                   <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">How we reached this</p>
                   <div className="mt-3 grid gap-3 text-sm md:grid-cols-2">
                     {[
-                      ["Your situation", v3How.your_situation],
-                      ["Tax rules", v3How.tax_rules],
-                      ["Your evidence", v3How.your_evidence],
-                      ["Our conclusion", v3How.our_conclusion],
+                      ["Your situation", howWeReached.your_situation],
+                      ["Tax rules", howWeReached.tax_rules],
+                      ["Your evidence", howWeReached.your_evidence],
+                      ["Our conclusion", howWeReached.our_conclusion],
                     ].map(([label, value]) => {
                       const details = listFrom(value);
                       if (details.length === 0) return null;
@@ -267,11 +267,11 @@ export async function CaseAnalysisView({ caseId, viewer }: { caseId: string; vie
                   </div>
                 </div>
               )}
-              {v3NeedItems.length > 0 && (
+              {needItems.length > 0 && (
                 <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-4">
                   <p className="text-xs font-semibold uppercase tracking-wide text-amber-700">What still needs confirmation</p>
                   <ul className="mt-2 space-y-1 text-sm text-amber-900">
-                    {v3NeedItems.map((item, idx) => <li key={idx}>• {item}</li>)}
+                    {needItems.map((item, idx) => <li key={idx}>• {item}</li>)}
                   </ul>
                 </div>
               )}

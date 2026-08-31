@@ -46,7 +46,7 @@ export default async function GuestResultPage({
   // The analysis runs in the background after intake — show a live-refreshing
   // waiting state until findings are ready. When the deterministic first pass
   // is available, show it immediately so the user gets value while the full
-  // v3.1 review continues.
+  // review continues.
   if (c.status === "analyzing" && nowMs - c.updatedAt.getTime() < 10 * 60000) {
     const { AutoRefresh } = await import("@/components/auto-refresh");
     return (
@@ -60,7 +60,7 @@ export default async function GuestResultPage({
             </h1>
             <p className="mt-2 text-slate-600">
               {teaserIssue
-                ? "We found an initial direction. The full v3.1 review is still checking documents, rules, and next steps."
+                ? "We found an initial direction. The full review is still checking documents, rules, and next steps."
                 : "We're reading your summary, goal, and documents. This page updates automatically as the review progresses."}
             </p>
           </div>
