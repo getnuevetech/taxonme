@@ -40,6 +40,9 @@ import {
 } from "./audit";
 import { providerAllowedForTaxData } from "./provider-policy";
 import { extractUserFacingText, validateAiJson } from "./validation";
+import { buildQuestionContract } from "../conversation/question-contract";
+import { buildExperienceSearchBlock } from "../experience/search";
+import { extractSituationFeatures } from "../experience/what-mattered";
 
 type Json = Record<string, unknown>;
 
@@ -722,6 +725,15 @@ export async function runCaseAnalysis(caseId: string, opts?: { trigger?: string;
   // Layer 4: situation analysis grounded in the IRS knowledge base.
   const authority = await retrieveAuthorityForCase(caseId, `${c.situation} ${c.goal} ${docText}`);
   const knowledge = authority.text;
+  const experienceBlock = await buildExperienceSearchBlock({
+    decisionTarget: buildQuestionContract({
+      message: c.situation,
+      goal: c.goal,
+    }).decision_target,
+    workspace: "existing_case",
+    factKeys: extractSituationFeatures(c.situation),
+    limit: 5,
+  });
   let situationMerged: Json = {};
   let situationConflicts: Conflict[] = [];
   // v3.2 evidence gate: tax reasoning only runs once the evidence we hold has
@@ -758,7 +770,8 @@ export async function runCaseAnalysis(caseId: string, opts?: { trigger?: string;
       facts: JSON.stringify(facts),
       documents: documentOut ? JSON.stringify(documentOut.merged) : "(no documents uploaded)",
       document_findings: documentOut ? JSON.stringify(documentOut.merged) : "(no documents uploaded)",
-      knowledge: knowledge || "(no matching reference material)",
+      knowledge: [knowledge, experienceBlock].filter(Boolean).join("\n\n") || "(no matching reference material)",
+      experience_patterns: experienceBlock || "(none)",
       irs_sources: knowledge || "(no matching reference material)",
       authority_queries: authority.queries.join("\n"),
       goal: JSON.stringify(goalFacts),
@@ -1108,19 +1121,27 @@ async function buildQaUserContext(userId?: string): Promise<string> {
 export async function runQaChat(history: { role: string; content: string }[], userId?: string): Promise<string> {
   const steps = await getRunnableSteps(STAGE_KEYS.QA);
   const convo = history.map((m) => `${m.role === "user" ? "User" : "Assistant"}: ${m.content}`).join("\n");
+  const question = history.filter((m) => m.role === "user").at(-1)?.content ?? "";
   const userContext = await buildQaUserContext(userId);
   // The assistant answers from the same evidence the analysis used, so it can
   // never contradict the case it is discussing.
   const { brief } = await buildLatestCaseBrief(userId);
   const knowledge = await retrieveKnowledge(`${userContext}\n${history.map((m) => m.content).join(" ")}`);
+  const experienceBlock = await buildExperienceSearchBlock({
+    decisionTarget: buildQuestionContract({ message: question }).decision_target,
+    workspace: userId ? "situation" : "question_only",
+    factKeys: extractSituationFeatures(question),
+    limit: 5,
+  });
   if (steps.length === 0) {
     return "The assistant isn't available just yet. Meanwhile, you can upload your documents to your vault and browse the guides — everything you add will be analyzed as soon as the assistant comes online.";
   }
   try {
     const outcome = await runTrackedStage(STAGE_KEYS.QA, {
       input: convo,
-      question: history.filter((m) => m.role === "user").at(-1)?.content ?? "",
-      knowledge: knowledge || "(none)",
+      question,
+      knowledge: [knowledge, experienceBlock].filter(Boolean).join("\n\n") || "(none)",
+      experience_patterns: experienceBlock || "(none)",
       irs_sources: knowledge || "(none)",
       user_context: userContext || "(none)",
       case_evidence: brief.text,

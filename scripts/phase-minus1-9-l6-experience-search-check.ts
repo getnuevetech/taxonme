@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import {
   EXPERIENCE_SEARCH_PRECEDENCE,
   TAX_RELIEF_SCHEMA_NEGATIVE_LESSON,
@@ -62,5 +63,12 @@ assert.match(block, /full_form_433_package/);
 const hints = productionPatternAskHints(hits);
 assert.ok(hints.suppress_keys.includes("full_form_433_package"));
 assert.ok(hints.prefer_keys.includes("ability_to_pay"));
+const orchestrator = readFileSync("src/lib/ai/orchestrator.ts", "utf8");
+assert.match(orchestrator, /buildExperienceSearchBlock/);
+assert.match(orchestrator, /experience_patterns/);
+assert.match(
+  readFileSync("src/lib/experience/publish.ts", "utf8"),
+  /minPromotionLevel: 4/,
+);
 
 console.log("phase-minus1-9-l6-experience-search-check: ok");
