@@ -180,9 +180,10 @@ export async function guideRespond(
   if (intent === "new_case") {
     return {
       message:
-        "That sounds like a separate tax situation — it deserves its own case so it gets a full analysis, its own issues, and its own step-by-step plan (chat isn't the right place to handle it). Want me to start it as a new case? Your message will be pre-filled and you just confirm.",
+        "That sounds like a separate tax situation. I will keep helping here without forcing a new agency matter — if you already have an IRS/state notice or a filed return under review, say so and we can deepen the analysis. Otherwise we stay in Q&A / situation mode.",
       actions: [
-        { type: "new_case", label: "Yes — start this as a new case", href: `/app/cases/new?prefill=${encodeURIComponent(lastQuestion.slice(0, 500))}` },
+        { type: "link", label: "Open situations & cases", href: "/app" },
+        { type: "link", label: "Start a matter only if the IRS is already involved", href: `/app/cases/new?prefill=${encodeURIComponent(lastQuestion.slice(0, 500))}` },
         ...baseActions(),
       ],
     };

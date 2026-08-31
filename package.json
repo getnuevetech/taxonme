@@ -19,6 +19,7 @@
     "test:lightsail-healthz": "tsx scripts/lightsail-healthz-check.ts",
     "test:phase-billing": "tsx scripts/phase-billing-tier-matrix-check.ts",
     "test:guest-continuity": "tsx scripts/guest-continuity-check.ts",
+    "test:phase-minus1": "tsx scripts/phase-minus1-conversation-check.ts",
     "db:push": "prisma db push",
     "db:seed": "prisma db seed",
     "db:migrate": "prisma migrate deploy"
