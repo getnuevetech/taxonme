@@ -1,7 +1,7 @@
 import { db } from "@/lib/db";
 import { requireUser } from "@/lib/auth";
 import { PageHeader, Card, CardBody, Badge, EmptyState } from "@/components/ui";
-import { ExperienceForm, PastCaseForm } from "@/components/consultant-experience-forms";
+import { ExperienceForm, InstitutionalExperienceForms, PastCaseForm } from "@/components/consultant-experience-forms";
 import { deletePastCaseAction } from "@/actions/consultant";
 import { CONSULTANT_SPECIALTIES } from "@/lib/constants";
 
@@ -62,6 +62,15 @@ export default async function ConsultantExperiencePage() {
               </div>
               <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">Add a past case</h3>
               <PastCaseForm />
+            </CardBody>
+          </Card>
+
+          <Card>
+            <CardBody>
+              <h2 className="mb-3 text-sm font-semibold text-slate-900">
+                Institutional learning
+              </h2>
+              <InstitutionalExperienceForms />
             </CardBody>
           </Card>
         </div>
