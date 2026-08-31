@@ -11,6 +11,7 @@ import {
   buildOutcomePatternCandidate,
   checkOutcomeAuthority,
   type ExperienceRecordV0,
+  type GovernmentOutcomeInput,
 } from "../src/lib/experience";
 
 assert.deepEqual(GOVERNMENT_SYSTEMS, [
@@ -47,7 +48,7 @@ assert.equal(
   false,
 );
 
-const input = {
+const input: GovernmentOutcomeInput = {
   outcome_kind: "installment_agreement_accepted",
   government_system: "irs",
   form_or_notice_key: "form_9465",
@@ -55,7 +56,7 @@ const input = {
   authority_keys: ["irs_installment_agreement_guidance"],
   authority_publisher: "IRS",
   note_key: "monthly_plan_accepted",
-} as const;
+};
 const gate = checkOutcomeAuthority(input);
 assert.equal(gate.ok, true);
 assert.equal(gate.signal_precedence, "historical_experience");
