@@ -25,8 +25,7 @@ export default async function DashboardPage() {
     status: string;
     updatedAt: Date;
   }> = [];
-  let situationsUnavailable = false;
-  const [cases, situations, issues, deadlines, notifications, plan] = await Promise.all([
+  const [cases, situationsResult, issues, deadlines, notifications, plan] = await Promise.all([
     db.case
       .findMany({ where: { userId: user.id }, orderBy: { updatedAt: "desc" }, take: 5, include: { issues: true } })
       .catch(() => emptyCases),
@@ -37,10 +36,8 @@ export default async function DashboardPage() {
         take: 5,
         select: { id: true, number: true, title: true, status: true, updatedAt: true },
       })
-      .catch(() => {
-        situationsUnavailable = true;
-        return emptySituations;
-      }),
+      .then((rows) => ({ ok: true as const, rows }))
+      .catch(() => ({ ok: false as const, rows: emptySituations })),
     db.issue
       .findMany({ where: { case: { userId: user.id }, state: { not: "resolved" } } })
       .catch(() => [] as Array<{ id: string; state: string; differenceCents: number | null }>),
@@ -52,6 +49,8 @@ export default async function DashboardPage() {
       .catch(() => [] as Array<{ id: string; title: string; body: string; link: string | null }>),
     getActivePlan(user.id).catch(() => null),
   ]);
+  const situations = situationsResult.rows;
+  const situationsUnavailable = !situationsResult.ok;
 
   const soon = new Date();
   soon.setDate(soon.getDate() + 30);
