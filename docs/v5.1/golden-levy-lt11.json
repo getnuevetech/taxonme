@@ -1,0 +1,22 @@
+{
+  "fixture_id": "golden-levy-lt11",
+  "fixture_version": 1,
+  "domain": "tax",
+  "label": "LT11 levy risk with unpaid balance",
+  "situation": "I got an LT11 final notice of intent to levy. I owe about $8,000 for 2022 and cannot pay in full.",
+  "goal": "Stop the levy",
+  "primary_module": "collection_levy",
+  "do_not_recommend_new_pathway": true,
+  "documents": [
+    {
+      "alias_file_name": "lt11-levy.pdf",
+      "document_type": "IRS_NOTICE",
+      "content_hash": "sha256:fixture-lt11"
+    }
+  ],
+  "expected_posture": "collection_active",
+  "must_forbid_customer_copy": [
+    "file a new Form 1040 first",
+    "Schedule C audit workbook"
+  ]
+}

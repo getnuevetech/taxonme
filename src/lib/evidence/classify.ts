@@ -43,7 +43,7 @@ const TEXT_RULES: { type: DocumentType; pattern: RegExp }[] = [
   { type: DOCUMENT_TYPES.IRS_RECORD_OF_ACCOUNT, pattern: /record\s+of\s+account/i },
   { type: DOCUMENT_TYPES.IRS_WAGE_INCOME_TRANSCRIPT, pattern: /wage\s+and\s+income\s+transcript/i },
   { type: DOCUMENT_TYPES.IRS_RETURN_TRANSCRIPT, pattern: /return\s+transcript/i },
-  { type: DOCUMENT_TYPES.IRS_ACCOUNT_TRANSCRIPT, pattern: /account\s+transcript|account\s+balance:/i },
+  { type: DOCUMENT_TYPES.IRS_ACCOUNT_TRANSCRIPT, pattern: /account[\s_-]*transcript|account\s+balance:/i },
   { type: DOCUMENT_TYPES.AMENDED_RETURN, pattern: /\b1040-?x\b|amended\s+u\.?s\.?\s+individual/i },
   { type: DOCUMENT_TYPES.PAYROLL_RETURN, pattern: /\bform\s*94[01]\b|employer'?s\s+quarterly\s+federal\s+tax/i },
   { type: DOCUMENT_TYPES.BUSINESS_RETURN, pattern: /\bform\s*11(20|65)\b|u\.?s\.?\s+corporation\s+income\s+tax\s+return/i },

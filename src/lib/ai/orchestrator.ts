@@ -4,6 +4,11 @@ import { callProvider, extractJson, type ChatMessage, type MediaAttachment } fro
 import { mergeStructured, type Conflict } from "./consensus";
 import { computeReadinessDimensions } from "../evidence/readiness-core";
 import { fallbackAnalyze } from "./fallback";
+import {
+  canAttemptStep,
+  emptyStageBudget,
+  recordAttempt,
+} from "./reliability-ceilings";
 import { STAGE_KEYS } from "../constants";
 import { getNumberSetting } from "../settings";
 import { readUpload } from "../uploads";
@@ -246,13 +251,15 @@ export async function runStage(
     try {
       let result: Awaited<ReturnType<typeof callProvider>> | null = null;
       let lastProviderError: unknown = null;
-      for (let attempt = 0; attempt < 2; attempt++) {
+      let stageBudget = emptyStageBudget();
+      while (canAttemptStep(stageBudget)) {
+        stageBudget = recordAttempt(stageBudget);
         try {
           result = await callProvider(step.provider, messages, opts?.media ?? []);
           break;
         } catch (err) {
           lastProviderError = err;
-          if (attempt === 0) {
+          if (canAttemptStep(stageBudget)) {
             const { logSystem } = await import("../syslog");
             await logSystem("warning", "ai_call", `${step.provider.name} retrying stage "${stageKey}" (${step.role}) after provider failure`, String(err));
           }
