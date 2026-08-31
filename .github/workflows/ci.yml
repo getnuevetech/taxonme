@@ -51,3 +51,5 @@ jobs:
       - run: npm run test:guest-continuity
       - run: npm run test:phase-minus1
       - run: npm run test:phase-s
+      - run: npm run test:v51
+      - run: npm run test:evidence

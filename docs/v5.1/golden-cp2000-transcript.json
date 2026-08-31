@@ -1,0 +1,43 @@
+{
+  "fixture_id": "golden-cp2000-transcript",
+  "fixture_version": 1,
+  "domain": "tax",
+  "label": "CP2000 + account transcript balance",
+  "situation": "I received IRS CP2000 for tax year 2023 proposing additional wages. My account transcript shows ACCOUNT BALANCE: 2,879.00.",
+  "goal": "Respond correctly and confirm the balance",
+  "primary_module": "cp2000_underreporter",
+  "do_not_recommend_new_pathway": true,
+  "documents": [
+    {
+      "alias_file_name": "cp2000-2023.pdf",
+      "document_type": "IRS_NOTICE",
+      "content_hash": "sha256:fixture-cp2000"
+    },
+    {
+      "alias_file_name": "account-transcript-2023.pdf",
+      "document_type": "IRS_ACCOUNT_TRANSCRIPT",
+      "content_hash": "sha256:fixture-transcript",
+      "extracted_text": "ACCOUNT TRANSCRIPT\nTAX PERIOD ENDING: Dec. 31, 2023\nACCOUNT BALANCE: 2,879.00"
+    }
+  ],
+  "expected_facts": {
+    "TAX_YEAR": { "status": "VERIFIED", "value": "2023" },
+    "ACCOUNT_BALANCE": { "status": "VERIFIED", "value": 2879 },
+    "NOTICE_CODE": { "status": "VERIFIED" }
+  },
+  "phase_f_aggregate_ceilings_to_establish": {
+    "provisional_measurement_hints_only": {
+      "maxTotalModelCallsPerAnalysis": 24,
+      "maxTotalFailedModelCalls": 4,
+      "maxRetryChildren": 3,
+      "coalesceChildrenPerParent": 1,
+      "maxWallClockSeconds": 180,
+      "targetSuccessRate": 0.95
+    }
+  },
+  "must_forbid_customer_copy": [
+    "file a new Form 1040 first",
+    "start with an offer in compromise before responding to the CP2000",
+    "Schedule C audit workbook"
+  ]
+}
