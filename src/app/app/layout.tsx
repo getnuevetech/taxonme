@@ -9,6 +9,7 @@ import { GuideWidget } from "@/components/guide-widget";
 
 const NAV = [
   { href: "/app", label: "Overview" },
+  { href: "/app/situations", label: "My situations" },
   { href: "/app/cases", label: "My cases" },
   { href: "/app/irs-updates", label: "IRS updates" },
   { href: "/app/notices", label: "IRS notices" },

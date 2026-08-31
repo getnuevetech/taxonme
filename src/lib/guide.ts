@@ -163,7 +163,7 @@ export async function guideRespond(
     const tip = snapshot.currentStep
       ? STEP_TIPS[snapshot.currentStep.actionKey.toUpperCase()] ??
         `Your next step is "${snapshot.currentStep.title}". Knock it out and you're one step closer — I'm here if you need help with it.`
-      : "You haven't started a case yet — tell us what's going on with your taxes and we'll break it into simple steps.";
+      : "You haven't started a Situation yet — tell us what's going on with your taxes and we'll map options without forcing an agency Case.";
     return {
       message: `Here's where you stand:\n\n${snapshot.text
         .split("\n")
@@ -171,7 +171,11 @@ export async function guideRespond(
         .join("\n")}\n\nNext up: ${tip}\n\nYou're making progress — stick with the plan and ask me anything about your next step.`,
       actions: snapshot.currentStep
         ? [{ type: "link", label: "Open my case", href: `/app/cases/${snapshot.currentStep.caseId}` }, ...baseActions()]
-        : [{ type: "link", label: "Start my first case", href: "/app/cases/new" }, ...baseActions()],
+        : [
+            { type: "link", label: "Continue with my situation", href: "/app/situations" },
+            { type: "link", label: "Track this government case", href: "/app/cases/new" },
+            ...baseActions(),
+          ],
     };
   }
 
@@ -180,10 +184,10 @@ export async function guideRespond(
   if (intent === "new_case") {
     return {
       message:
-        "That sounds like a separate tax situation. I will keep helping here without forcing a new agency matter — if you already have an IRS/state notice or a filed return under review, say so and we can deepen the analysis. Otherwise we stay in Q&A / situation mode.",
+        "That sounds like a separate tax situation. I will keep helping here without forcing a new agency matter — if you already have an IRS/state notice or a filed return under review, say so and we can deepen the analysis. Otherwise we stay in Situation mode.",
       actions: [
-        { type: "link", label: "Open situations & cases", href: "/app" },
-        { type: "link", label: "Start a matter only if the IRS is already involved", href: `/app/cases/new?prefill=${encodeURIComponent(lastQuestion.slice(0, 500))}` },
+        { type: "link", label: "Continue with my situation", href: "/app/situations" },
+        { type: "link", label: "Track this government case", href: `/app/cases/new?prefill=${encodeURIComponent(lastQuestion.slice(0, 500))}` },
         ...baseActions(),
       ],
     };

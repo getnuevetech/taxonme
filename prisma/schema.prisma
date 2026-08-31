@@ -213,6 +213,7 @@ model User {
   subscriptions       Subscription[]
   transactions        PaymentTransaction[]
   cases               Case[]
+  situations          Situation[]
   documents           Document[]
   deadlines           Deadline[]
   letters             ResponseLetter[]
@@ -336,16 +337,74 @@ model GuestSession {
   createdAt       DateTime  @default(now())
   documents       Document[]
   cases           Case[]
+  situations      Situation[]
   qaThreads       QaThread[]
 }
 
-// ---------- Cases & analysis ----------
+// ---------- Situations & Prep Plans (Wave 5 / Phase S Option B) ----------
+
+model Situation {
+  id                     String    @id @default(cuid())
+  number                 Int       @unique @default(autoincrement()) // shown as SIT-000123 — not a Case TOM-
+  userId                 String?
+  guestSessionId         String?
+  title                  String
+  originalNarrative      String    @default("")
+  goal                   String    @default("")
+  questionContractJson   String    @default("{}")
+  currentDecisionTarget  String    @default("")
+  knownFactsJson         String    @default("[]")
+  currentPathwaysJson    String    @default("[]")
+  currentRisksJson       String    @default("[]")
+  status                 String    @default("open") // open | guiding | prep_plan | linked_case | closed
+  intelligenceJson       String    @default("{}")
+  learningEventJson      String    @default("{}")
+  assistantReply         String    @default("")
+  legacyCaseId           String?
+  legacyRecordType       String    @default("")
+  migrationTimestamp     DateTime?
+  closedAt               DateTime?
+  createdAt              DateTime  @default(now())
+  updatedAt              DateTime  @updatedAt
+  user                   User?     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  guestSession           GuestSession? @relation(fields: [guestSessionId], references: [id])
+  documents              Document[]
+  prepPlans              PrepPlan[]
+  cases                  Case[]
+  qaThreads              QaThread[]
+
+  @@index([userId, createdAt])
+  @@index([guestSessionId])
+}
+
+model PrepPlan {
+  id                 String    @id @default(cuid())
+  situationId        String
+  selectedPathway    String    @default("")
+  eligibilityJson    String    @default("{}")
+  blockersJson       String    @default("[]")
+  filingsJson        String    @default("[]")
+  evidenceNeedsJson  String    @default("[]")
+  sequenceJson       String    @default("[]")
+  preparationStatus  String    @default("draft") // draft | in_progress | ready | filed
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+  situation          Situation @relation(fields: [situationId], references: [id], onDelete: Cascade)
+
+  @@index([situationId])
+}
+
+// ---------- Cases & analysis (Agency matters) ----------
 
 model Case {
   id             String    @id @default(cuid())
   number         Int       @unique @default(autoincrement()) // shown as TOM-000123
   userId         String?
   guestSessionId String?
+  /** Optional link to the Situation that gave rise to this agency matter. */
+  situationId    String?
+  /** irs | state_dor | tax_court_collections | other */
+  governmentSystem String @default("")
   title          String
   situation      String    @default("")
   goal           String    @default("")
@@ -363,6 +422,7 @@ model Case {
   updatedAt      DateTime  @updatedAt
   user           User?     @relation(fields: [userId], references: [id], onDelete: Cascade)
   guestSession   GuestSession? @relation(fields: [guestSessionId], references: [id])
+  originSituation Situation? @relation(fields: [situationId], references: [id], onDelete: SetNull)
   documents      Document[]
   runs           AnalysisRun[]
   issues         Issue[]
@@ -392,6 +452,8 @@ model Case {
   suppressedQuestions SuppressedQuestion[]
   reportDownloads CaseReportDownload[]
   updateImpacts   CaseUpdateImpact[]
+
+  @@index([situationId])
 }
 
 // Official agency news (IRS by default). Synced from the configured feed and
@@ -468,6 +530,8 @@ model Document {
   userId         String?
   guestSessionId String?
   caseId         String?
+  /** Optional link when the upload belongs to a Situation (not yet an agency matter). */
+  situationId    String?
   fileName       String
   filePath       String
   mimeType       String    @default("application/octet-stream")
@@ -499,6 +563,7 @@ model Document {
   user           User?         @relation(fields: [userId], references: [id], onDelete: Cascade)
   guestSession   GuestSession? @relation(fields: [guestSessionId], references: [id])
   case           Case?         @relation(fields: [caseId], references: [id])
+  situation      Situation?    @relation(fields: [situationId], references: [id], onDelete: SetNull)
   duplicateOf    Document?     @relation("documentDuplicate", fields: [duplicateOfId], references: [id], onDelete: SetNull)
   duplicates     Document[]    @relation("documentDuplicate")
   notices        Notice[]
@@ -506,6 +571,7 @@ model Document {
   evidenceFacts  EvidenceFact[]
 
   @@index([caseId, contentHash])
+  @@index([situationId])
 }
 
 // ---------- v3.2 evidence intelligence ----------
@@ -972,12 +1038,17 @@ model QaThread {
   id             String       @id @default(cuid())
   userId         String?
   guestSessionId String?
+  /** Optional link when the thread belongs to a Situation workspace. */
+  situationId    String?
   title          String       @default("Tax question")
   kind           String       @default("qa") // qa | guide
   createdAt      DateTime     @default(now())
   user           User?        @relation(fields: [userId], references: [id], onDelete: Cascade)
   guestSession   GuestSession? @relation(fields: [guestSessionId], references: [id])
+  situation      Situation?    @relation(fields: [situationId], references: [id], onDelete: SetNull)
   messages       QaMessage[]
+
+  @@index([situationId])
 }
 
 model QaMessage {

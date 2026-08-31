@@ -28,6 +28,7 @@ const read = (p: string) => readFileSync(join(root, p), "utf8");
 {
   const quotas = read("src/lib/billing-quotas.ts");
   assert.ok(quotas.includes("getPrepPlanQuota"));
+  assert.ok(quotas.includes("db.prepPlan.count") || quotas.includes("prepPlan.count"));
   assert.ok(quotas.includes("getFormWizardQuota"));
   assert.ok(quotas.includes("getFormDownloadQuota"));
   assert.ok(quotas.includes("FEATURE_KEYS.PREP_PLAN_BUILD"));

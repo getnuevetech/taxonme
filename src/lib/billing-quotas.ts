@@ -1,7 +1,6 @@
 /**
- * Wave 3a — monthly quotas for IRS form wizards / downloads.
- * Plus is capped; Pro is unlimited. Free cannot run wizards or download forms.
- * Prep-plan quota helper is stubbed for Wave 3b / Wave 5 (no Prep Plan model yet).
+ * Wave 3a/5 — monthly quotas for IRS form wizards / downloads / Prep Plans.
+ * Plus is capped; Pro is unlimited. Free cannot run wizards, download forms, or build Prep Plans.
  */
 import "server-only";
 import { db } from "@/lib/db";
@@ -30,13 +29,17 @@ function pack(hasAccess: boolean, limit: number | null, used: number): FeatureQu
   };
 }
 
-/** Wave 3b/5: Prep Plan builds. Until the model exists, usage is always 0. */
+/** Wave 5: Prep Plan builds counted per UTC calendar month via PrepPlan rows. */
 export async function getPrepPlanQuota(userId: string): Promise<FeatureQuota> {
-  const [hasAccess, limit] = await Promise.all([
+  const since = startOfUtcMonth();
+  const [hasAccess, limit, used] = await Promise.all([
     hasFeature(userId, FEATURE_KEYS.PREP_PLAN_BUILD),
     featureLimit(userId, FEATURE_KEYS.PREP_PLAN_BUILD),
+    db.prepPlan.count({
+      where: { situation: { userId }, createdAt: { gte: since } },
+    }),
   ]);
-  return pack(hasAccess, limit, 0);
+  return pack(hasAccess, limit, used);
 }
 
 export async function getFormWizardQuota(userId: string): Promise<FeatureQuota> {

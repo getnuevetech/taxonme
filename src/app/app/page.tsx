@@ -5,6 +5,7 @@ import { getActivePlan } from "@/lib/access";
 import { PageHeader, Card, CardBody, Stat, ButtonLink, StateMark, ProgressBar, Money, EmptyState, Badge } from "@/components/ui";
 import { markNotificationReadAction } from "@/actions/user";
 import { formatCaseNumber } from "@/lib/case-number";
+import { formatSituationNumber } from "@/lib/situation";
 
 export default async function DashboardPage() {
   const user = await requireUser();
@@ -17,10 +18,29 @@ export default async function DashboardPage() {
     readinessScore: number;
     issues: unknown[];
   }> = [];
-  const [cases, issues, deadlines, notifications, plan] = await Promise.all([
+  const emptySituations: Array<{
+    id: string;
+    number: number;
+    title: string;
+    status: string;
+    updatedAt: Date;
+  }> = [];
+  let situationsUnavailable = false;
+  const [cases, situations, issues, deadlines, notifications, plan] = await Promise.all([
     db.case
       .findMany({ where: { userId: user.id }, orderBy: { updatedAt: "desc" }, take: 5, include: { issues: true } })
       .catch(() => emptyCases),
+    db.situation
+      .findMany({
+        where: { userId: user.id },
+        orderBy: { updatedAt: "desc" },
+        take: 5,
+        select: { id: true, number: true, title: true, status: true, updatedAt: true },
+      })
+      .catch(() => {
+        situationsUnavailable = true;
+        return emptySituations;
+      }),
     db.issue
       .findMany({ where: { case: { userId: user.id }, state: { not: "resolved" } } })
       .catch(() => [] as Array<{ id: string; state: string; differenceCents: number | null }>),
@@ -47,7 +67,7 @@ export default async function DashboardPage() {
       <PageHeader
         title={`Hi${user.firstName ? ` ${user.firstName}` : ""}, here's your tax picture`}
         subtitle={plan ? `You're on the ${plan.name} plan` : undefined}
-        actions={<ButtonLink href="/app/cases/new">New case →</ButtonLink>}
+        actions={<ButtonLink href="/app/cases/new">Describe a situation →</ButtonLink>}
       />
 
       {notifications.length > 0 && (
@@ -88,12 +108,51 @@ export default async function DashboardPage() {
 
       <div className="mt-8 grid gap-6 lg:grid-cols-2">
         <div>
+          <div className="mb-3 flex items-center justify-between gap-2">
+            <h2 className="text-base font-semibold text-slate-900">Recent situations</h2>
+            <Link href="/app/situations" className="text-xs font-medium text-indigo-600 hover:underline">
+              View all
+            </Link>
+          </div>
+          {situationsUnavailable ? (
+            <EmptyState
+              title="Situations temporarily unavailable"
+              body="We could not load Situations. Refresh after migrations finish."
+            />
+          ) : situations.length === 0 ? (
+            <EmptyState
+              title="No situations yet"
+              body="Ask a tax question or explore options before anything is before the IRS."
+              action={<ButtonLink href="/app/cases/new">Start exploring</ButtonLink>}
+            />
+          ) : (
+            <div className="space-y-3">
+              {situations.map((s) => (
+                <Link key={s.id} href={`/app/situations/${s.id}`} className="block">
+                  <Card className="transition hover:border-indigo-300">
+                    <CardBody className="flex items-center justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="truncate font-medium text-slate-900">{s.title}</p>
+                        <p className="text-xs text-slate-500">
+                          {formatSituationNumber(s.number)} · {s.status.replace(/_/g, " ")}
+                        </p>
+                      </div>
+                      <Badge color="slate">{s.status.replace(/_/g, " ")}</Badge>
+                    </CardBody>
+                  </Card>
+                </Link>
+              ))}
+            </div>
+          )}
+        </div>
+
+        <div>
           <h2 className="mb-3 text-base font-semibold text-slate-900">Recent cases</h2>
           {cases.length === 0 ? (
             <EmptyState
-              title="No cases yet"
-              body="Tell us about your tax situation and we'll break it into clear issues and next steps."
-              action={<ButtonLink href="/app/cases/new">Start your first case</ButtonLink>}
+              title="No agency cases yet"
+              body="Cases track matters already before the IRS or another tax agency. Explore a Situation first if you have not filed."
+              action={<ButtonLink href="/app/situations">My situations</ButtonLink>}
             />
           ) : (
             <div className="space-y-3">
@@ -117,27 +176,27 @@ export default async function DashboardPage() {
             </div>
           )}
         </div>
+      </div>
 
-        <div>
-          <h2 className="mb-3 text-base font-semibold text-slate-900">Upcoming deadlines</h2>
-          {deadlines.length === 0 ? (
-            <EmptyState title="Nothing due" body="Deadlines from notices and analyses appear here automatically." />
-          ) : (
-            <div className="space-y-3">
-              {deadlines.map((d) => (
-                <Card key={d.id}>
-                  <CardBody className="flex items-center justify-between">
-                    <div>
-                      <p className="font-medium text-slate-900">{d.title}</p>
-                      <p className="text-xs text-slate-500">{d.dueDate.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}</p>
-                    </div>
-                    <StateMark state={d.dueDate <= soon ? "action_needed" : "review"} />
-                  </CardBody>
-                </Card>
-              ))}
-            </div>
-          )}
-        </div>
+      <div className="mt-8">
+        <h2 className="mb-3 text-base font-semibold text-slate-900">Upcoming deadlines</h2>
+        {deadlines.length === 0 ? (
+          <EmptyState title="Nothing due" body="Deadlines from notices and analyses appear here automatically." />
+        ) : (
+          <div className="grid gap-3 sm:grid-cols-2">
+            {deadlines.map((d) => (
+              <Card key={d.id}>
+                <CardBody className="flex items-center justify-between">
+                  <div>
+                    <p className="font-medium text-slate-900">{d.title}</p>
+                    <p className="text-xs text-slate-500">{d.dueDate.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}</p>
+                  </div>
+                  <StateMark state={d.dueDate <= soon ? "action_needed" : "review"} />
+                </CardBody>
+              </Card>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );

@@ -4,6 +4,7 @@ export type ClaimedGuestWork = {
   sessionId: string;
   threadId: string | null;
   caseId: string | null;
+  situationId: string | null;
 };
 
 /** Only allow same-origin relative continue paths under /app or /start. */
@@ -25,7 +26,7 @@ export function sanitizeAuthNext(raw: string | null | undefined): string | null 
 
 /**
  * Where to send the user after login/register so guest work is not abandoned.
- * Priority: explicit next → claimed Q&A thread → claimed case → fallback.
+ * Priority: explicit next → claimed Situation → claimed Q&A thread → claimed case → fallback.
  */
 export function continuePathAfterAuth(opts: {
   next?: string | null;
@@ -34,6 +35,7 @@ export function continuePathAfterAuth(opts: {
 }): string {
   const next = sanitizeAuthNext(opts.next);
   if (next) return next;
+  if (opts.claimed?.situationId) return `/app/situations/${opts.claimed.situationId}`;
   if (opts.claimed?.threadId) return `/app/qa/${opts.claimed.threadId}`;
   if (opts.claimed?.caseId) return `/app/cases/${opts.claimed.caseId}`;
   return opts.fallback ?? "/app";

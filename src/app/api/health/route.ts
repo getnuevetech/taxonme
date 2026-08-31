@@ -9,8 +9,8 @@ import { timingSafeStringEqual } from "@/lib/secrets";
  * Maintenance jobs run only when Authorization: Bearer <CRON_SECRET>
  * (or ?secret=) matches process.env.CRON_SECRET or setting cron.secret.
  *
- * Schema readiness reports core tables today. Situation / Experience probes are
- * forward-looking (Waves 5 / 7) and do not fail schemaReady until those models ship.
+ * Schema readiness reports core tables including Situation (Wave 5).
+ * Experience probes remain forward-looking (Wave 7) and do not fail schemaReady.
  *
  * Dedicated POST /api/cron/maintenance remains supported for existing cron jobs.
  */
@@ -50,7 +50,7 @@ async function schemaChecks(): Promise<{
     case_table: "error",
     guest_session: "error",
     evidence_fact: "error",
-    situation_table: "not_yet",
+    situation_table: "error",
     experience_observation: "not_yet",
   };
 
@@ -75,17 +75,14 @@ async function schemaChecks(): Promise<{
     checks.evidence_fact = "missing";
   }
 
-  // Forward-looking: Prisma client has no Situation / Experience models yet.
-  // When Waves 5 / 7 land, replace with real probes that can return "ok" | "missing".
-  const client = db as unknown as Record<string, { findFirst?: (args: unknown) => Promise<unknown> }>;
-  if (typeof client.situation?.findFirst === "function") {
-    try {
-      await client.situation.findFirst({ select: { id: true } });
-      checks.situation_table = "ok";
-    } catch {
-      checks.situation_table = "missing";
-    }
+  // Wave 5 Situation probe is live. Experience remains forward-looking (Wave 7).
+  try {
+    await db.situation.findFirst({ select: { id: true } });
+    checks.situation_table = "ok";
+  } catch {
+    checks.situation_table = "missing";
   }
+  const client = db as unknown as Record<string, { findFirst?: (args: unknown) => Promise<unknown> }>;
   if (typeof client.experienceObservation?.findFirst === "function") {
     try {
       await client.experienceObservation.findFirst({ select: { id: true } });
@@ -99,7 +96,12 @@ async function schemaChecks(): Promise<{
 }
 
 function coreSchemaReady(schema: Awaited<ReturnType<typeof schemaChecks>>): boolean {
-  return schema.case_table === "ok" && schema.guest_session === "ok" && schema.evidence_fact === "ok";
+  return (
+    schema.case_table === "ok" &&
+    schema.guest_session === "ok" &&
+    schema.evidence_fact === "ok" &&
+    schema.situation_table === "ok"
+  );
 }
 
 export async function GET(request: Request) {

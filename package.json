@@ -20,6 +20,10 @@
     "test:phase-billing": "tsx scripts/phase-billing-tier-matrix-check.ts",
     "test:guest-continuity": "tsx scripts/guest-continuity-check.ts",
     "test:phase-minus1": "tsx scripts/phase-minus1-conversation-check.ts",
+    "test:phase-s": "tsx scripts/phase-s1-situation-router-check.ts && tsx scripts/phase-s2-situation-workspace-check.ts && tsx scripts/phase-s3-prep-plan-check.ts && tsx scripts/phase-s4-case-lifecycle-check.ts && tsx scripts/phase-s5-customer-copy-check.ts && tsx scripts/phase-s6-workspace-regression-check.ts && tsx scripts/phase-s-situation-discovery-check.ts",
+    "test:phase-s1": "tsx scripts/phase-s1-situation-router-check.ts",
+    "test:phase-s3": "tsx scripts/phase-s3-prep-plan-check.ts",
+    "test:phase-s-discovery": "tsx scripts/phase-s-situation-discovery-check.ts",
     "db:push": "prisma db push",
     "db:seed": "prisma db seed",
     "db:migrate": "prisma migrate deploy"

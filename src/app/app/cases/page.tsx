@@ -18,14 +18,14 @@ export default async function CasesPage() {
     <div>
       <PageHeader
         title="My cases"
-        subtitle="Each case is one tax situation, broken into issues and steps."
-        actions={<ButtonLink href="/app/cases/new">New case →</ButtonLink>}
+        subtitle="Agency matters already before the IRS or another tax agency. Pre-filing questions live under My situations."
+        actions={<ButtonLink href="/app/cases/new">Track an agency matter →</ButtonLink>}
       />
       {cases.length === 0 ? (
         <EmptyState
-          title="No cases yet"
-          body="Describe your situation and goal, and we'll analyze it into clear issues."
-          action={<ButtonLink href="/app/cases/new">Start a case</ButtonLink>}
+          title="No agency cases yet"
+          body="If you are still exploring options and have not filed, start from My situations. Open a Case only when something is before the IRS or another agency."
+          action={<ButtonLink href="/app/situations">My situations</ButtonLink>}
         />
       ) : (
         <div className="space-y-4">
