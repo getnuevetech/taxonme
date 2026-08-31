@@ -2,7 +2,7 @@ import { evaluateAnswerability } from "./answerability";
 import { routeConversation } from "./conversation-router";
 import { detectGovernmentMatter } from "./government-matter";
 import { interpretIntent } from "./intent-interpreter";
-import { buildExperienceRecord, buildLearningEvent } from "./learning-events";
+import { buildExperienceRecord, buildLearningEvent } from "@/lib/experience";
 import { buildNeedToKnow } from "./need-to-know";
 import { buildQuestionContract } from "./question-contract";
 import { buildResponseStrategy } from "./response-strategy";
@@ -63,12 +63,12 @@ export function runConversationIntelligence(input: ConversationMessageInput): Co
     contract: question_contract,
     workspace: route.workspace,
     responseMode: route.response_mode,
-    invokesCaseEngine: route.invokes_case_engine,
     existingGovernmentCase: route.existing_government_case,
     interactionIntent: intent.interaction_intent,
     pathways: strategy.branches.map((b) => b.id),
     askNow: strategy.ask_now,
     needToKnow: need_to_know,
+    message,
   });
 
   return {

@@ -8,11 +8,15 @@ import { getOrCreateGuestSession } from "@/lib/guest";
 import { saveUpload } from "@/lib/uploads";
 import { situationTitleFromNarrative } from "@/lib/situation";
 import type { ConversationIntelligence } from "@/lib/conversation";
+import {
+  publishAnonymizedObservation,
+  type ExperienceRecordV0,
+} from "@/lib/experience";
 import type { ActionState } from "@/actions/auth";
 
 /**
  * Persist a Situation workspace (Wave 5 / Phase S Option B).
- * Never runs V5.1 Case analysis. Experience publish deferred to Wave 7.
+ * Never runs V5.1 Case analysis. Shared experience publish is best-effort.
  */
 export async function createSituationFromIntelligence(opts: {
   situation: string;
@@ -71,8 +75,7 @@ export async function createSituationFromIntelligence(opts: {
     });
   }
 
-  // Wave 7 will publish anonymized experience observations; persist only for now.
-  after(() => recordSituationLearningEvent(row.id));
+  after(() => publishSituationExperience(row.id));
 
   return { id: row.id, userId: user?.id ?? null };
 }
@@ -81,20 +84,22 @@ export async function redirectToSituation(id: string, userId: string | null) {
   redirect(userId ? `/app/situations/${id}` : `/start/situation?id=${id}`);
 }
 
-/** No-op placeholder so after() callers have a typed import path for future enrichment. */
-export async function recordSituationLearningEvent(situationId: string) {
-  after(async () => {
-    try {
-      const row = await db.situation.findUnique({
-        where: { id: situationId },
-        select: { learningEventJson: true },
-      });
-      if (!row?.learningEventJson) return;
-      // Wave 7 will consume learningEventJson into Experience Memory.
-    } catch {
-      /* ignore */
-    }
-  });
+/** Publish only the de-identified L1 representation; raw L0 stays on Situation. */
+export async function publishSituationExperience(situationId: string) {
+  try {
+    const row = await db.situation.findUnique({
+      where: { id: situationId },
+      select: { learningEventJson: true },
+    });
+    if (!row?.learningEventJson) return;
+    const record = JSON.parse(row.learningEventJson) as ExperienceRecordV0;
+    if (record.schema_version !== "l0") return;
+    await publishAnonymizedObservation({ record, situationId });
+  } catch {
+    // Experience capture must never block Situation creation.
+  }
 }
+
+export const recordSituationLearningEvent = publishSituationExperience;
 
 export type { ActionState };

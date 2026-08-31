@@ -24,6 +24,7 @@ const NAV: { area: string; href: string; label: string; section: string }[] = [
   { area: "admin.ai", href: "/admin/ai-readiness", label: "AI readiness", section: "Intelligence" },
   { area: "admin.knowledge", href: "/admin/source-snapshots", label: "Source snapshots", section: "Intelligence" },
   { area: "admin.human_review", href: "/admin/human-review", label: "Human review", section: "Intelligence" },
+  { area: "admin.experience", href: "/admin/experience", label: "Experience / Pattern registry", section: "Intelligence" },
   { area: "admin.knowledge", href: "/admin/knowledge", label: "IRS knowledge base", section: "Intelligence" },
   { area: "admin.plans", href: "/admin/plans", label: "Plans & access", section: "Commerce" },
   { area: "admin.payments", href: "/admin/payments", label: "Payment gateways", section: "Commerce" },

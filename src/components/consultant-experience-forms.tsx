@@ -5,6 +5,9 @@ import { saveExperiencesAction, addPastCaseAction } from "@/actions/consultant";
 import { Field, inputClass } from "./ui";
 import { SearchSelect } from "./search-select";
 import { CONSULTANT_SPECIALTIES } from "@/lib/constants";
+import { recordConsultantExperienceCorrectionAction } from "@/actions/experience-correction";
+import { recordGovernmentOutcomeAction } from "@/actions/experience-outcome";
+import { GOVERNMENT_SYSTEMS, OUTCOME_KINDS } from "@/lib/experience/outcomes";
 
 export function ExperienceForm({ experiences }: { experiences: string }) {
   return (
@@ -48,5 +51,85 @@ export function PastCaseForm() {
       </div>
       <div className="mt-3"><SubmitButton>Add past case</SubmitButton></div>
     </ActionForm>
+  );
+}
+
+export function InstitutionalExperienceForms() {
+  return (
+    <div className="grid gap-5 lg:grid-cols-2">
+      <ActionForm
+        action={recordConsultantExperienceCorrectionAction}
+        successMessage="De-identified correction candidate recorded."
+      >
+        <h3 className="mb-2 text-sm font-semibold">Correct a reasoning pattern</h3>
+        <p className="mb-3 text-xs text-slate-500">
+          Use institutional keys only. Do not enter names, account numbers, or
+          client narratives.
+        </p>
+        <div className="space-y-3">
+          <Field label="Assigned Situation ID">
+            <input name="situationId" required className={inputClass} />
+          </Field>
+          <input type="hidden" name="failure_type" value="premature_clarification" />
+          <Field label="Incorrect key">
+            <input name="incorrect_key" required defaultValue="full_form_433_package" className={inputClass} />
+          </Field>
+          <Field label="Preferred key">
+            <input name="preferred_key" required defaultValue="ability_to_pay" className={inputClass} />
+          </Field>
+          <Field label="Reason key">
+            <input name="note_key" required defaultValue="ask_payment_capacity_first" className={inputClass} />
+          </Field>
+          <SubmitButton>Record correction</SubmitButton>
+        </div>
+      </ActionForm>
+
+      <ActionForm
+        action={recordGovernmentOutcomeAction}
+        successMessage="Authority-checked outcome candidate recorded."
+      >
+        <h3 className="mb-2 text-sm font-semibold">Record a tax outcome</h3>
+        <p className="mb-3 text-xs text-slate-500">
+          Outcomes are historical experience, not law. Cite an institutional
+          IRS, state DOR, or Tax Court authority key.
+        </p>
+        <div className="space-y-3">
+          <Field label="Assigned Situation ID">
+            <input name="situationId" required className={inputClass} />
+          </Field>
+          <Field label="Outcome">
+            <select name="outcome_kind" className={inputClass}>
+              {OUTCOME_KINDS.map((kind) => (
+                <option key={kind} value={kind}>{kind.replaceAll("_", " ")}</option>
+              ))}
+            </select>
+          </Field>
+          <Field label="Government system">
+            <select name="government_system" className={inputClass}>
+              {GOVERNMENT_SYSTEMS.map((system) => (
+                <option key={system} value={system}>{system.replaceAll("_", " ")}</option>
+              ))}
+            </select>
+          </Field>
+          <Field label="Form or notice key">
+            <input name="form_or_notice_key" required defaultValue="cp503" className={inputClass} />
+          </Field>
+          <Field label="Authority keys" hint="Comma-separated institutional catalog keys.">
+            <input name="authority_keys" required defaultValue="irs_collection_process" className={inputClass} />
+          </Field>
+          <Field label="Authority publisher">
+            <select name="authority_publisher" className={inputClass}>
+              <option value="IRS">IRS</option>
+              <option value="STATE_DOR">State DOR</option>
+              <option value="TAX_COURT">Tax Court</option>
+            </select>
+          </Field>
+          <Field label="Outcome note key">
+            <input name="note_key" required defaultValue="notice_resolved" className={inputClass} />
+          </Field>
+          <SubmitButton>Record outcome</SubmitButton>
+        </div>
+      </ActionForm>
+    </div>
   );
 }

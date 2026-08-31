@@ -9,7 +9,15 @@ export function buildNeedToKnow(opts: {
   const text = opts.message;
   const items: NeedToKnowItem[] = [];
 
-  const knownAbilityToPay = /\b(can'?t pay|cannot pay|can pay|payment plan|installment|hardship)\b/i.test(text);
+  const uncertainAbilityToPay =
+    /\b(not sure|unsure|don'?t know|uncertain).{0,35}\b(pay|afford|monthly)\b|\bmaybe.{0,20}(pay|afford)\b/i.test(
+      text,
+    );
+  const knownAbilityToPay =
+    !uncertainAbilityToPay &&
+    /\b(can'?t pay|cannot pay|unable to pay|can pay|payment plan|installment|hardship)\b/i.test(
+      text,
+    );
   const knownNoticeCode = /\b(cp\s?-?\d{3,4}|lt\s?-?\d+|notice\s+(cp|lt)\s?-?\d+)\b/i.test(text);
   const knownTaxYear = /\b(20\d{2}|tax year|ty\s*20\d{2})\b/i.test(text);
 
