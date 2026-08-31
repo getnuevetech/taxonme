@@ -37,5 +37,4 @@ export { detectGovernmentMatter } from "./government-matter";
 export { buildLearningEvent, assertNoPrematureSchemaAsk } from "./learning-events";
 export { composeAssistantReply, composeAssistantView, decisionFocusLabel } from "./assistant-composer";
 export type { AssistantViewSection } from "./assistant-composer";
-export type { AssistantViewSection } from "./assistant-composer";
 export { canonicalizeResponseMode, invokesCaseEngine } from "./types";
