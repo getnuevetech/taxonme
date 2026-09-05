@@ -293,6 +293,8 @@ Waves 0–7 port the Imm engineering posture. Remaining product risk is **scenar
 | **A** | Goal provenance; fact-based consensus; omit unsupported modules | Honesty under uncertainty (generalizes to all thin intakes). Charter: `docs/v5.1/PACKAGE-A-EVIDENCE-PROPORTIONAL.md`. Gate: `npm run test:package-a`. |
 | **B** | Dynamic next ask; evidence-gap docs; authority timing/freshness | Next step + rules adapt to *this* matter. Charter: `docs/v5.1/PACKAGE-B-DYNAMIC-EVIDENCE.md`. Gate: `npm run test:package-b`. |
 | **C** | Approved-analysis path; real completion states; readiness; paywall safety | Actions and gating stay trustworthy across scenarios. Charter: `docs/v5.1/PACKAGE-C-PATH-PAYWALL.md`. Gate: `npm run test:package-c`. |
+| **D** | Wire V5.1 approval gate (fail closed) | Unsafe presentation cannot persist. Charter: `docs/v5.1/PACKAGE-D-APPROVAL-GATE-WIRE.md`. Gate: `npm run test:package-d`. |
+| **E** | Evidence-proportional UI (empty module = nothing) | Thin intakes stay short. Charter: `docs/v5.1/PACKAGE-E-PROPORTIONAL-UI.md`. Gate: `npm run test:package-e`. |
 
 These packages **increase** dynamic capability by retiring static templates; they do not narrow TaxOnMe to one demo case.
 

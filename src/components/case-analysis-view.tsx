@@ -11,6 +11,14 @@ import { rankPotentialEvidenceSources } from "@/lib/evidence/potential-sources";
 import { groupCustomerUnknowns } from "@/lib/evidence/unknown-groups";
 import { selectVisibleIssues } from "@/lib/issue-visibility";
 import { readinessPresentationMode } from "@/lib/evidence/readiness-core";
+import {
+  documentChecklistLimit,
+  filterPathStepsForDepth,
+  isThinCustomerPresentation,
+  shouldShowAnalysisOutline,
+  shouldShowHowWeReached,
+  shouldShowPathForwardSection,
+} from "@/lib/presentation-depth";
 import Link from "next/link";
 
 export type CaseViewer = { role: "customer" | "consultant" | "admin"; userId: string; fullResults?: boolean };
@@ -129,13 +137,31 @@ export async function CaseAnalysisView({ caseId, viewer }: { caseId: string; vie
     typeof value === "number" ? value.toLocaleString("en-US", { style: "currency", currency: "USD" }) : "—";
 
   // The same intent stated more than once is shown once.
+  const presentationDepth = {
+    hasDocs: documentsInEvidence.length > 0,
+    hasTranscript: c.documents.some((d) => d.docKind === "transcript"),
+    hasNotice: c.documents.some((d) => d.docKind === "notice"),
+    hasAmount: c.issues.some(
+      (i) => i.expectedCents != null || i.differenceCents != null || i.receivedCents != null,
+    ),
+    hasTaxYear: c.issues.some((i) => i.taxYear != null),
+    hasEstablishedPosition: establishedPositions.length > 0,
+    hasTimeline: timelineEntries.length > 0,
+  };
+  const thinPresentation = isThinCustomerPresentation(presentationDepth);
+  const showAnalysisOutline = shouldShowAnalysisOutline(presentationDepth);
+  const showHowWeReached = shouldShowHowWeReached(presentationDepth);
   const seenStepPurpose = new Set<string>();
-  const displayedPathSteps = c.pathSteps.filter((step) => {
-    const purpose = normalizeActionPurpose(`${step.actionKey} ${step.title} ${step.description}`);
-    if (seenStepPurpose.has(purpose)) return false;
-    seenStepPurpose.add(purpose);
-    return true;
-  });
+  const displayedPathSteps = filterPathStepsForDepth(
+    c.pathSteps.filter((step) => {
+      const purpose = normalizeActionPurpose(`${step.actionKey} ${step.title} ${step.description}`);
+      if (seenStepPurpose.has(purpose)) return false;
+      seenStepPurpose.add(purpose);
+      return true;
+    }),
+    presentationDepth,
+  );
+  const showPathForward = shouldShowPathForwardSection(displayedPathSteps.length);
 
   const form9465 = interactive
     ? await db.irsFormTemplate.findFirst({ where: { formNumber: "9465", isPublished: true }, select: { id: true } })
@@ -173,7 +199,7 @@ export async function CaseAnalysisView({ caseId, viewer }: { caseId: string; vie
     ),
     unfiledDominant: c.issues.some((i) => i.issueType === "missing_return"),
     narrativeMentionsNotice: /\b(notice|letter|cp\d+|lt\d+)\b/i.test(narrative),
-  }).map((d) => ({ kind: d.kind, label: d.label, hint: d.hint }));
+  }).map((d) => ({ kind: d.kind, label: d.label, hint: d.hint })).slice(0, documentChecklistLimit(presentationDepth));
 
   const unknownInputs = [
     ...c.unknowns.map((u) => ({ key: u.id, label: u.label, text: u.reason || "" })),
@@ -248,24 +274,22 @@ export async function CaseAnalysisView({ caseId, viewer }: { caseId: string; vie
               </div>
               <h2 className="mt-3 text-xl font-semibold text-slate-900">{textFrom(findingCard.headline) || "Your case at a glance"}</h2>
               {textFrom(findingCard.summary) && <p className="mt-2 text-sm leading-relaxed text-slate-700">{textFrom(findingCard.summary)}</p>}
-              <div className="mt-5 grid gap-4 md:grid-cols-2">
+              <div className={`mt-5 grid gap-4 ${whatWeFoundItems.length > 0 ? "md:grid-cols-2" : ""}`}>
+                {whatWeFoundItems.length > 0 && (
                 <div className="rounded-xl bg-slate-50 p-4">
                   <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">What we know so far</p>
-                  {whatWeFoundItems.length > 0 ? (
-                    <ul className="mt-2 space-y-2 text-sm text-slate-700">
-                      {whatWeFoundItems.map((item, idx) => <li key={idx} className="leading-relaxed">• {item}</li>)}
-                    </ul>
-                  ) : (
-                    <p className="mt-2 text-sm text-slate-500">We are still organizing the facts from your summary and documents.</p>
-                  )}
+                  <ul className="mt-2 space-y-2 text-sm text-slate-700">
+                    {whatWeFoundItems.map((item, idx) => <li key={idx} className="leading-relaxed">• {item}</li>)}
+                  </ul>
                 </div>
+                )}
                 <div className="rounded-xl bg-indigo-50 p-4">
                   <p className="text-xs font-semibold uppercase tracking-wide text-indigo-500">Your next useful step</p>
-                  <p className="mt-2 text-sm font-semibold text-slate-900">{textFrom(nextStepCard?.title) || "Review the findings below"}</p>
-                  <p className="mt-1 text-sm leading-relaxed text-slate-700">{textFrom(nextStepCard?.description) || "Use the checklist and open questions to confirm the facts that matter most."}</p>
+                  <p className="mt-2 text-sm font-semibold text-slate-900">{textFrom(nextStepCard?.title) || (thinPresentation ? "Add IRS account records" : "Review the findings below")}</p>
+                  <p className="mt-1 text-sm leading-relaxed text-slate-700">{textFrom(nextStepCard?.description) || (thinPresentation ? "Upload an Account Transcript or IRS notice so we can show what the IRS currently reports." : "Use the checklist and open questions to confirm the facts that matter most.")}</p>
                 </div>
               </div>
-              {howWeReached && (
+              {showHowWeReached && howWeReached && (
                 <div className="mt-4 rounded-xl border border-slate-200 p-4">
                   <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">How we reached this</p>
                   <div className="mt-3 grid gap-3 text-sm md:grid-cols-2">
@@ -539,7 +563,7 @@ export async function CaseAnalysisView({ caseId, viewer }: { caseId: string; vie
                     </div>
                   )}
 
-                  {outline.length > 0 && (
+                  {showAnalysisOutline && outline.length > 0 && (
                     <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50/60 p-4">
                       <p className="mb-3 text-xs font-bold uppercase tracking-wide text-slate-400">Why TaxOnMe says this</p>
                       <ol className="space-y-3">
@@ -703,6 +727,7 @@ export async function CaseAnalysisView({ caseId, viewer }: { caseId: string; vie
           </section>
         )}
 
+        {showPathForward && (
         <section>
           <div className="mb-3 flex items-center justify-between">
             <h2 className="text-base font-semibold text-slate-900">Path forward</h2>
@@ -769,10 +794,10 @@ export async function CaseAnalysisView({ caseId, viewer }: { caseId: string; vie
                   </div>
                 );
               })}
-              {displayedPathSteps.length === 0 && <p className="p-3 text-sm text-slate-500">Steps appear after analysis completes.</p>}
             </CardBody>
           </Card>
         </section>
+        )}
       </div>
 
       <div className="space-y-6">
@@ -780,11 +805,11 @@ export async function CaseAnalysisView({ caseId, viewer }: { caseId: string; vie
           <CardBody>
             {readinessPresentationMode({
               documentsProvided: c.documents.filter((d) => d.docKind !== "avatar").length,
-              evidentiaryFacts: 0,
-              caseTypeThin:
-                customerFacing &&
-                c.documents.filter((d) => d.docKind !== "avatar").length === 0 &&
-                c.readinessScore < 30,
+              evidentiaryFacts:
+                establishedPositions.length +
+                timelineEntries.length +
+                (presentationDepth.hasAmount ? 1 : 0),
+              caseTypeThin: customerFacing && thinPresentation,
             }) === "checklist" ? (
               <>
                 <h3 className="text-sm font-semibold text-slate-900">Case picture</h3>

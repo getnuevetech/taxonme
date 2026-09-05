@@ -46,7 +46,6 @@ type ThinFindingOpts = {
  */
 export function thinBalanceDueFinding(opts: ThinFindingOpts): Record<string, unknown> {
   const yearLabel = opts.year ? `${opts.year} ` : "";
-  const yearText = opts.year ? String(opts.year) : "the relevant";
   return {
     issue_type: "balance_due",
     item_kind: "missing_info",
@@ -73,22 +72,7 @@ export function thinBalanceDueFinding(opts: ThinFindingOpts): Record<string, unk
     state: opts.guidance.state,
     next_action: opts.guidance.action,
     alternative_action: "Upload an IRS notice if you have one, or use Help me get my transcript.",
-    analysis_outline: [
-      {
-        heading: "Your situation",
-        detail:
-          "You told us you may owe the IRS but do not know the current amount or what to do next. That is enough to start — not enough to recommend a resolution.",
-      },
-      {
-        heading: "What we need",
-        detail: `An IRS Account Transcript for ${yearText} year(s) (or the notice stating the balance) lets us reconstruct what created the balance before evaluating options.`,
-      },
-      { heading: "Your evidence", detail: opts.evidenceLine },
-      {
-        heading: "Your next move",
-        detail:
-          "Upload your Account Transcript or IRS notice. If you have neither, use the transcript help path — do not invent an amount to unlock options.",
-      },
-    ],
+    // Package E: empty outline on thin intake — UI omits "Why TaxOnMe says this".
+    analysis_outline: [],
   };
 }

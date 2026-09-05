@@ -89,6 +89,8 @@ Work packages that enforce this guide (do not treat as “make the app dumber”
 | **A** | Goal provenance; fact-based consensus; omit unsupported modules |
 | **B** | Dynamic next ask; evidence-gap documents; authority timing/freshness; compressed unknowns |
 | **C** | Approved-analysis path; real completion states; readiness honesty; paywall safety |
+| **D** | Wire V5.1 approval gate into orchestrator (fail closed on BLOCK) |
+| **E** | Evidence-proportional UI — empty module = render nothing on thin intake |
 
 Every package must preserve **Pipeline A** (arbitrary IRS/tax questions) and **Pipeline B** (matter engine) as general reasoners — never collapse the product into a single-scenario wizard.
 

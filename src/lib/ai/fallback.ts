@@ -622,12 +622,15 @@ export async function fallbackAnalyze(
     });
   }
   pathSteps = filterResolutionPathSteps(pathSteps, eligibility);
-  pathSteps.push({
-    title: "Confirm the resolution with the IRS",
-    description:
-      "After you've responded or arranged payment, confirm the IRS updated your account (letter or transcript). Mark this done yourself once confirmed.",
-    action_key: "",
-  });
+  // Package E: only ask to "confirm resolution" after something resolvable exists.
+  if (eligibility.installment || eligibility.penaltyRelief || noticeCodes.length > 0 || evidenceSnapshot.hasAmount) {
+    pathSteps.push({
+      title: "Confirm the resolution with the IRS",
+      description:
+        "After you've responded or arranged payment, confirm the IRS updated your account (letter or transcript). Mark this done yourself once confirmed.",
+      action_key: "",
+    });
+  }
 
   const goalFacts = preserveUserReportedGoal(goal, { user_goal: goal });
   const facts: Json = {
