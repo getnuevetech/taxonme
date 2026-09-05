@@ -13,6 +13,13 @@ import {
   resolutionEligibility,
   thinEvidencePathSteps,
 } from "../path-from-analysis";
+import {
+  applyApprovalGateFailClosed,
+  approvalDocsFromCaseDocs,
+  buildOrchestratorGateInput,
+  customerFacingTextFromOutputs,
+} from "../approval-gate-apply";
+import { buildFactLedger } from "../evidence/fact-ledger";
 import type { EvidenceSnapshot } from "./evidence-proportional";
 import {
   canAttemptStep,
@@ -805,6 +812,7 @@ export async function runCaseAnalysis(caseId: string, opts?: { trigger?: string;
 
   // Layer 5 presentation: a single AI converts internal analysis to structured
   // data; the UI renders it deterministically. Falls back to rule-based output.
+  // Presentation is persisted only after the V5.1 approval gate (Package D).
   let presentation: Json | null = null;
   const priorPresentation = typeof priorSnapshot?.presentation === "object" && priorSnapshot.presentation !== null
     ? priorSnapshot.presentation as Json
@@ -821,21 +829,14 @@ export async function runCaseAnalysis(caseId: string, opts?: { trigger?: string;
       }),
     });
     const p = presenterOut.stepOutputs.find((o) => o.data)?.data ?? null;
-    if (p) {
-      await recordPresentationSnapshot({
-        caseId,
-        analysisVersionId: analysisVersion.id,
-        schemaVersion: "3.0",
-        presentation: p,
-      });
-    }
     presentation = normalizePresentation(p);
   } else if (priorPresentation) {
     presentation = normalizePresentation(priorPresentation);
     reusedPipelines.push(STAGE_KEYS.PRESENTER);
   }
-  let issues: Json[] = presentation
-    ? ((presentation.issues as Json[]) ?? [])
+  const presentationCandidate = presentation;
+  let issues: Json[] = presentationCandidate
+    ? ((presentationCandidate.issues as Json[]) ?? [])
     : (fallback ?? (await fallbackAnalyze(c.situation, c.goal, rawDocText, docInfos))).issues;
   const narrativeText = `${c.situation}\n${c.goal}`;
   if (hasUnfiledReturnIntent(narrativeText) && !hasRefundIntent(narrativeText)) {
@@ -845,6 +846,139 @@ export async function runCaseAnalysis(caseId: string, opts?: { trigger?: string;
       const missingReturn = deterministic.issues.find((issue) => String(issue.issue_type ?? "") === "missing_return");
       if (missingReturn) issues.unshift(missingReturn);
     }
+  }
+
+  // Path forward: prefer presentation path → ranked actions → thin evidence stubs.
+  // Never fall through to a static resolution playbook on thin evidence.
+  const pathEvidence: EvidenceSnapshot = {
+    hasDocs: c.documents.length > 0,
+    hasTranscript: c.documents.some((d) => d.docKind === "transcript"),
+    hasAmount: Boolean(
+      (facts as Json).balance_due ||
+        (typeof (facts as Json).expected_refund === "number" && typeof (facts as Json).received_refund === "number"),
+    ),
+    hasTaxYear:
+      issues.some((i) => i.tax_year != null && i.tax_year !== "") ||
+      Boolean((facts as Json).tax_years),
+  };
+  const eligibility = resolutionEligibility(pathEvidence);
+  const thinPath = thinEvidencePathSteps({
+    hasDocs: pathEvidence.hasDocs,
+    hasTranscript: pathEvidence.hasTranscript,
+  });
+  let pathSteps: Json[] = [];
+  if (presentationCandidate?.path_steps && Array.isArray(presentationCandidate.path_steps) && (presentationCandidate.path_steps as Json[]).length) {
+    pathSteps = filterResolutionPathSteps(
+      (presentationCandidate.path_steps as Json[]).map((step) => ({
+        title: String(step.title ?? ""),
+        description: String(step.description ?? ""),
+        action_key: String(step.action_key ?? ""),
+      })),
+      eligibility,
+    ) as unknown as Json[];
+  } else {
+    try {
+      const ranked = buildRankedTaxActions({
+        hasNoticeDeadline: issues.some(
+          (i) =>
+            String(i.issue_type ?? "") === "notice_response" ||
+            String(i.priority ?? "").toLowerCase() === "urgent" ||
+            String(i.state ?? "").toLowerCase() === "urgent",
+        ),
+      });
+      const fromRanked = filterResolutionPathSteps(pathStepsFromRankedActions(ranked), eligibility);
+      pathSteps = (fromRanked.length ? fromRanked : thinPath) as unknown as Json[];
+    } catch {
+      pathSteps = thinPath as unknown as Json[];
+    }
+    if (fallback?.pathSteps?.length && pathSteps.length === 0) {
+      pathSteps = filterResolutionPathSteps(
+        fallback.pathSteps.map((s) => ({
+          title: s.title,
+          description: s.description,
+          action_key: s.action_key,
+        })),
+        eligibility,
+      ) as unknown as Json[];
+    }
+  }
+
+  // Package D — V5.1 approval gate: fail closed on BLOCK before any customer persist.
+  const approvalDocs = approvalDocsFromCaseDocs(c.documents);
+  const gateLedger = buildFactLedger({
+    situation: c.situation,
+    goal: c.goal,
+    documents: c.documents.map((d) => ({
+      id: d.id,
+      fileName: d.fileName,
+      documentType: d.documentType,
+      contentHash: d.contentHash || null,
+      text: documentTextById.get(d.id) ?? storedRawText(d.extractedJson),
+    })),
+  });
+  const customerText = customerFacingTextFromOutputs({
+    presentation: presentationCandidate,
+    issues,
+    pathSteps: pathSteps as { title: string; description: string; action_key: string }[],
+  });
+  const priorGateBlocked =
+    typeof priorSnapshot?.approval_gate === "object" &&
+    priorSnapshot.approval_gate !== null &&
+    (priorSnapshot.approval_gate as Json).gate_result === "BLOCK";
+  // Safe issues for BLOCK are loaded lazily only when the gate fails closed.
+  let safeIssuesForBlock: Json[] = fallback?.issues ?? [];
+  const preGate = applyApprovalGateFailClosed({
+    gateInput: buildOrchestratorGateInput({
+      caseId,
+      analysisVersionId: analysisVersion.id,
+      situation: c.situation,
+      goal: c.goal,
+      documents: approvalDocs,
+      factLedger: gateLedger,
+      customerText,
+      customerOutputStale: Boolean(
+        priorGateBlocked && !shouldRunPresenter && reusedPipelines.includes(STAGE_KEYS.PRESENTER),
+      ),
+    }),
+    presentation: presentationCandidate,
+    issues,
+    pathSteps: pathSteps as { title: string; description: string; action_key: string }[],
+    thinPathSteps: thinPath,
+    safeIssues: safeIssuesForBlock,
+  });
+  let gated = preGate;
+  if (preGate.blocked && safeIssuesForBlock.length === 0) {
+    safeIssuesForBlock = (await fallbackAnalyze(c.situation, c.goal, rawDocText, docInfos)).issues as Json[];
+    gated = {
+      ...preGate,
+      issues: safeIssuesForBlock,
+    };
+  }
+  presentation = gated.presentation;
+  issues = gated.issues;
+  pathSteps = gated.pathSteps as unknown as Json[];
+  const approvalGateAudit = gated.audit;
+
+  if (gated.presentationToStore) {
+    await recordPresentationSnapshot({
+      caseId,
+      analysisVersionId: analysisVersion.id,
+      schemaVersion: gated.blocked ? "3.0-blocked" : "3.0",
+      presentation: gated.presentationToStore,
+    });
+  }
+  if (gated.blocked) {
+    await queueHumanReview({
+      caseId,
+      analysisVersionId: analysisVersion.id,
+      reason: "Approval gate blocked customer presentation",
+      severity: "high",
+      payload: {
+        gate_result: approvalGateAudit.gate_result,
+        rule_ids: approvalGateAudit.rule_ids,
+        reasons: approvalGateAudit.reasons,
+      },
+    });
   }
 
   // Persist issues after successful stage execution so failed targeted runs do
@@ -893,65 +1027,6 @@ export async function runCaseAnalysis(caseId: string, opts?: { trigger?: string;
       },
     });
     issueIds.push(createdIssue.id);
-  }
-
-  // Path forward: prefer presentation path → ranked actions → thin evidence stubs.
-  // Never fall through to a static resolution playbook on thin evidence.
-  const pathEvidence: EvidenceSnapshot = {
-    hasDocs: c.documents.length > 0,
-    hasTranscript: c.documents.some((d) => d.docKind === "transcript"),
-    hasAmount: Boolean(
-      (facts as Json).balance_due ||
-        (typeof (facts as Json).expected_refund === "number" && typeof (facts as Json).received_refund === "number"),
-    ),
-    hasTaxYear:
-      issues.some((i) => i.tax_year != null && i.tax_year !== "") ||
-      Boolean((facts as Json).tax_years),
-  };
-  const eligibility = resolutionEligibility(pathEvidence);
-  let pathSteps: Json[] = [];
-  if (presentation?.path_steps && Array.isArray(presentation.path_steps) && (presentation.path_steps as Json[]).length) {
-    pathSteps = filterResolutionPathSteps(
-      (presentation.path_steps as Json[]).map((step) => ({
-        title: String(step.title ?? ""),
-        description: String(step.description ?? ""),
-        action_key: String(step.action_key ?? ""),
-      })),
-      eligibility,
-    ) as unknown as Json[];
-  } else {
-    try {
-      const ranked = buildRankedTaxActions({
-        hasNoticeDeadline: issues.some(
-          (i) =>
-            String(i.issue_type ?? "") === "notice_response" ||
-            String(i.priority ?? "").toLowerCase() === "urgent" ||
-            String(i.state ?? "").toLowerCase() === "urgent",
-        ),
-      });
-      const fromRanked = filterResolutionPathSteps(pathStepsFromRankedActions(ranked), eligibility);
-      pathSteps = (fromRanked.length
-        ? fromRanked
-        : thinEvidencePathSteps({
-            hasDocs: pathEvidence.hasDocs,
-            hasTranscript: pathEvidence.hasTranscript,
-          })) as unknown as Json[];
-    } catch {
-      pathSteps = thinEvidencePathSteps({
-        hasDocs: pathEvidence.hasDocs,
-        hasTranscript: pathEvidence.hasTranscript,
-      }) as unknown as Json[];
-    }
-    if (fallback?.pathSteps?.length && pathSteps.length === 0) {
-      pathSteps = filterResolutionPathSteps(
-        fallback.pathSteps.map((s) => ({
-          title: s.title,
-          description: s.description,
-          action_key: s.action_key,
-        })),
-        eligibility,
-      ) as unknown as Json[];
-    }
   }
   const pathStepIds: string[] = [];
   for (const [i, step] of pathSteps.entries()) {
@@ -1110,6 +1185,12 @@ export async function runCaseAnalysis(caseId: string, opts?: { trigger?: string;
       documents: documentOut?.merged ?? null,
       analysis: situationMerged,
       presentation,
+      approval_gate: {
+        gate_result: approvalGateAudit.gate_result,
+        rule_ids: approvalGateAudit.rule_ids,
+        reasons: approvalGateAudit.reasons,
+        blocked: gated.blocked,
+      },
       conflicts: displayConflicts,
       human_review: reviewReasons,
     },

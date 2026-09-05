@@ -57,3 +57,4 @@ jobs:
       - run: npm run test:package-a
       - run: npm run test:package-b
       - run: npm run test:package-c
+      - run: npm run test:package-d
