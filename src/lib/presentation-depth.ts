@@ -3,10 +3,12 @@
  * Empty module = render nothing; thin intakes stay short.
  */
 
-import type { EvidenceSnapshot } from "@/lib/ai/evidence-proportional";
-
-export type PresentationDepthInput = EvidenceSnapshot & {
+export type PresentationDepthInput = {
+  hasDocs?: boolean;
+  hasTranscript?: boolean;
   hasNotice?: boolean;
+  hasAmount?: boolean;
+  hasTaxYear?: boolean;
   hasEstablishedPosition?: boolean;
   hasTimeline?: boolean;
 };

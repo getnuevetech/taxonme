@@ -144,6 +144,7 @@ export async function CaseAnalysisView({ caseId, viewer }: { caseId: string; vie
     hasAmount: c.issues.some(
       (i) => i.expectedCents != null || i.differenceCents != null || i.receivedCents != null,
     ),
+    hasTaxYear: c.issues.some((i) => i.taxYear != null),
     hasEstablishedPosition: establishedPositions.length > 0,
     hasTimeline: timelineEntries.length > 0,
   };
