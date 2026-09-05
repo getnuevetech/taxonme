@@ -16,6 +16,7 @@
 2. **Port engines and contracts**, not immigration strings, forms, or fixtures.
 3. Keep / restore TaxOnMe domain under `src/domain` (or equivalent). Re-apply `docs/domain-map.md` in reverse when reading ImmigrationOnMe code.
 4. Do **not** reopen ImmigrationOnMe’s locked Option B architecture for TaxOnMe—**mirror** it with tax analogues (Situation → Prep Plan → Agency Matter).
+5. **Binding product guide:** TaxOnMe must reason **dynamically** over unbounded IRS/tax scenarios (letters, liabilities, benefits, Q&A)—not static one-scenario answers. Read and apply `docs/v5.1/DYNAMIC-IRS-REASONING-GUIDE.md` on every analysis / conversation / presentation / authority change. Depth must be proportional to evidence; empty modules render nothing.
 
 ---
 
@@ -281,9 +282,26 @@ Port `src/lib/experience/*` + admin Pattern Registry UI; replace immigration out
 
 ---
 
+### Post–Wave 7 — Evidence-proportional dynamic intelligence
+
+Waves 0–7 port the Imm engineering posture. Remaining product risk is **scenario-static fallbacks** that invent goals, fake conflicts, fill modules without evidence, and premature resolution paths.
+
+**North star:** help users navigate *any* IRS problem — understand letters/issues, benefits and liabilities — by reasoning with online/IRS authority, not canned playbooks. See `docs/v5.1/DYNAMIC-IRS-REASONING-GUIDE.md`.
+
+| Package | Focus | Intent |
+| --- | --- | --- |
+| **A** | Goal provenance; fact-based consensus; omit unsupported modules | Honesty under uncertainty (generalizes to all thin intakes) |
+| **B** | Dynamic next ask; evidence-gap docs; authority timing/freshness | Next step + rules adapt to *this* matter |
+| **C** | Approved-analysis path; real completion states; readiness; paywall safety | Actions and gating stay trustworthy across scenarios |
+
+These packages **increase** dynamic capability by retiring static templates; they do not narrow TaxOnMe to one demo case.
+
+---
+
 ## 5. Suggested TaxOnMe PR checklist (per wave)
 
 - [ ] Charter under `docs/` (purpose, locks, non-goals, check command)
+- [ ] Aligns with `docs/v5.1/DYNAMIC-IRS-REASONING-GUIDE.md` (no new scenario-static playbooks)
 - [ ] Implementation with domain strings only in `src/domain` / tax copy modules
 - [ ] `scripts/<wave>-check.ts` + npm script; wire into umbrella gate
 - [ ] Seed/migrate if schema changes; Docker entrypoint still migrates
@@ -297,6 +315,7 @@ Port `src/lib/experience/*` + admin Pattern Registry UI; replace immigration out
 | Concern | Paths |
 | --- | --- |
 | Domain map | `docs/domain-map.md` |
+| Dynamic IRS reasoning (binding) | `docs/v5.1/DYNAMIC-IRS-REASONING-GUIDE.md` |
 | Phase S program | `docs/v5.1/PHASE-S-SITUATION-FILING-PLAN-EXECUTION.md` |
 | Billing | `docs/v5.1/PHASE-BILLING-TIER-MATRIX.md`, `src/lib/billing-quotas.ts`, `prisma/seed.ts` |
 | Conversation | `docs/v5.1/PHASE-MINUS1-*.md`, `src/lib/conversation/` |
@@ -331,6 +350,7 @@ TaxOnMe is “optimized like ImmigrationOnMe” when:
 5. Experience learning is de-identified, admin-promoted, L4-only in retrieval, with telemetry—and never live fine-tunes.
 6. Lightsail (or any LB) health-checks **HTTP `/healthz`** successfully.
 7. Every wave has a failing-closed check script on `main`.
+8. The product handles **open-ended** IRS/tax questions and matters dynamically (authority-grounded, evidence-proportional)—not a fixed set of static scenario responses (`DYNAMIC-IRS-REASONING-GUIDE.md`).
 
 ---
 

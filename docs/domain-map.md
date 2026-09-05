@@ -63,3 +63,4 @@ introduced, otherwise tax-named modules).
 4. Evidence claims must trace to a fact, event, knowledge source, or explicit unknown.
 5. Suppress clarifying questions only when the evidence ledger already answers them.
 6. Stay on TaxOnMe’s Next.js major; do not pin Imm’s Next 15 when porting.
+7. Build for **unbounded IRS scenarios** (letters, liabilities, benefits, any user query)—engines + authority retrieval, not static one-scenario answers. See `docs/v5.1/DYNAMIC-IRS-REASONING-GUIDE.md`.
