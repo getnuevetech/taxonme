@@ -58,3 +58,4 @@ jobs:
       - run: npm run test:package-b
       - run: npm run test:package-c
       - run: npm run test:package-d
+      - run: npm run test:package-e
