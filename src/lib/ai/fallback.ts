@@ -8,6 +8,8 @@ import {
   type EvidenceSnapshot,
 } from "./evidence-proportional";
 import { preserveUserReportedGoal } from "./goal-provenance";
+import { shouldRetrieveInstallmentThresholds } from "../authority-gates";
+import { neutralPenaltyReliefCopy } from "../authority-gates";
 
 // Deterministic (no-AI) case analyzer. Used when no AI provider is configured
 // yet, and as the safety net if all providers fail. It performs real
@@ -234,7 +236,7 @@ export async function fallbackAnalyze(
     const yr = year ?? "the year in question";
     if (!hasDocs) {
       return {
-        what: `To verify the numbers we need two specific documents: your IRS Account Transcript for ${yr} (downloads instantly from your IRS online account) and your tax return (Form 1040) for ${yr}.`,
+        what: `To verify what the IRS currently shows, start with your IRS Account Transcript for ${yr} (usually instant from your IRS online account) or the IRS notice stating the balance.`,
         action: "UPLOAD_DOCUMENTS",
         state: "info_needed",
       };
@@ -415,7 +417,9 @@ export async function fallbackAnalyze(
       alternative_action: "Have a TaxOnMe professional evaluate the resolution options with you.",
       analysis_outline: [
         { heading: "Your situation", detail: `${balanceDue.fromDocument ? "Your uploaded records show" : "You reported"} ${usd(balanceDue.amount)} owed to the IRS${primaryYear ? ` for ${yearText}` : ""}.` },
-        { heading: "Tax rules", detail: `Rule: an IRS balance is made of tax + penalties + interest, and each part is treated differently. Why it matters to your case: installment agreements are defined by law (IRC §6159) with streamlined thresholds, some penalties may be eligible for relief depending on your compliance history, and interest follows the balance — so confirming the composition can change both the amount and the options.`, source: "IRC §6159 · Form 9465 instructions · IRM 20.1.1 (penalty relief)" },
+        { heading: "Tax rules", detail: shouldRetrieveInstallmentThresholds({ hasDocs, hasTranscript, hasAmount: true, hasTaxYear: Boolean(primaryYear) })
+          ? `Rule: an IRS balance is made of tax + penalties + interest, and each part is treated differently. Why it matters to your case: installment agreements under IRC §6159 have amount-based options (including common streamlined thresholds), and some penalties may be eligible for relief depending on period and history — confirm composition before choosing a path.`
+          : `Rule: an IRS balance is made of tax + penalties + interest, and each part is treated differently. Confirm the amount and composition before sizing any resolution option.`, source: "IRC §6159 · Form 9465 instructions · IRM 20.1.1 (penalty relief)" },
         { heading: "Your evidence", detail: evidenceLine() },
         { heading: "Our conclusion", detail: `The balance is ${balanceDue.fromDocument ? "supported by your records" : "reported but not yet documented"}. Once the Account Transcript and any IRS notice confirm the amount and its composition, TaxOnMe can evaluate the legitimate resolution paths for your circumstances.` },
         { heading: "Your next move", detail: hasTranscript ? `Your transcript is on file — confirm the tax/penalty/interest split from its codes, then use the Form 9465 wizard to prepare a payment plan request if needed.` : `Add your ${yearText} Account Transcript and the IRS notice showing the balance — together they confirm the exact amount so the resolution can be sized correctly.` },
@@ -486,8 +490,7 @@ export async function fallbackAnalyze(
       evidence_strength: hasTranscript ? "moderate" : "limited",
       tax_year: primaryYear,
       title: "Penalty relief may be available",
-      what_we_know:
-        "Your records indicate penalties or interest. Some penalties may qualify for administrative or reasonable-cause relief depending on the tax period and compliance history. We'll evaluate the correct current relief path after the periods and penalty types are confirmed.",
+      what_we_know: neutralPenaltyReliefCopy(primaryYear),
       our_conclusion:
         "Relief eligibility can't be assessed until the assessed penalties and your compliance history are established — both appear on your Account Transcript.",
       still_unclear: [

@@ -138,13 +138,13 @@ const OIC: PrepPlanContent = {
 
 const PENALTY: PrepPlanContent = {
   selectedPathway: "penalty_abatement",
-  pathwayLabel: "Penalty abatement / first-time abatement",
+  pathwayLabel: "Penalty abatement / administrative relief",
   eligibility: {
     summary:
-      "You may request removal of certain failure-to-file or failure-to-pay penalties when you qualify for first-time abatement or reasonable cause. Tax itself usually still remains due.",
+      "You may request removal of certain failure-to-file or failure-to-pay penalties when you qualify for administrative relief or reasonable cause for the applicable tax period. Tax itself usually still remains due.",
     requirements: [
       "Identify which penalties appear on the transcript",
-      "Confirm first-time abatement eligibility or document reasonable cause",
+      "Confirm the tax periods, then evaluate administrative vs reasonable-cause relief under current IRS rules for those periods",
       "File a written request or use IRS procedures that apply to your notice",
     ],
   },
@@ -159,18 +159,18 @@ const PENALTY: PrepPlanContent = {
   ],
   evidenceNeeds: [
     "Account transcript showing penalty codes",
-    "Proof supporting first-time or reasonable-cause facts",
+    "Proof supporting administrative or reasonable-cause facts for the periods involved",
     "Copy of the notice assessing the penalty",
   ],
   sequence: [
     "Confirm penalty types and amounts on transcript",
-    "Choose first-time vs reasonable-cause path",
+    "Choose the relief path that matches the tax period and facts",
     "Draft request / Form 843",
     "Submit; track IRS response as a Case if a matter is opened",
   ],
   preparationStatus: "draft",
   consultantHint: "Connect with a tax professional when penalties are large or mixed with collection action.",
-  selfFileHint: "Follow current IRS penalty relief guidance for the specific penalty codes on your transcript.",
+  selfFileHint: "Follow current IRS penalty relief guidance for the specific penalty codes and tax years on your transcript.",
 };
 
 const GENERIC: PrepPlanContent = {
