@@ -1,23 +1,53 @@
 import "server-only";
 import { db } from "./db";
+import {
+  reviewAnalysisSatisfied,
+  uploadDocumentsSatisfied,
+  VERIFIABLE_ACTION_COPY,
+} from "./case-progress-core";
+import { rankPotentialEvidenceSources } from "./evidence/potential-sources";
 
 // Evidence-based path-step verification. Steps with a recognized action key
 // are completed only when the system can actually observe the required
 // artifact — never by an unchecked checkbox.
 
-export const VERIFIABLE_ACTIONS: Record<string, string> = {
-  UPLOAD_DOCUMENTS: "Completes when your case has at least one document",
-  GET_TRANSCRIPT: "Completes when an IRS transcript is uploaded to your case",
-  GET_ACCOUNT_TRANSCRIPT: "Completes when an IRS transcript is uploaded to your case",
-  REVIEW_ANALYSIS: "Completes when the analysis has been re-run after documents were added",
-  RERUN_ANALYSIS: "Completes when the analysis has been re-run after documents were added",
-  DRAFT_LETTER: "Completes when a response letter has been drafted",
-  COMPLETE_FORM_9465: "Completes when the Form 9465 wizard is finished",
-  ADD_DEADLINE: "Completes when a deadline is tracked for this case",
-};
+export const VERIFIABLE_ACTIONS: Record<string, string> = { ...VERIFIABLE_ACTION_COPY };
 
 export function isVerifiable(actionKey: string): boolean {
   return actionKey.toUpperCase() in VERIFIABLE_ACTIONS;
+}
+
+async function requiredUploadKinds(caseId: string): Promise<string[]> {
+  const c = await db.case.findUnique({
+    where: { id: caseId },
+    include: { issues: true, documents: { where: { deletedAt: null } } },
+  });
+  if (!c) return ["transcript", "notice"];
+  const haveKinds = new Set(c.documents.map((d) => d.docKind));
+  const ranked = rankPotentialEvidenceSources({
+    issueTypes: c.issues.map((i) => i.issueType),
+    hasTranscript: false,
+    hasNotice: false,
+    hasReturn: haveKinds.has("1040"),
+    hasIncomeDocs: haveKinds.has("w2") || haveKinds.has("1099"),
+    taxYear: c.issues.find((i) => i.taxYear)?.taxYear ?? null,
+    amountKnown: c.issues.some(
+      (i) => i.expectedCents != null || i.differenceCents != null || i.receivedCents != null,
+    ),
+    unfiledDominant: c.issues.some((i) => i.issueType === "missing_return"),
+    narrativeMentionsNotice: /\b(notice|letter|cp\d+|lt\d+)\b/i.test(`${c.situation}\n${c.goal}`),
+  });
+  const kinds = ranked.map((r) => r.kind);
+  return kinds.length ? kinds : ["transcript", "notice"];
+}
+
+async function latestAuditStatus(caseId: string): Promise<string | null> {
+  const row = await db.evidenceAudit.findFirst({
+    where: { caseId },
+    orderBy: { createdAt: "desc" },
+    select: { status: true },
+  });
+  return row?.status ?? null;
 }
 
 async function stepSatisfied(
@@ -31,10 +61,12 @@ async function stepSatisfied(
   const key = actionKey.toUpperCase();
   switch (key) {
     case "UPLOAD_DOCUMENTS": {
-      const count = await db.document.count({
-        where: { caseId: ctx.caseId, deletedAt: null, docKind: { not: "avatar" } },
+      const docs = await db.document.findMany({
+        where: { caseId: ctx.caseId, deletedAt: null },
+        select: { docKind: true, documentType: true },
       });
-      return count > 0;
+      const required = await requiredUploadKinds(ctx.caseId);
+      return uploadDocumentsSatisfied(docs, required);
     }
     case "GET_TRANSCRIPT":
     case "GET_ACCOUNT_TRANSCRIPT": {
@@ -45,7 +77,6 @@ async function stepSatisfied(
     }
     case "REVIEW_ANALYSIS":
     case "RERUN_ANALYSIS": {
-      // Satisfied when a completed analysis run started after the newest document upload.
       const newestDoc = await db.document.findFirst({
         where: { caseId: ctx.caseId, deletedAt: null },
         orderBy: { uploadedAt: "desc" },
@@ -54,7 +85,11 @@ async function stepSatisfied(
       const runAfter = await db.analysisRun.count({
         where: { caseId: ctx.caseId, status: "complete", startedAt: { gte: newestDoc.uploadedAt } },
       });
-      return runAfter > 0;
+      const auditStatus = await latestAuditStatus(ctx.caseId);
+      return reviewAnalysisSatisfied({
+        hasRunAfterNewestDoc: runAfter > 0,
+        auditStatus,
+      });
     }
     case "DRAFT_LETTER": {
       if (!ctx.userId) return false;
@@ -112,7 +147,6 @@ export async function verifyCaseProgress(caseId: string): Promise<number> {
     }
   }
 
-  // Recompute which step is "current": the first one not done.
   const steps = await db.pathStep.findMany({ where: { caseId }, orderBy: { sortOrder: "asc" } });
   let currentAssigned = false;
   for (const step of steps) {

@@ -3,13 +3,17 @@ import { db } from "../db";
 import {
   shouldEmitExplanations,
   shouldEmitPenaltyReliefIssue,
-  shouldEmitPrematureResolutionPath,
   thinBalanceDueFinding,
   type EvidenceSnapshot,
 } from "./evidence-proportional";
 import { preserveUserReportedGoal } from "./goal-provenance";
 import { shouldRetrieveInstallmentThresholds } from "../authority-gates";
 import { neutralPenaltyReliefCopy } from "../authority-gates";
+import {
+  filterResolutionPathSteps,
+  resolutionEligibility,
+  thinEvidencePathSteps,
+} from "../path-from-analysis";
 
 // Deterministic (no-AI) case analyzer. Used when no AI provider is configured
 // yet, and as the safety net if all providers fail. It performs real
@@ -584,63 +588,44 @@ export async function fallbackAnalyze(
     });
   }
 
-  // ---------- Path forward ----------
+  // ---------- Path forward (Package C: evidence path only; no static resolution playbook) ----------
   const unfiledIntent = hasUnfiledReturnIntent(lower);
-  const pathSteps: FallbackResult["pathSteps"] = [];
-  pathSteps.push({
-    title: hasDocs ? `Add any remaining documents (${docs.length} on file)` : "Add your supporting documents",
-    description: hasDocs
-      ? "You've started your evidence file — add anything still missing (see the 'Documents we still need' checklist)."
-      : unfiledIntent
-        ? "Upload any IRS notices plus W-2, 1099, or income records you still have. Completes automatically when your case has documents."
-        : "Upload the IRS notice, your tax return, and any W-2/1099s. Completes automatically when your case has documents.",
-    action_key: "UPLOAD_DOCUMENTS",
-  });
-  if (!hasTranscript) {
-    pathSteps.push({
-      title: unfiledIntent ? "Get your IRS Wage & Income Transcript" : "Get your IRS account transcript",
-      description: unfiledIntent
-        ? "Your Wage & Income Transcript lists W-2s and 1099s the IRS received, which helps reconstruct unfiled years. Completes when a transcript is in your case documents."
-        : "Your transcript shows exactly what the IRS has on file — account balances, payments, notices, adjustments, and refund transactions. Completes when a transcript is in your case documents.",
-      action_key: "GET_TRANSCRIPT",
-    });
-  }
-  pathSteps.push({
-    title: "Confirm the analysis against your documents",
-    description: "Once documents are in, the analysis refreshes automatically so every amount is verified against them.",
-    action_key: "REVIEW_ANALYSIS",
+  const eligibility = resolutionEligibility(evidenceSnapshot);
+  let pathSteps: FallbackResult["pathSteps"] = thinEvidencePathSteps({
+    hasDocs,
+    hasTranscript,
+    unfiledDominant: unfiledIntent,
   });
   if (noticeCodes.length > 0) {
     pathSteps.push({
       title: "Draft your response letter",
-      description: "If you disagree with a notice, the IRS expects a written response with your supporting documents. Generate a professional reply, edit it, and mail it before the deadline. Completes when a letter exists.",
+      description:
+        "If you disagree with a notice, the IRS expects a written response with supporting documents. Drafting a letter is not the same as IRS acceptance.",
       action_key: "DRAFT_LETTER",
     });
   }
-  // Package A: no premature penalty-relief or installment path without an established amount.
-  if (
-    shouldEmitPenaltyReliefIssue(evidenceSnapshot, /(penalt|interest)/.test(lower)) &&
-    shouldEmitPrematureResolutionPath(evidenceSnapshot)
-  ) {
+  // Resolution steps only when eligibility facts exist (still not a static regex playbook).
+  if (eligibility.penaltyRelief && shouldEmitPenaltyReliefIssue(evidenceSnapshot, /(penalt|interest)/.test(lower))) {
     pathSteps.push({
       title: "Evaluate penalty relief options",
-      description: "After the tax periods and assessed penalties are confirmed, determine whether administrative or reasonable-cause relief applies — then draft only if appropriate.",
+      description:
+        "After tax periods and assessed penalties are confirmed, determine whether administrative or reasonable-cause relief applies.",
       action_key: "DRAFT_LETTER",
     });
   }
-  if (
-    (/(payment plan|installment|can'?t pay|afford)/.test(lower) || balanceDue) &&
-    shouldEmitPrematureResolutionPath(evidenceSnapshot)
-  ) {
+  if (eligibility.installment && (/(payment plan|installment|can'?t pay|afford)/.test(lower) || balanceDue)) {
     pathSteps.push({
       title: "Prepare a payment plan request (Form 9465)",
-      description: "Use the guided form wizard to prepare an installment agreement request. Mail it with your notice's response slip, or apply online for faster setup. Completes when the form is finished.",
+      description:
+        "Use the guided form wizard once the balance is established. Completing the wizard is not IRS approval of an agreement.",
       action_key: "COMPLETE_FORM_9465",
     });
   }
+  pathSteps = filterResolutionPathSteps(pathSteps, eligibility);
   pathSteps.push({
     title: "Confirm the resolution with the IRS",
-    description: "After you've responded or arranged payment, confirm the IRS updated your account (letter or transcript). Mark this done yourself once confirmed.",
+    description:
+      "After you've responded or arranged payment, confirm the IRS updated your account (letter or transcript). Mark this done yourself once confirmed.",
     action_key: "",
   });
 

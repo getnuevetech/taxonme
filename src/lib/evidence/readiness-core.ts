@@ -35,6 +35,22 @@ export type ReadinessFact = { provenance: string };
 
 export type ReadinessUnknown = { status: string; label: string };
 
+/** CaseUnknown uses ACTIVE in schema; OPEN kept as legacy alias. */
+export function isOpenUnknownStatus(status: string): boolean {
+  return status === "ACTIVE" || status === "OPEN" || status === "AWAITING_CUSTOMER";
+}
+
+export function readinessPresentationMode(input: {
+  documentsProvided: number;
+  evidentiaryFacts: number;
+  caseTypeThin: boolean;
+}): "checklist" | "percent" {
+  if (input.caseTypeThin && input.documentsProvided === 0 && input.evidentiaryFacts === 0) {
+    return "checklist";
+  }
+  return "percent";
+}
+
 function pct(value: number): number {
   return Math.max(0, Math.min(100, Math.round(value)));
 }
@@ -58,7 +74,7 @@ export function computeReadinessDimensions(input: {
   // not a processing failure — it reports as complete-on-our-side.
   const evidenceProcessed = documentsProvided === 0 ? 100 : pct((documentsRead / documentsProvided) * 100);
 
-  const openUnknowns = input.unknowns.filter((u) => u.status === "OPEN" || u.status === "AWAITING_CUSTOMER").length;
+  const openUnknowns = input.unknowns.filter((u) => isOpenUnknownStatus(u.status)).length;
   const resolvedUnknowns = input.unknowns.length - openUnknowns;
   const evidentiaryFacts = input.facts.filter((f) => isEvidentiaryProvenance(f.provenance)).length;
 
@@ -83,7 +99,7 @@ export function computeReadinessDimensions(input: {
   }
 
   const customerBlockers = input.unknowns
-    .filter((u) => u.status === "AWAITING_CUSTOMER")
+    .filter((u) => u.status === "AWAITING_CUSTOMER" || u.status === "ACTIVE" || u.status === "OPEN")
     .map((u) => u.label)
     .filter(Boolean);
 
