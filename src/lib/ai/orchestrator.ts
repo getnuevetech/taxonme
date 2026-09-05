@@ -904,7 +904,9 @@ export async function runCaseAnalysis(caseId: string, opts?: { trigger?: string;
       (facts as Json).balance_due ||
         (typeof (facts as Json).expected_refund === "number" && typeof (facts as Json).received_refund === "number"),
     ),
-    hasTaxYear: c.issues.some((i) => i.taxYear != null) || Boolean((facts as Json).tax_years),
+    hasTaxYear:
+      issues.some((i) => i.tax_year != null && i.tax_year !== "") ||
+      Boolean((facts as Json).tax_years),
   };
   const eligibility = resolutionEligibility(pathEvidence);
   let pathSteps: Json[] = [];
@@ -920,7 +922,12 @@ export async function runCaseAnalysis(caseId: string, opts?: { trigger?: string;
   } else {
     try {
       const ranked = buildRankedTaxActions({
-        hasNoticeDeadline: c.issues.some((i) => i.issueType === "notice_response" || i.priority === "urgent"),
+        hasNoticeDeadline: issues.some(
+          (i) =>
+            String(i.issue_type ?? "") === "notice_response" ||
+            String(i.priority ?? "").toLowerCase() === "urgent" ||
+            String(i.state ?? "").toLowerCase() === "urgent",
+        ),
       });
       const fromRanked = filterResolutionPathSteps(pathStepsFromRankedActions(ranked), eligibility);
       pathSteps = (fromRanked.length
