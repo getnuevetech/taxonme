@@ -42,7 +42,8 @@ export function normalizeConcept(raw: string): NormalizedConcept {
         raw_value: raw,
         normalized_category: option.category,
         normalized_meaning: option.meaning,
-        material_difference: false,
+        // Goal-category matches are material when compared across categories.
+        material_difference: true,
       };
     }
   }
@@ -55,7 +56,13 @@ export function normalizeConcept(raw: string): NormalizedConcept {
 }
 
 export function conceptsConflict(a: NormalizedConcept, b: NormalizedConcept): boolean {
-  return a.normalized_category !== b.normalized_category && (a.material_difference || b.material_difference);
+  if (a.normalized_category === b.normalized_category) return false;
+  // Unclassified vs classified is incomplete information, not a conflict.
+  if (a.normalized_category === "UNCLASSIFIED" || b.normalized_category === "UNCLASSIFIED") {
+    return false;
+  }
+  // Different classified goal categories (e.g. debt resolution vs refund) conflict.
+  return a.material_difference || b.material_difference;
 }
 
 export function classifyInformationCondition(input: {

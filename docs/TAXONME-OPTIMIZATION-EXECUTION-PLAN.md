@@ -290,7 +290,7 @@ Waves 0–7 port the Imm engineering posture. Remaining product risk is **scenar
 
 | Package | Focus | Intent |
 | --- | --- | --- |
-| **A** | Goal provenance; fact-based consensus; omit unsupported modules | Honesty under uncertainty (generalizes to all thin intakes) |
+| **A** | Goal provenance; fact-based consensus; omit unsupported modules | Honesty under uncertainty (generalizes to all thin intakes). Charter: `docs/v5.1/PACKAGE-A-EVIDENCE-PROPORTIONAL.md`. Gate: `npm run test:package-a`. |
 | **B** | Dynamic next ask; evidence-gap docs; authority timing/freshness | Next step + rules adapt to *this* matter |
 | **C** | Approved-analysis path; real completion states; readiness; paywall safety | Actions and gating stay trustworthy across scenarios |
 
