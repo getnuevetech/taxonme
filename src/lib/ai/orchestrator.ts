@@ -1,9 +1,11 @@
 import "server-only";
 import { db } from "../db";
 import { callProvider, extractJson, type ChatMessage, type MediaAttachment } from "./adapters";
-import { mergeStructured, type Conflict } from "./consensus";
+import { mergeStructured, PROSE_CONSENSUS_KEYS, type Conflict } from "./consensus";
 import { computeReadinessDimensions } from "../evidence/readiness-core";
 import { fallbackAnalyze } from "./fallback";
+import { preserveUserReportedGoal } from "./goal-provenance";
+import { isMaterialDifference } from "../case-semantics";
 import {
   canAttemptStep,
   emptyStageBudget,
@@ -720,7 +722,10 @@ export async function runCaseAnalysis(caseId: string, opts?: { trigger?: string;
   }));
   const fallback = upstreamUsedAi || hasReusableUpstream ? null : await fallbackAnalyze(c.situation, c.goal, rawDocText, docInfos);
   const facts = upstreamUsedAi || hasReusableUpstream ? summaryOut.merged : fallback!.facts;
-  const goalFacts = upstreamUsedAi || hasReusableUpstream ? goalOut.merged : { user_goal: c.goal };
+  const goalFacts = preserveUserReportedGoal(
+    c.goal,
+    upstreamUsedAi || hasReusableUpstream ? goalOut.merged : { user_goal: c.goal },
+  );
 
   // Layer 4: situation analysis grounded in the IRS knowledge base.
   const authority = await retrieveAuthorityForCase(caseId, `${c.situation} ${c.goal} ${docText}`);
@@ -937,14 +942,16 @@ export async function runCaseAnalysis(caseId: string, opts?: { trigger?: string;
 
   // Information conflicts: contradictions between the customer's narrative and
   // their documents (fallback engine) or between analysis engines (AI path).
-  // Surfaced to the customer as INFORMATION CONFLICT cards — never guessed away.
+  // Package A: drop prose-only model disagreements from customer display.
   const displayConflicts = fallback
     ? fallback.conflicts
-    : allConflicts.map((cf) => ({
-        topic: cf.field.replace(/_/g, " "),
-        description: `Our analysis sources disagree on "${cf.field.replace(/_/g, " ")}": ${cf.values.map((v) => String(v.value)).join(" vs. ")}.`,
-        resolution: "Flagged for verification instead of guessing — your Account Transcript or the underlying document settles it.",
-      }));
+    : allConflicts
+        .filter((cf) => isMaterialDifference(cf.field) && !PROSE_CONSENSUS_KEYS.has(cf.field))
+        .map((cf) => ({
+          topic: cf.field.replace(/_/g, " "),
+          description: `Our analysis sources disagree on "${cf.field.replace(/_/g, " ")}": ${cf.values.map((v) => String(v.value)).join(" vs. ")}.`,
+          resolution: "Flagged for verification instead of guessing — your Account Transcript or the underlying document settles it.",
+        }));
 
   // Consultant recommendation → notify admins.
   const needsConsultant =

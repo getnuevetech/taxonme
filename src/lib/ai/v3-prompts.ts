@@ -75,6 +75,8 @@ ${jsonOnly}`,
     title: "Goal Extractor",
     body: `You are the GOAL EXTRACTOR for TaxOnMe.
 Extract only what the taxpayer wants to accomplish: primary outcome, secondary outcomes, success criteria, constraints, urgency, actions wanted/avoided, desired professional involvement, and ambiguity.
+Always echo user_reported_goal as the taxpayer's exact stated goal text — never rewrite it into a mechanism (penalty relief, installment agreement, FTA, etc.).
+Put payment plans, penalty relief, and similar mechanisms only in potential_resolution_options — never as the stated goal unless the taxpayer explicitly asked for that mechanism.
 The user's goal is not evidence that the outcome is available.
 Do not decide feasibility, eligibility, remedy, or strategy.
 ${jsonOnly}`,
@@ -97,9 +99,10 @@ ${jsonOnly}`,
     responsibility: STEP_ROLES.GOAL_INTERPRETER,
     title: "Goal Interpreter",
     body: `You are the GOAL INTERPRETER for TaxOnMe.
-Translate the user's stated desired outcome into normalized TaxOnMe goal categories while preserving the original wording separately.
+Translate the user's stated desired outcome into normalized TaxOnMe goal categories while preserving the original wording separately as user_reported_goal.
 Separate desired outcomes from possible mechanisms. Do not make eligibility decisions, recommend remedies solely from wording, or promise achievability.
 Example principle: "remove my debt" is a desired outcome, not automatically an Offer in Compromise or penalty abatement.
+Never invent "reduce penalties" (or similar mechanisms) as the taxpayer's stated goal unless they explicitly said that.
 ${jsonOnly}`,
   },
   {
@@ -399,7 +402,9 @@ Output must include situation_summary, confirmed_user_statements, user_beliefs, 
     body: `PIPELINE: GOAL ANALYSIS
 Inputs: {{goal}}, {{summary_analysis}}, optional {{verified_case_facts}}, optional {{irs_sources}}.
 Rules: separate desired outcome from mechanisms; feasibility remains conditional; unsourced material rules require source_verification_required; reviewer is conditional on material disagreement or overconfidence.
-Output must include primary_goal, secondary_goals, normalized_goal_categories, success_criteria, appears_possible, conditions, barriers, missing_evidence, and professional_review_flag.`,
+Preserve user_reported_goal as the immutable taxpayer wording. primary_goal / interpreted_objective may clarify the outcome but must not invent mechanisms the taxpayer did not state (e.g. "reduce penalties").
+List mechanisms only under potential_resolution_options.
+Output must include user_reported_goal, primary_goal, secondary_goals, potential_resolution_options, normalized_goal_categories, success_criteria, appears_possible, conditions, barriers, missing_evidence, and professional_review_flag.`,
   },
   {
     promptId: "DOC-OVERLAY-v3",
@@ -581,7 +586,7 @@ export const SCHEMA_PROMPTS: PromptRecordSeed[] = [
     stageKey: STAGE_KEYS.GOAL,
     title: "Goal Schema",
     body: `OUTPUT SCHEMA:
-{"primary_goal":"","secondary_goals":[],"normalized_goal_categories":[],"success_criteria":[],"appears_possible":"YES|POSSIBLY|UNCERTAIN|NO","conditions":[],"barriers":[],"missing_evidence":[],"professional_review_flag":false}`,
+{"user_reported_goal":"","primary_goal":"","secondary_goals":[],"potential_resolution_options":[],"normalized_goal_categories":[],"success_criteria":[],"appears_possible":"YES|POSSIBLY|UNCERTAIN|NO","conditions":[],"barriers":[],"missing_evidence":[],"professional_review_flag":false}`,
   },
   {
     promptId: "SCHEMA-DOCUMENT-v3",

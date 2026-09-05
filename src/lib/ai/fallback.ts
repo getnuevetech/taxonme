@@ -1,5 +1,13 @@
 import "server-only";
 import { db } from "../db";
+import {
+  shouldEmitExplanations,
+  shouldEmitPenaltyReliefIssue,
+  shouldEmitPrematureResolutionPath,
+  thinBalanceDueFinding,
+  type EvidenceSnapshot,
+} from "./evidence-proportional";
+import { preserveUserReportedGoal } from "./goal-provenance";
 
 // Deterministic (no-AI) case analyzer. Used when no AI provider is configured
 // yet, and as the safety net if all providers fail. It performs real
@@ -212,6 +220,14 @@ export async function fallbackAnalyze(
 
   const yearText = primaryYear ? `${primaryYear}` : "the year in question";
 
+  const evidenceSnapshot: EvidenceSnapshot = {
+    hasDocs,
+    hasTranscript,
+    hasAmount: Boolean(balanceDue?.amount || (expectedRefund && receivedRefund)),
+    hasTaxYear: Boolean(primaryYear),
+    transcriptPenaltyCount: transcript.penalties.length,
+  };
+
   // Product language only — the customer never hears about AI providers or
   // internal engines. Verification is described in terms of documents.
   const evidenceGuidance = (year: number | null) => {
@@ -298,15 +314,23 @@ export async function fallbackAnalyze(
             hasTranscript ? `Which transaction code on your transcript explains it (e.g. TC 826 credit transferred, TC 570 hold)` : `What your ${yearText} Account Transcript shows — it lists the answer code by code`,
             `Whether any related IRS notice was issued that you haven't received or uploaded`,
           ],
-      explanations: offsetConfirmed
-        ? [
-            { title: "Refund offset", detail: `Confirmed by your transcript: TC 826 transferred ${usd(offsetTotal)} on ${offsetDates} — the refund was applied to another balance.`, likelihood: "Confirmed" },
-          ]
-        : [
-            { title: "Refund offset", detail: "Another federal or state debt (a prior tax year, state taxes, child support, or federal student loans) may have been applied against the refund. Shows as TC 826 on your transcript or a Treasury Offset notice.", likelihood: "Possible" },
-            { title: "IRS adjustment", detail: "The IRS may have changed the amount of your refund (math corrections or credit changes). You would normally receive a notice such as a CP12.", likelihood: "Possible" },
-            { title: "Refund hold or review", detail: "Part of the refund may be held pending review (TC 570). The available information does not yet establish whether a hold affected the payment.", likelihood: "Possible" },
-          ],
+      explanations: shouldEmitExplanations({
+        hasDocs,
+        hasTranscript,
+        hasAmount: true,
+        hasTaxYear: Boolean(primaryYear),
+        offsetConfirmed,
+      })
+        ? offsetConfirmed
+          ? [
+              { title: "Refund offset", detail: `Confirmed by your transcript: TC 826 transferred ${usd(offsetTotal)} on ${offsetDates} — the refund was applied to another balance.`, likelihood: "Confirmed" },
+            ]
+          : [
+              { title: "Refund offset", detail: "Another federal or state debt (a prior tax year, state taxes, child support, or federal student loans) may have been applied against the refund. Shows as TC 826 on your transcript or a Treasury Offset notice.", likelihood: "Possible" },
+              { title: "IRS adjustment", detail: "The IRS may have changed the amount of your refund (math corrections or credit changes). You would normally receive a notice such as a CP12.", likelihood: "Possible" },
+              { title: "Refund hold or review", detail: "Part of the refund may be held pending review (TC 570). The available information does not yet establish whether a hold affected the payment.", likelihood: "Possible" },
+            ]
+        : [],
       expected_amount: expectedRefund.amount,
       received_amount: receivedRefund.amount,
       difference_amount: diff,
@@ -348,11 +372,7 @@ export async function fallbackAnalyze(
         "When you filed — refunds normally issue within 21 days of e-file acceptance, so the timeline tells us if something intervened",
         "Whether an offset, adjustment, or hold caused any difference (your Account Transcript shows this code by code)",
       ],
-      explanations: [
-        { title: "Refund offset", detail: "Part or all of the refund was applied to another debt — a prior tax year, state taxes, child support, or federal student loans (TC 826 or a Treasury Offset notice).", likelihood: "Possible" },
-        { title: "IRS adjustment", detail: "The IRS corrected the return (math errors, credit changes) and refunded a different amount — a CP12-type notice normally follows.", likelihood: "Possible" },
-        { title: "Refund hold or review", detail: "The refund (or part of it) is held pending review (TC 570) and may still be released.", likelihood: "Possible" },
-      ],
+      explanations: [],
       confidence: "low",
       priority: "medium",
       state: guidance.state,
@@ -403,40 +423,15 @@ export async function fallbackAnalyze(
     });
   } else if (/(owe|balance|debt|amount due)/.test(lower)) {
     const guidance = evidenceGuidance(primaryYear);
-    issues.push({
-      issue_type: "balance_due",
-      item_kind: "missing_info",
-      evidence_status: "needs_verification",
-      evidence_strength: "limited",
-      tax_year: primaryYear,
-      title: `Possible ${primaryYear ? `${primaryYear} ` : ""}balance due — one figure unlocks the options`,
-      what_we_know: `We found evidence that you may have an IRS balance${primaryYear ? ` for tax year ${primaryYear}` : ""}, but the available information does not yet establish the current amount.${hasDocs ? ` ${docs.length} document${docs.length === 1 ? " is" : "s are"} on file with information relevant to the balance.` : ""} The amount matters because the resolution thresholds are specific: balances of $50,000 or less generally qualify for a streamlined monthly installment agreement (no financial statement), and up to $100,000 can get a 180-day short-term plan.`,
-      our_conclusion: "A balance may exist, but until the amount and its composition (tax vs. penalties vs. interest) are established, no resolution option can responsibly be recommended. One number from your IRS notice or online account — given in the questions below — moves this forward immediately.",
-      still_unclear: [
-        "The current balance (it grows with penalties and interest until arranged)",
-        "Which notice/letter states it, its date, and any respond-by deadline printed on it",
-        "Tax principal versus penalties versus interest — penalties may be relievable, interest is statutory",
-        "Payments or credits already applied",
-        "Whether the balance is under active collection (that changes the urgency)",
-      ],
-      explanations: [
-        { title: "Filed but couldn't pay in full", detail: "The most common case — the balance is real and payment options (installment agreement, short-term plan) are the path.", likelihood: "Possible" },
-        { title: "IRS adjustment or proposed change", detail: "A CP2000-type proposal or correction — these can be agreed with, partially agreed, or disputed in writing before the deadline.", likelihood: "Possible" },
-        { title: "Penalties and interest inflating the base tax", detail: "Part of the balance may be relievable penalties (e.g. first-time abatement) rather than tax.", likelihood: "Possible" },
-      ],
-      confidence: "low",
-      priority: "medium",
-      state: guidance.state,
-      next_action: guidance.action,
-      alternative_action: "Answer the quick questions on this page — the balance amount alone sharpens every recommendation.",
-      analysis_outline: [
-        { heading: "Your situation", detail: "You reported owing the IRS, but the exact amount wasn't stated — so the right resolution path can't be sized yet." },
-        { heading: "Tax rules", detail: "Rule: resolution options are amount-driven — full payment, streamlined installment agreements under IRC §6159 (≤ $50,000), 180-day plans (≤ $100,000), or hardship status. Why it matters to your case: the facts must be established before the right option can be identified — deciding the solution before the facts is how taxpayers end up on the wrong plan.", source: "IRC §6159 · Form 9465 instructions · IRS collection procedures" },
-        { heading: "Your evidence", detail: evidenceLine() },
-        { heading: "Our conclusion", detail: "The concern is credible but unverified. The IRS notice (or your online account balance) establishes the amount; the Account Transcript establishes its composition — together they let TaxOnMe evaluate the legitimate resolution paths for your circumstances." },
-        { heading: "Your next move", detail: "Fastest: answer the questions on this page with the amount from your notice. Strongest: upload the notice and your Account Transcript — we verify the amount and split it into tax, penalties, and interest." },
-      ],
-    });
+    issues.push(
+      thinBalanceDueFinding({
+        year: primaryYear,
+        hasDocs,
+        docCount: docs.length,
+        guidance,
+        evidenceLine: evidenceLine(),
+      }),
+    );
   }
 
   // ---------- Notice-specific issues, grounded in the knowledge base ----------
@@ -480,7 +475,10 @@ export async function fallbackAnalyze(
   }
 
   // ---------- Penalty relief (an OPPORTUNITY, not a promise) ----------
-  if (/(penalt|interest)/.test(lower)) {
+  // Package A: only when evidence supports assessed penalties — not keyword-only.
+  if (
+    shouldEmitPenaltyReliefIssue(evidenceSnapshot, /(penalt|interest)/.test(lower))
+  ) {
     issues.push({
       issue_type: "penalty",
       item_kind: "opportunity",
@@ -488,8 +486,10 @@ export async function fallbackAnalyze(
       evidence_strength: hasTranscript ? "moderate" : "limited",
       tax_year: primaryYear,
       title: "Penalty relief may be available",
-      what_we_know: "Your situation mentions penalties or interest. Some penalties may be eligible for relief depending on the circumstances and applicable IRS rules — first-time abatement applies when the prior three years are penalty-clean, and reasonable-cause relief is a separate path. Relief is requested in writing; we can draft the request letter for you.",
-      our_conclusion: "Relief eligibility can't be assessed until the assessed penalties and your compliance history are established — both appear on your Account Transcript.",
+      what_we_know:
+        "Your records indicate penalties or interest. Some penalties may qualify for administrative or reasonable-cause relief depending on the tax period and compliance history. We'll evaluate the correct current relief path after the periods and penalty types are confirmed.",
+      our_conclusion:
+        "Relief eligibility can't be assessed until the assessed penalties and your compliance history are established — both appear on your Account Transcript.",
       still_unclear: [
         "Which penalties were assessed (the transcript lists them by transaction code, e.g. TC 276)",
         "Your compliance history for the prior three years",
@@ -502,10 +502,24 @@ export async function fallbackAnalyze(
       alternative_action: "Have a TaxOnMe professional assess your eligibility.",
       analysis_outline: [
         { heading: "Your situation", detail: "Your situation mentions penalties or interest on top of the tax itself." },
-        { heading: "Tax rules", detail: "Rule: first-time abatement removes failure-to-file and failure-to-pay penalties when (1) the prior 3 years are penalty-clean, (2) all required returns are filed, and (3) the tax is paid or on a payment plan; reasonable cause is a second path. Why it matters to your case: if eligible, the penalty portion of your balance may be removable with one written request — and interest on abated penalties is removed with them.", source: "IRM 20.1.1.3.3.2.1 (first-time abatement) · reasonable-cause criteria" },
+        {
+          heading: "Tax rules",
+          detail:
+            "Rule: penalty relief depends on the tax period, penalty type, and compliance history. Administrative relief programs and reasonable-cause criteria change over time — the applicable path is selected after those facts are known.",
+          source: "IRM 20.1.1 (penalty relief) · current IRS relief guidance for the tax period",
+        },
         { heading: "Your evidence", detail: evidenceLine() },
-        { heading: "Our conclusion", detail: "This is an opportunity, not a promise: eligibility depends on facts that your Account Transcript establishes. If the criteria are met, relief is a defined administrative process." },
-        { heading: "Your next move", detail: hasTranscript ? "Your transcript shows which penalties were assessed — draft the relief request letter and send it with any response form." : "Get your Account Transcript to see exactly which penalties were assessed, then we draft the relief request." },
+        {
+          heading: "Our conclusion",
+          detail:
+            "This is an opportunity, not a promise: eligibility depends on facts that your Account Transcript establishes.",
+        },
+        {
+          heading: "Your next move",
+          detail: hasTranscript
+            ? "Your transcript shows which penalties were assessed — confirm the tax periods before drafting any relief request."
+            : "Get your Account Transcript to see exactly which penalties were assessed.",
+        },
       ],
     });
   }
@@ -600,14 +614,21 @@ export async function fallbackAnalyze(
       action_key: "DRAFT_LETTER",
     });
   }
-  if (/(penalt|interest)/.test(lower)) {
+  // Package A: no premature penalty-relief or installment path without an established amount.
+  if (
+    shouldEmitPenaltyReliefIssue(evidenceSnapshot, /(penalt|interest)/.test(lower)) &&
+    shouldEmitPrematureResolutionPath(evidenceSnapshot)
+  ) {
     pathSteps.push({
-      title: "Request penalty relief in writing",
-      description: "If you're eligible, relief is requested with a short letter (we draft it) or by calling the IRS. Send it together with any response form from your notice.",
+      title: "Evaluate penalty relief options",
+      description: "After the tax periods and assessed penalties are confirmed, determine whether administrative or reasonable-cause relief applies — then draft only if appropriate.",
       action_key: "DRAFT_LETTER",
     });
   }
-  if (/(payment plan|installment|can'?t pay|afford)/.test(lower) || balanceDue) {
+  if (
+    (/(payment plan|installment|can'?t pay|afford)/.test(lower) || balanceDue) &&
+    shouldEmitPrematureResolutionPath(evidenceSnapshot)
+  ) {
     pathSteps.push({
       title: "Prepare a payment plan request (Form 9465)",
       description: "Use the guided form wizard to prepare an installment agreement request. Mail it with your notice's response slip, or apply online for faster setup. Completes when the form is finished.",
@@ -620,6 +641,7 @@ export async function fallbackAnalyze(
     action_key: "",
   });
 
+  const goalFacts = preserveUserReportedGoal(goal, { user_goal: goal });
   const facts: Json = {
     tax_years: years,
     notices_received: noticeCodes,
@@ -629,7 +651,8 @@ export async function fallbackAnalyze(
     amounts_mentioned: fromNarrative.mentions.map((m) => m.amount),
     transcript_transactions: transcript.transactions.slice(0, 25),
     transcript_account_balance: transcript.accountBalance,
-    user_goal: goal,
+    user_goal: goalFacts.user_reported_goal,
+    user_reported_goal: goalFacts.user_reported_goal,
     unknowns: issues.flatMap((i) => (Array.isArray(i.still_unclear) ? (i.still_unclear as string[]).slice(0, 1) : [])),
   };
 

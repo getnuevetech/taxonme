@@ -54,3 +54,4 @@ jobs:
       - run: npm run test:v51
       - run: npm run test:phase-minus1-9
       - run: npm run test:evidence
+      - run: npm run test:package-a
