@@ -729,6 +729,8 @@ export async function runCaseAnalysis(caseId: string, opts?: { trigger?: string;
     requestedPipelineSet.has(STAGE_KEYS.PRESENTER);
   const docInfos = c.documents.map((d) => ({
     docKind: d.docKind,
+    documentType: d.documentType,
+    fileName: d.fileName,
     readable:
       readableDocIds.has(d.id) ||
       d.mimeType.startsWith("text/") ||
@@ -852,14 +854,19 @@ export async function runCaseAnalysis(caseId: string, opts?: { trigger?: string;
   // Never fall through to a static resolution playbook on thin evidence.
   const pathEvidence: EvidenceSnapshot = {
     hasDocs: c.documents.length > 0,
-    hasTranscript: c.documents.some((d) => d.docKind === "transcript"),
+    hasTranscript: c.documents.some(
+      (d) =>
+        d.docKind === "transcript" ||
+        d.documentType === "IRS_ACCOUNT_TRANSCRIPT" ||
+        /TRANSCRIPT|RECORD_OF_ACCOUNT/i.test(d.documentType || ""),
+    ),
     hasAmount: Boolean(
       (facts as Json).balance_due ||
         (typeof (facts as Json).expected_refund === "number" && typeof (facts as Json).received_refund === "number"),
     ),
     hasTaxYear:
       issues.some((i) => i.tax_year != null && i.tax_year !== "") ||
-      Boolean((facts as Json).tax_years),
+      (Array.isArray((facts as Json).tax_years) && ((facts as Json).tax_years as unknown[]).length > 0),
   };
   const eligibility = resolutionEligibility(pathEvidence);
   const thinPath = thinEvidencePathSteps({

@@ -3,6 +3,7 @@ import { db } from "../db";
 import { classifyDocument } from "./classify";
 import { compileDocumentEvents, compileDocumentFacts, compileNarrativeFacts } from "./facts";
 import { countTransactionRowCandidates, parseTranscript } from "./transcript";
+import { docKindFromDocumentType } from "./is-transcript";
 import { countPages, storedRawText } from "./extraction-cache";
 import { reconcileCaseEvidence } from "./reconcile";
 import { PROCESSING_STATUS, PROVENANCE, FACT_KEYS, type EvidenceFactInput } from "./types";
@@ -129,6 +130,8 @@ export async function compileCaseEvidence(
       data: {
         documentType: classification.documentType,
         documentFamily: classification.documentFamily,
+        // Package F: backfill customer docKind when classification identifies transcript/notice.
+        docKind: docKindFromDocumentType(classification.documentType, doc.docKind),
         classificationConfidence: classification.confidence,
         taxPeriodsJson: JSON.stringify(classification.taxPeriods),
         pagesExpected: pages.expected,

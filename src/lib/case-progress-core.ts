@@ -3,17 +3,23 @@
  */
 
 import { EVIDENCE_AUDIT_STATUS } from "@/lib/evidence/types";
+import { isAccountTranscriptDoc, isNoticeDoc } from "@/lib/evidence/is-transcript";
 
 export const REQUIRED_EVIDENCE_KINDS_DEFAULT = ["transcript", "notice"] as const;
 
 export function uploadDocumentsSatisfied(
-  docs: { docKind: string; documentType?: string | null }[],
+  docs: { docKind: string; documentType?: string | null; fileName?: string | null }[],
   requiredKinds: string[] = [...REQUIRED_EVIDENCE_KINDS_DEFAULT],
 ): boolean {
-  const kinds = new Set(docs.map((d) => d.docKind).filter((k) => k && k !== "avatar"));
-  if (kinds.size === 0) return false;
-  // Complete only when at least one required evidence kind is present.
-  return requiredKinds.some((k) => kinds.has(k));
+  if (docs.length === 0) return false;
+  return requiredKinds.some((k) =>
+    docs.some((d) => {
+      if (d.docKind === k) return true;
+      if (k === "transcript") return isAccountTranscriptDoc(d);
+      if (k === "notice") return isNoticeDoc(d);
+      return false;
+    }),
+  );
 }
 
 export function isEvidenceAuditPassing(status: string | null | undefined): boolean {

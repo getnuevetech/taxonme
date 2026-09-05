@@ -7,6 +7,7 @@ import {
   type EvidenceSnapshot,
 } from "./evidence-proportional";
 import { preserveUserReportedGoal } from "./goal-provenance";
+import { deepenedBalanceDueFinding } from "./transcript-deepen";
 import { shouldRetrieveInstallmentThresholds } from "../authority-gates";
 import { neutralPenaltyReliefCopy } from "../authority-gates";
 import {
@@ -14,6 +15,8 @@ import {
   resolutionEligibility,
   thinEvidencePathSteps,
 } from "../path-from-analysis";
+import { parseTranscript } from "../evidence/transcript";
+import { isAccountTranscriptDoc } from "../evidence/is-transcript";
 
 // Deterministic (no-AI) case analyzer. Used when no AI provider is configured
 // yet, and as the safety net if all providers fail. It performs real
@@ -76,44 +79,6 @@ function classifyAmounts(text: string) {
   return { balanceDue, receivedRefund, expectedRefund, mentions };
 }
 
-// ---- IRS transcript reader: parses transaction-code rows and the account
-// balance out of transcript text (digital PDFs carry a text layer), turning
-// the IRS's own records into authoritative amounts. ----
-type TranscriptTx = { code: string; description: string; date: string; amount: number };
-type TranscriptData = {
-  transactions: TranscriptTx[];
-  accountBalance: number | null;
-  refundIssued: TranscriptTx | null;
-  offsets: TranscriptTx[];
-  hold: boolean;
-  penalties: TranscriptTx[];
-};
-
-function parseAmount(s: string): number {
-  return Number(s.replace(/[$,\s]/g, ""));
-}
-
-export function parseTranscript(text: string): TranscriptData {
-  const transactions: TranscriptTx[] = [];
-  const rowRe = /\b(\d{3})\s+([A-Za-z][^\n$]{2,80}?)\s+(\d{2}-\d{2}-\d{4})\s+(-?\$?[\d,]+\.\d{2})/g;
-  let m: RegExpExecArray | null;
-  while ((m = rowRe.exec(text))) {
-    const amount = parseAmount(m[4]);
-    if (!Number.isFinite(amount)) continue;
-    transactions.push({ code: m[1], description: m[2].replace(/\s+/g, " ").trim(), date: m[3], amount });
-  }
-  const balMatch = text.match(/ACCOUNT\s+BALANCE:?\s*(-?\$?[\d,]+\.\d{2})/i);
-  const accountBalance = balMatch ? parseAmount(balMatch[1]) : null;
-  return {
-    transactions,
-    accountBalance,
-    refundIssued: transactions.find((t) => t.code === "846") ?? null,
-    offsets: transactions.filter((t) => t.code === "826"),
-    hold: transactions.some((t) => t.code === "570"),
-    penalties: transactions.filter((t) => ["276", "196", "166"].includes(t.code)),
-  };
-}
-
 export type FallbackConflict = { topic: string; description: string; resolution: string };
 
 export type FallbackResult = {
@@ -123,7 +88,12 @@ export type FallbackResult = {
   conflicts: FallbackConflict[];
 };
 
-export type DocInfo = { docKind: string; readable: boolean };
+export type DocInfo = {
+  docKind: string;
+  readable: boolean;
+  documentType?: string | null;
+  fileName?: string | null;
+};
 
 export async function fallbackAnalyze(
   situation: string,
@@ -136,7 +106,12 @@ export async function fallbackAnalyze(
   const lower = text.toLowerCase();
   const haveKinds = new Set(docs.map((d) => d.docKind));
   const hasDocs = docs.length > 0;
-  const hasTranscript = haveKinds.has("transcript");
+  // Package F: transcript presence from kind, classified type, filename, or text.
+  const transcript = parseTranscript(documentsText);
+  const hasTranscript =
+    docs.some((d) => isAccountTranscriptDoc({ ...d, text: documentsText })) ||
+    transcript.accountBalance !== null ||
+    transcript.transactions.length > 0;
   const hasReturn = haveKinds.has("1040");
   const unreadableCount = docs.filter((d) => !d.readable).length;
 
@@ -171,7 +146,6 @@ export async function fallbackAnalyze(
   const expectedRefund = reconcile("Expected refund", fromNarrative.expectedRefund, fromDocs?.expectedRefund);
 
   // The transcript is the IRS's own record — its figures are authoritative.
-  const transcript = parseTranscript(documentsText);
   if (transcript.refundIssued) {
     const t = transcript.refundIssued;
     if (receivedRefund && Math.abs(receivedRefund.amount - t.amount) > 1 && !receivedRefund.fromDocument) {
@@ -211,7 +185,9 @@ export async function fallbackAnalyze(
       .sort();
   const explicitMatch = narrative.match(/tax year\(?s?\)?[^.\n]{0,40}/i);
   const explicitYears = explicitMatch ? yearsFrom(explicitMatch[0]) : [];
-  const taxPeriodYear = documentsText.match(/Tax Period Ending:[^\n]*?(20\d{2})/i)?.[1];
+  const taxPeriodYear =
+    documentsText.match(/Tax Period Ending:[^\n]*?(20\d{2})/i)?.[1] ??
+    transcript.taxPeriods[0];
   const narrativeYears = explicitYears.length ? explicitYears : yearsFrom(narrative);
   const years = narrativeYears.length
     ? narrativeYears
@@ -397,15 +373,26 @@ export async function fallbackAnalyze(
   // ---------- Balance due ----------
   if (balanceDue) {
     const balanceFromTranscript = transcript.accountBalance !== null && transcript.accountBalance > 0;
+    if (balanceFromTranscript) {
+      issues.push(
+        deepenedBalanceDueFinding({
+          amount: balanceDue.amount,
+          year: primaryYear,
+          transcript,
+          evidenceLine: evidenceLine(),
+          hasDocs,
+        }),
+      );
+    } else {
     issues.push({
       issue_type: "balance_due",
       item_kind: "issue",
-      evidence_status: balanceFromTranscript ? "confirmed" : balanceDue.fromDocument ? "likely" : "possible",
-      evidence_strength: balanceFromTranscript ? "strong" : balanceDue.fromDocument ? "moderate" : hasTranscript ? "moderate" : "limited",
+      evidence_status: balanceDue.fromDocument ? "likely" : "possible",
+      evidence_strength: balanceDue.fromDocument ? "moderate" : hasTranscript ? "moderate" : "limited",
       tax_year: primaryYear,
       expected_amount: balanceDue.amount,
-      title: balanceFromTranscript ? `Balance due confirmed — ${usd(balanceDue.amount)}` : `Possible balance due of ${usd(balanceDue.amount)}`,
-      what_we_know: `${balanceFromTranscript ? "Your IRS Account Transcript shows an account balance of" : balanceDue.fromDocument ? "Your uploaded records show" : "Your information mentions"} ${usd(balanceDue.amount)}${balanceFromTranscript ? " — the IRS's own current figure" : " owed to the IRS"}${primaryYear ? ` for tax year ${primaryYear}` : ""}.${transcript.penalties.length ? ` Of that, ${usd(transcript.penalties.reduce((s, p) => s + Math.abs(p.amount), 0))} is penalties/interest per the transcript — some penalties may be eligible for relief depending on the circumstances.` : ""} Depending on your balance and circumstances, you may have several payment or collection-resolution options, and some penalties may be eligible for relief under applicable IRS rules.`,
+      title: `Possible balance due of ${usd(balanceDue.amount)}`,
+      what_we_know: `${balanceDue.fromDocument ? "Your uploaded records show" : "Your information mentions"} ${usd(balanceDue.amount)} owed to the IRS${primaryYear ? ` for tax year ${primaryYear}` : ""}. Depending on your balance and circumstances, you may have several payment or collection-resolution options.`,
       our_conclusion: `A balance of about ${usd(balanceDue.amount)} appears to exist, but its composition (tax vs. penalties vs. interest) and current status aren't established yet — and that composition determines which resolution options apply.`,
       still_unclear: [
         "The current confirmed balance (it changes with penalties and interest)",
@@ -429,6 +416,7 @@ export async function fallbackAnalyze(
         { heading: "Your next move", detail: hasTranscript ? `Your transcript is on file — confirm the tax/penalty/interest split from its codes, then use the Form 9465 wizard to prepare a payment plan request if needed.` : `Add your ${yearText} Account Transcript and the IRS notice showing the balance — together they confirm the exact amount so the resolution can be sized correctly.` },
       ],
     });
+    }
   } else if (/(owe|balance|debt|amount due)/.test(lower)) {
     const guidance = evidenceGuidance(primaryYear);
     issues.push(

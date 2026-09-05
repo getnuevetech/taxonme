@@ -6,6 +6,7 @@ import {
   VERIFIABLE_ACTION_COPY,
 } from "./case-progress-core";
 import { rankPotentialEvidenceSources } from "./evidence/potential-sources";
+import { isAccountTranscriptDoc, isNoticeDoc } from "./evidence/is-transcript";
 
 // Evidence-based path-step verification. Steps with a recognized action key
 // are completed only when the system can actually observe the required
@@ -26,8 +27,8 @@ async function requiredUploadKinds(caseId: string): Promise<string[]> {
   const haveKinds = new Set(c.documents.map((d) => d.docKind));
   const ranked = rankPotentialEvidenceSources({
     issueTypes: c.issues.map((i) => i.issueType),
-    hasTranscript: false,
-    hasNotice: false,
+    hasTranscript: c.documents.some((d) => isAccountTranscriptDoc(d)),
+    hasNotice: c.documents.some((d) => isNoticeDoc(d)),
     hasReturn: haveKinds.has("1040"),
     hasIncomeDocs: haveKinds.has("w2") || haveKinds.has("1099"),
     taxYear: c.issues.find((i) => i.taxYear)?.taxYear ?? null,
@@ -70,10 +71,13 @@ async function stepSatisfied(
     }
     case "GET_TRANSCRIPT":
     case "GET_ACCOUNT_TRANSCRIPT": {
-      const where = ctx.userId
-        ? { userId: ctx.userId, deletedAt: null, docKind: "transcript" }
-        : { caseId: ctx.caseId, deletedAt: null, docKind: "transcript" };
-      return (await db.document.count({ where })) > 0;
+      const docs = await db.document.findMany({
+        where: ctx.userId
+          ? { userId: ctx.userId, deletedAt: null }
+          : { caseId: ctx.caseId, deletedAt: null },
+        select: { docKind: true, documentType: true, fileName: true },
+      });
+      return docs.some((d) => isAccountTranscriptDoc(d));
     }
     case "REVIEW_ANALYSIS":
     case "RERUN_ANALYSIS": {

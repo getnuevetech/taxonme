@@ -2,6 +2,7 @@ import "server-only";
 import { db } from "./db";
 import { resolveQuestionFromFacts, resolveUnknownTextFromFacts, type KnownFact } from "./evidence/unknowns";
 import { amountUnknownFromText, preferEvidenceAsk } from "./clarify-evidence";
+import { isAccountTranscriptDoc, isNoticeDoc } from "./evidence/is-transcript";
 
 // The clarifying interview: when the analysis is thin (missing amounts,
 // years, dates, documents), the app asks the customer targeted questions in a
@@ -89,8 +90,8 @@ export async function nextClarifyQuestion(caseId: string): Promise<ClarifyQuesti
   const answered = new Set(c.clarifyMessages.map((m) => m.questionKey));
   const narrative = `${c.situation}\n${c.goal}`;
   const unfiledDominant = hasUnfiledReturnIntent(narrative) && !hasRefundIntent(narrative);
-  const hasTranscript = c.documents.some((d) => d.docKind === "transcript");
-  const hasNoticeDoc = c.documents.some((d) => d.docKind === "notice");
+  const hasTranscript = c.documents.some((d) => isAccountTranscriptDoc(d));
+  const hasNoticeDoc = c.documents.some((d) => isNoticeDoc(d));
   const balanceIssue = c.issues.find((i) => i.issueType === "balance_due");
   const balanceOpen = Boolean(
     balanceIssue && balanceIssue.expectedCents === null && balanceIssue.differenceCents === null,

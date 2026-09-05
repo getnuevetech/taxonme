@@ -19,6 +19,7 @@ import {
   shouldShowHowWeReached,
   shouldShowPathForwardSection,
 } from "@/lib/presentation-depth";
+import { isAccountTranscriptDoc, isNoticeDoc } from "@/lib/evidence/is-transcript";
 import Link from "next/link";
 
 export type CaseViewer = { role: "customer" | "consultant" | "admin"; userId: string; fullResults?: boolean };
@@ -139,8 +140,8 @@ export async function CaseAnalysisView({ caseId, viewer }: { caseId: string; vie
   // The same intent stated more than once is shown once.
   const presentationDepth = {
     hasDocs: documentsInEvidence.length > 0,
-    hasTranscript: c.documents.some((d) => d.docKind === "transcript"),
-    hasNotice: c.documents.some((d) => d.docKind === "notice"),
+    hasTranscript: c.documents.some((d) => isAccountTranscriptDoc(d)),
+    hasNotice: c.documents.some((d) => isNoticeDoc(d)),
     hasAmount: c.issues.some(
       (i) => i.expectedCents != null || i.differenceCents != null || i.receivedCents != null,
     ),
@@ -189,8 +190,8 @@ export async function CaseAnalysisView({ caseId, viewer }: { caseId: string; vie
   const narrative = `${c.situation}\n${c.goal}`;
   const neededDocs = rankPotentialEvidenceSources({
     issueTypes: c.issues.map((i) => i.issueType),
-    hasTranscript: haveKinds.has("transcript"),
-    hasNotice: haveKinds.has("notice"),
+    hasTranscript: c.documents.some((d) => isAccountTranscriptDoc(d)),
+    hasNotice: c.documents.some((d) => isNoticeDoc(d)),
     hasReturn: haveKinds.has("1040"),
     hasIncomeDocs: haveKinds.has("w2") || haveKinds.has("1099"),
     taxYear: yearHint,
