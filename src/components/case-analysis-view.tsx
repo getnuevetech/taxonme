@@ -9,6 +9,8 @@ import { CaseUpload } from "@/components/case-upload";
 import { AutoRefresh } from "@/components/auto-refresh";
 import { rankPotentialEvidenceSources } from "@/lib/evidence/potential-sources";
 import { groupCustomerUnknowns } from "@/lib/evidence/unknown-groups";
+import { selectVisibleIssues } from "@/lib/issue-visibility";
+import { readinessPresentationMode } from "@/lib/evidence/readiness-core";
 import Link from "next/link";
 
 export type CaseViewer = { role: "customer" | "consultant" | "admin"; userId: string; fullResults?: boolean };
@@ -43,8 +45,10 @@ export async function CaseAnalysisView({ caseId, viewer }: { caseId: string; vie
   const interactive = viewer.role === "customer";
   const fullAccess = viewer.role !== "customer" ? true : (viewer.fullResults ?? true);
   const customerFacing = viewer.role === "customer";
-  const visibleIssues = fullAccess ? c.issues.slice(0, 5) : c.issues.slice(0, 1);
-  const hiddenIssueCount = fullAccess ? Math.max(0, c.issues.length - visibleIssues.length) : Math.max(0, c.issues.length - 1);
+  const { visible: visibleIssues, hiddenCount: hiddenIssueCount } = selectVisibleIssues(c.issues, {
+    fullAccess,
+    maxFull: 5,
+  });
   let conflicts: { topic: string; description: string; resolution?: string }[] = [];
   try {
     const parsed = JSON.parse(c.conflictsJson || "[]");
@@ -774,22 +778,47 @@ export async function CaseAnalysisView({ caseId, viewer }: { caseId: string; vie
       <div className="space-y-6">
         <Card>
           <CardBody>
-            <ProgressBar value={c.readinessScore} label="Case readiness" />
-            <p className="mt-2 text-xs text-slate-500">
-              How much of your case we can act on, based on the evidence we hold and have read.
-            </p>
-            {/* Cases analyzed before the split have no stored dimensions, and an
-                unset score must not be shown as though nothing was provided. */}
-            {c.evidenceAvailableScore > 0 && (
+            {readinessPresentationMode({
+              documentsProvided: c.documents.filter((d) => d.docKind !== "avatar").length,
+              evidentiaryFacts: 0,
+              caseTypeThin:
+                customerFacing &&
+                c.documents.filter((d) => d.docKind !== "avatar").length === 0 &&
+                c.readinessScore < 30,
+            }) === "checklist" ? (
               <>
-                <div className="mt-3 space-y-2 border-t border-slate-100 pt-3">
-                  <ProgressBar value={c.evidenceAvailableScore} label="Evidence you've provided" />
-                  <ProgressBar value={c.evidenceProcessedScore} label="Evidence we've read" />
-                </div>
-                {c.evidenceProcessedScore < 100 && (
-                  <p className="mt-2 text-xs text-amber-600">
-                    Some of what you sent is still unread on our side. That is our gap to close, and it does not count against your case.
-                  </p>
+                <h3 className="text-sm font-semibold text-slate-900">Case picture</h3>
+                <p className="mt-1 text-xs font-medium uppercase tracking-wide text-slate-400">Early stage</p>
+                <ul className="mt-3 space-y-1.5 text-sm text-slate-600">
+                  <li>Situation understood ✓</li>
+                  <li>Goal understood {c.goal ? "✓" : "—"}</li>
+                  <li>IRS account records Needed</li>
+                  <li>Relevant tax periods {c.issues.some((i) => i.taxYear) ? "Noted" : "Unknown"}</li>
+                  <li>Current balance Unknown</li>
+                  <li>Next action available ✓</li>
+                </ul>
+                <p className="mt-3 text-xs text-slate-500">
+                  A percentage is shown after evidence is on file so the score reflects what we can act on — not speculation.
+                </p>
+              </>
+            ) : (
+              <>
+                <ProgressBar value={c.readinessScore} label="Case readiness" />
+                <p className="mt-2 text-xs text-slate-500">
+                  How much of your case we can act on, based on the evidence we hold and have read.
+                </p>
+                {c.evidenceAvailableScore > 0 && (
+                  <>
+                    <div className="mt-3 space-y-2 border-t border-slate-100 pt-3">
+                      <ProgressBar value={c.evidenceAvailableScore} label="Evidence you've provided" />
+                      <ProgressBar value={c.evidenceProcessedScore} label="Evidence we've read" />
+                    </div>
+                    {c.evidenceProcessedScore < 100 && (
+                      <p className="mt-2 text-xs text-amber-600">
+                        Some of what you sent is still unread on our side. That is our gap to close, and it does not count against your case.
+                      </p>
+                    )}
+                  </>
                 )}
               </>
             )}

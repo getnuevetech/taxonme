@@ -6,6 +6,14 @@ import { computeReadinessDimensions } from "../evidence/readiness-core";
 import { fallbackAnalyze } from "./fallback";
 import { preserveUserReportedGoal } from "./goal-provenance";
 import { isMaterialDifference } from "../case-semantics";
+import { buildRankedTaxActions } from "../action-priority";
+import {
+  filterResolutionPathSteps,
+  pathStepsFromRankedActions,
+  resolutionEligibility,
+  thinEvidencePathSteps,
+} from "../path-from-analysis";
+import type { EvidenceSnapshot } from "./evidence-proportional";
 import {
   canAttemptStep,
   emptyStageBudget,
@@ -887,10 +895,64 @@ export async function runCaseAnalysis(caseId: string, opts?: { trigger?: string;
     issueIds.push(createdIssue.id);
   }
 
-  // Path forward steps (each carries an action key for evidence verification).
-  const pathSteps: Json[] = presentation?.path_steps
-    ? ((presentation.path_steps as Json[]) ?? [])
-    : ((fallback ?? (await fallbackAnalyze(c.situation, c.goal, rawDocText, docInfos))).pathSteps as unknown as Json[]);
+  // Path forward: prefer presentation path → ranked actions → thin evidence stubs.
+  // Never fall through to a static resolution playbook on thin evidence.
+  const pathEvidence: EvidenceSnapshot = {
+    hasDocs: c.documents.length > 0,
+    hasTranscript: c.documents.some((d) => d.docKind === "transcript"),
+    hasAmount: Boolean(
+      (facts as Json).balance_due ||
+        (typeof (facts as Json).expected_refund === "number" && typeof (facts as Json).received_refund === "number"),
+    ),
+    hasTaxYear:
+      issues.some((i) => i.tax_year != null && i.tax_year !== "") ||
+      Boolean((facts as Json).tax_years),
+  };
+  const eligibility = resolutionEligibility(pathEvidence);
+  let pathSteps: Json[] = [];
+  if (presentation?.path_steps && Array.isArray(presentation.path_steps) && (presentation.path_steps as Json[]).length) {
+    pathSteps = filterResolutionPathSteps(
+      (presentation.path_steps as Json[]).map((step) => ({
+        title: String(step.title ?? ""),
+        description: String(step.description ?? ""),
+        action_key: String(step.action_key ?? ""),
+      })),
+      eligibility,
+    ) as unknown as Json[];
+  } else {
+    try {
+      const ranked = buildRankedTaxActions({
+        hasNoticeDeadline: issues.some(
+          (i) =>
+            String(i.issue_type ?? "") === "notice_response" ||
+            String(i.priority ?? "").toLowerCase() === "urgent" ||
+            String(i.state ?? "").toLowerCase() === "urgent",
+        ),
+      });
+      const fromRanked = filterResolutionPathSteps(pathStepsFromRankedActions(ranked), eligibility);
+      pathSteps = (fromRanked.length
+        ? fromRanked
+        : thinEvidencePathSteps({
+            hasDocs: pathEvidence.hasDocs,
+            hasTranscript: pathEvidence.hasTranscript,
+          })) as unknown as Json[];
+    } catch {
+      pathSteps = thinEvidencePathSteps({
+        hasDocs: pathEvidence.hasDocs,
+        hasTranscript: pathEvidence.hasTranscript,
+      }) as unknown as Json[];
+    }
+    if (fallback?.pathSteps?.length && pathSteps.length === 0) {
+      pathSteps = filterResolutionPathSteps(
+        fallback.pathSteps.map((s) => ({
+          title: s.title,
+          description: s.description,
+          action_key: s.action_key,
+        })),
+        eligibility,
+      ) as unknown as Json[];
+    }
+  }
   const pathStepIds: string[] = [];
   for (const [i, step] of pathSteps.entries()) {
     const createdStep = await db.pathStep.create({
