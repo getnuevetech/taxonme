@@ -36,7 +36,7 @@ export function analyzeBranches(opts: {
         id: "penalty_abatement",
         condition: "If penalties are a large part of what you owe",
         explanation:
-          "First-time abatement or reasonable-cause relief can reduce penalties when the facts fit IRS rules — requested in writing with supporting explanation.",
+          "Some penalties may qualify for administrative or reasonable-cause relief depending on the tax period and compliance history — evaluated after the periods and penalty types are known, then requested with supporting explanation when appropriate.",
       },
     ];
   } else if (

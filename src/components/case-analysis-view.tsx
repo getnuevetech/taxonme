@@ -7,6 +7,8 @@ import { startFormAction } from "@/actions/forms";
 import { InlineUpload } from "@/components/inline-upload";
 import { CaseUpload } from "@/components/case-upload";
 import { AutoRefresh } from "@/components/auto-refresh";
+import { rankPotentialEvidenceSources } from "@/lib/evidence/potential-sources";
+import { groupCustomerUnknowns } from "@/lib/evidence/unknown-groups";
 import Link from "next/link";
 
 export type CaseViewer = { role: "customer" | "consultant" | "admin"; userId: string; fullResults?: boolean };
@@ -151,27 +153,41 @@ export async function CaseAnalysisView({ caseId, viewer }: { caseId: string; vie
     }
   };
 
-  // Evidence checklist derived from the findings.
+  // Evidence checklist — potential sources ranked by matter state (Package B).
   const haveKinds = new Set(c.documents.map((d) => d.docKind));
-  const yearHint = c.issues.find((i) => i.taxYear)?.taxYear;
-  const neededDocs: { kind: string; label: string; hint: string }[] = [];
-  const wantDoc = (kind: string, label: string, hint: string) => {
-    if (!neededDocs.some((d) => d.kind === kind)) neededDocs.push({ kind, label, hint });
-  };
-  for (const issue of c.issues) {
-    if (["refund_discrepancy", "balance_due", "penalty"].includes(issue.issueType)) {
-      wantDoc("transcript", `IRS Account Transcript${yearHint ? ` (${yearHint})` : ""}`, "Downloads instantly from the IRS online account — settles the exact amounts.");
-      wantDoc("1040", `Tax return (Form 1040)${yearHint ? ` for ${yearHint}` : ""}`, "Shows what was claimed, for comparison against IRS records.");
-    }
-    if (issue.issueType === "notice_response") {
-      wantDoc("notice", "The IRS notice or letter itself", "A phone photo is fine — the notice number, amount, and deadline are printed on it.");
-    }
-    if (issue.issueType === "missing_return") {
-      wantDoc("w2", "Income documents (W-2s)", "Needed to prepare the unfiled return.");
-      wantDoc("1099", "Income documents (1099s)", "Freelance/interest/brokerage income forms.");
-      wantDoc("transcript", "IRS Wage & Income Transcript", "Lists every income form the IRS received.");
-    }
-  }
+  const yearHint = c.issues.find((i) => i.taxYear)?.taxYear ?? null;
+  const narrative = `${c.situation}\n${c.goal}`;
+  const neededDocs = rankPotentialEvidenceSources({
+    issueTypes: c.issues.map((i) => i.issueType),
+    hasTranscript: haveKinds.has("transcript"),
+    hasNotice: haveKinds.has("notice"),
+    hasReturn: haveKinds.has("1040"),
+    hasIncomeDocs: haveKinds.has("w2") || haveKinds.has("1099"),
+    taxYear: yearHint,
+    amountKnown: c.issues.some(
+      (i) => i.expectedCents != null || i.differenceCents != null || i.receivedCents != null,
+    ),
+    unfiledDominant: c.issues.some((i) => i.issueType === "missing_return"),
+    narrativeMentionsNotice: /\b(notice|letter|cp\d+|lt\d+)\b/i.test(narrative),
+  }).map((d) => ({ kind: d.kind, label: d.label, hint: d.hint }));
+
+  const unknownInputs = [
+    ...c.unknowns.map((u) => ({ key: u.id, label: u.label, text: u.reason || "" })),
+    ...needItems.map((item, idx) => ({ key: `need:${idx}`, label: item })),
+    ...c.issues.flatMap((issue) => {
+      try {
+        const parsed = JSON.parse(issue.unclearJson || "[]");
+        if (!Array.isArray(parsed)) return [];
+        return parsed.map((item: unknown, idx: number) => ({
+          key: `${issue.id}:${idx}`,
+          label: String(item),
+        }));
+      } catch {
+        return [];
+      }
+    }),
+  ];
+  const customerUnknownGroups = groupCustomerUnknowns(unknownInputs);
 
   // Plain-English walkthrough of the latest analysis batch.
   const chronological = [...c.runs].reverse();
@@ -267,14 +283,26 @@ export async function CaseAnalysisView({ caseId, viewer }: { caseId: string; vie
                   </div>
                 </div>
               )}
-              {needItems.length > 0 && (
+              {customerFacing && customerUnknownGroups.length > 0 ? (
+                <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-4">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-amber-700">What we still need to establish</p>
+                  <ul className="mt-2 space-y-3 text-sm text-amber-900">
+                    {customerUnknownGroups.map((group) => (
+                      <li key={group.id}>
+                        <p className="font-semibold">{group.title}</p>
+                        <p className="mt-0.5 leading-relaxed">{group.summary}</p>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ) : needItems.length > 0 && !customerFacing ? (
                 <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-4">
                   <p className="text-xs font-semibold uppercase tracking-wide text-amber-700">What still needs confirmation</p>
                   <ul className="mt-2 space-y-1 text-sm text-amber-900">
                     {needItems.map((item, idx) => <li key={idx}>• {item}</li>)}
                   </ul>
                 </div>
-              )}
+              ) : null}
             </CardBody>
           </Card>
         )}
@@ -605,7 +633,23 @@ export async function CaseAnalysisView({ caseId, viewer }: { caseId: string; vie
           </div>
         </section>
 
-        {openUnknowns.length > 0 && (
+        {customerFacing && customerUnknownGroups.length > 0 && !findingCard ? (
+          <section>
+            <h2 className="mb-3 text-base font-semibold text-slate-900">What we still need to establish</h2>
+            <Card>
+              <CardBody>
+                <ul className="space-y-3">
+                  {customerUnknownGroups.map((group) => (
+                    <li key={group.id}>
+                      <p className="text-sm font-semibold text-slate-900">{group.title}</p>
+                      <p className="text-sm text-slate-600">{group.summary}</p>
+                    </li>
+                  ))}
+                </ul>
+              </CardBody>
+            </Card>
+          </section>
+        ) : !customerFacing && openUnknowns.length > 0 ? (
           <section>
             <h2 className="mb-3 text-base font-semibold text-slate-900">What still needs confirmation</h2>
             <Card>
@@ -623,7 +667,7 @@ export async function CaseAnalysisView({ caseId, viewer }: { caseId: string; vie
               </CardBody>
             </Card>
           </section>
-        )}
+        ) : null}
 
         {documentsInEvidence.length > 0 && (
           <section>

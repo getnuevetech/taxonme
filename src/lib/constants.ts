@@ -147,10 +147,10 @@ export const CONSULTANT_SPECIALTIES = [
 ] as const;
 
 export const DOC_KINDS = [
-  { key: "w2", name: "W-2" },
-  { key: "1099", name: "1099" },
-  { key: "1040", name: "Form 1040 / tax return" },
   { key: "notice", name: "IRS notice or letter" },
   { key: "transcript", name: "IRS transcript" },
+  { key: "1040", name: "Form 1040 / tax return" },
+  { key: "w2", name: "W-2" },
+  { key: "1099", name: "1099" },
   { key: "other", name: "Other" },
 ] as const;

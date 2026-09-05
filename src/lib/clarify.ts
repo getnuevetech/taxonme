@@ -1,6 +1,7 @@
 import "server-only";
 import { db } from "./db";
 import { resolveQuestionFromFacts, resolveUnknownTextFromFacts, type KnownFact } from "./evidence/unknowns";
+import { amountUnknownFromText, preferEvidenceAsk } from "./clarify-evidence";
 
 // The clarifying interview: when the analysis is thin (missing amounts,
 // years, dates, documents), the app asks the customer targeted questions in a
@@ -31,6 +32,8 @@ export function situationLine(key: string, questionText: string, answer: string)
       return `[Clarified] I actually received ${a} as my refund.`;
     case "balance_amount":
       return `[Clarified] The IRS says I owe ${a}.`;
+    case "prefer_evidence":
+      return `[Clarified] About IRS notice or Account Transcript: ${a}.`;
     case "notice_details":
       return `[Clarified] My IRS notice: ${a}.`;
     case "unfiled_years":
@@ -86,6 +89,34 @@ export async function nextClarifyQuestion(caseId: string): Promise<ClarifyQuesti
   const answered = new Set(c.clarifyMessages.map((m) => m.questionKey));
   const narrative = `${c.situation}\n${c.goal}`;
   const unfiledDominant = hasUnfiledReturnIntent(narrative) && !hasRefundIntent(narrative);
+  const hasTranscript = c.documents.some((d) => d.docKind === "transcript");
+  const hasNoticeDoc = c.documents.some((d) => d.docKind === "notice");
+  const balanceIssue = c.issues.find((i) => i.issueType === "balance_due");
+  const balanceOpen = Boolean(
+    balanceIssue && balanceIssue.expectedCents === null && balanceIssue.differenceCents === null,
+  );
+
+  // Package B: if the user already said they don't know the amount, prefer
+  // notice/transcript evidence over asking for the figure.
+  if (!answered.has("prefer_evidence") && !answered.has("have_transcript") && !answered.has("balance_amount")) {
+    const evidenceAsk = preferEvidenceAsk({
+      narrative,
+      hasTranscript,
+      hasNoticeDoc,
+      balanceIssueOpen: balanceOpen,
+    });
+    if (evidenceAsk) {
+      const resolution = resolveQuestionFromFacts(
+        evidenceAsk.key === "prefer_evidence" ? "have_transcript" : evidenceAsk.key,
+        evidenceFacts,
+      );
+      if (!resolution.suppressed) {
+        return evidenceAsk;
+      }
+      await suppress(evidenceAsk.key, evidenceAsk.text, resolution);
+    }
+  }
+
   for (const issue of c.issues) {
     if (unfiledDominant && issue.issueType === "refund_discrepancy") continue;
     let unclear: string[] = [];
@@ -96,6 +127,12 @@ export async function nextClarifyQuestion(caseId: string): Promise<ClarifyQuesti
       unclear = [];
     }
     for (const [index, item] of unclear.entries()) {
+      if (
+        amountUnknownFromText(narrative) &&
+        /(current balance|how much|amount you owe|the amount)/i.test(item)
+      ) {
+        continue;
+      }
       const key = `unclear:${issue.id}:${index}`;
       if (answered.has(key)) continue;
       const year = issue.taxYear ? ` for ${issue.taxYear}` : "";
@@ -112,12 +149,11 @@ export async function nextClarifyQuestion(caseId: string): Promise<ClarifyQuesti
       };
     }
   }
-  const hasTranscript = c.documents.some((d) => d.docKind === "transcript");
   const refundIssue = c.issues.find((i) => i.issueType === "refund_discrepancy");
-  const balanceIssue = c.issues.find((i) => i.issueType === "balance_due");
   const noticeIssue = c.issues.find((i) => i.issueType === "notice_response");
   const unfiledIssue = c.issues.find((i) => i.issueType === "missing_return");
   const hasYear = c.issues.some((i) => i.taxYear);
+  const skipBalanceAmount = amountUnknownFromText(narrative) && !hasTranscript;
 
   const questions: (ClarifyQuestion & { needed: boolean })[] = [
     {
@@ -148,7 +184,7 @@ export async function nextClarifyQuestion(caseId: string): Promise<ClarifyQuesti
       key: "balance_amount",
       text: "What amount does the IRS say you owe, and where does that number come from — a letter/notice, your IRS online account, or your own estimate?",
       placeholder: "Enter the amount and source, such as a notice or online account...",
-      needed: Boolean(balanceIssue && balanceIssue.expectedCents === null && balanceIssue.differenceCents === null),
+      needed: Boolean(balanceOpen && !skipBalanceAmount),
     },
     {
       key: "notice_details",

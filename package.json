@@ -44,6 +44,7 @@
     "test:v51": "tsx scripts/phase-f-reliability-check.ts && tsx scripts/phase-a-classification-check.ts && tsx scripts/phase-b-fact-ledger-check.ts && tsx scripts/phase-c-locks-check.ts && tsx scripts/phase-e-approval-gate-check.ts && tsx scripts/phase-d-action-ranking-check.ts && tsx scripts/phase-g-fixture-pack-check.ts",
     "test:evidence": "tsx scripts/v32-evidence-check.ts",
     "test:package-a": "tsx scripts/phase-package-a-honesty-check.ts",
+    "test:package-b": "tsx scripts/phase-package-b-check.ts",
     "db:push": "prisma db push",
     "db:seed": "prisma db seed",
     "db:migrate": "prisma migrate deploy"
