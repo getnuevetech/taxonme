@@ -2,6 +2,10 @@ import { PrismaClient } from "@prisma/client";
 import bcrypt from "bcryptjs";
 import crypto from "crypto";
 import { AI_V3_VERSION, PROMPT_SUPERSEDES, V3_PIPELINE_BLUEPRINT, V3_PROMPT_RECORDS } from "../src/lib/ai/v3-prompts";
+import {
+  PERIOD_SENSITIVE_KNOWLEDGE,
+  knowledgeSourceWriteData,
+} from "../src/lib/knowledge-authority-seed";
 
 const db = new PrismaClient();
 
@@ -679,6 +683,7 @@ If your case needs a licensed professional, we can connect you with a vetted CPA
 }
 
 async function seedKnowledge() {
+  const periodByTitle = new Map(PERIOD_SENSITIVE_KNOWLEDGE.map((s) => [s.title, s]));
   const sources = [
     {
       title: "CP2000 — Underreported income notice",
@@ -715,29 +720,9 @@ async function seedKnowledge() {
       tags: "transcript, transaction codes, 846, 826, 570, 971",
       content: "Key IRS account transcript transaction codes: TC 150 = tax return filed and tax assessed. TC 806 = withholding credit. TC 846 = refund issued (with date and amount). TC 826 = credit transferred to another tax period (refund used to pay another year's debt). TC 570 = additional account action pending (refund hold). TC 971 = notice issued. TC 971/977 = amended return received. TC 276 = failure-to-pay penalty. TC 196 = interest assessed. TC 480 = offer in compromise pending. TC 971 with 'collection due process' = CDP request received. Comparing TC 846 amounts against the refund claimed on the return reveals offsets and adjustments.",
     },
-    {
-      title: "Installment agreements (payment plans)",
-      sourceType: "rule",
-      reference: "Form 9465 / IRC 6159",
-      tags: "payment plan, installment agreement, balance due, requires_known_balance",
-      content: "Individuals who owe $50,000 or less in combined tax, penalties, and interest can generally set up a long-term installment agreement online (streamlined, no financial statement). Short-term plans (up to 180 days) are available for balances under $100,000. Setup fees vary and are lower for direct-debit agreements; low-income taxpayers may qualify for fee waivers. While an agreement is in effect the failure-to-pay penalty rate is reduced. Defaulting (missing payments or new unpaid balances) can terminate the agreement. A pending installment agreement request generally suspends levy action.",
-    },
-    {
-      title: "First-time penalty abatement",
-      sourceType: "rule",
-      reference: "FTA / IRM 20.1.1.3.3.2.1",
-      tags: "penalty, abatement, relief, first time, fta, applies_through_2024",
-      taxYear: 2024,
-      content: "First-time abatement (FTA) provides administrative relief from failure-to-file, failure-to-pay, and failure-to-deposit penalties for eligible periods generally through tax year 2024 when the taxpayer: (1) has a clean compliance history for the prior 3 years (no significant penalties), (2) has filed all currently required returns or valid extensions, and (3) has paid or arranged to pay any tax due (an installment agreement in good standing qualifies). FTA can be requested by phone or in writing. Interest on the abated penalty is also removed, but interest on the tax itself is statutory and cannot be abated for reasonable cause. Reasonable-cause relief is a separate path for circumstances such as serious illness or disaster.",
-    },
-    {
-      title: "Automatic Exemption from Penalty (AEP)",
-      sourceType: "rule",
-      reference: "AEP / IRS penalty relief transition",
-      tags: "penalty, abatement, relief, aep, ty2025",
-      taxYear: 2025,
-      content: "Beginning with tax year 2025 (and certain 2026 quarterly returns), the IRS is transitioning from First Time Abate (FTA) to the Automatic Exemption from Penalty (AEP) for eligible original returns. AEP provides administrative relief from certain failure-to-file and failure-to-pay penalties when eligibility criteria for the period are met. Reasonable-cause relief remains a separate path. Always confirm the tax period and penalty codes on the Account Transcript before selecting FTA vs AEP language in a request.",
-    },
+    periodByTitle.get("Installment agreements (payment plans)")!,
+    periodByTitle.get("First-time penalty abatement")!,
+    periodByTitle.get("Automatic Exemption from Penalty (AEP)")!,
     {
       title: "Getting IRS transcripts",
       sourceType: "rule",
@@ -753,9 +738,26 @@ async function seedKnowledge() {
       content: "When a required return is not filed, the IRS may prepare a Substitute for Return (SFR) using payer information — with single/married-filing-separate status and no itemized deductions or credits, usually overstating the true tax. Filing an accurate original return generally replaces the SFR assessment. Refunds are only payable if claimed within 3 years of the return due date (or 2 years of payment). Getting compliant (typically the last 6 years of returns per IRS Policy Statement 5-133) is a prerequisite for most resolution options such as installment agreements and offers in compromise.",
     },
   ];
+  // Package G: create-or-update so re-seed refreshes taxYear / tags / content
+  // (create-if-missing left stale FTA rows without taxYear on existing installs).
   for (const s of sources) {
+    const write = knowledgeSourceWriteData({
+      title: s.title,
+      sourceType: s.sourceType,
+      reference: s.reference,
+      tags: s.tags,
+      content: s.content,
+      taxYear: "taxYear" in s ? (s.taxYear as number | null | undefined) : null,
+    });
     const exists = await db.knowledgeSource.findFirst({ where: { title: s.title } });
-    if (!exists) await db.knowledgeSource.create({ data: s });
+    if (!exists) {
+      await db.knowledgeSource.create({ data: { title: s.title, ...write } });
+    } else {
+      await db.knowledgeSource.update({
+        where: { id: exists.id },
+        data: write,
+      });
+    }
   }
 }
 

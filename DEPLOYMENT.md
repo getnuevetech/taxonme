@@ -65,7 +65,9 @@ If the server has no systemd, the script prints the manual start command instead
 export DATABASE_URL="postgresql://USER:PASSWORD@HOST:5432/DBNAME?schema=public"
 npm ci
 npx prisma migrate deploy   # apply schema migrations
-npx prisma db seed          # idempotent defaults (admin, plans, pipelines, content)
+## Deploy / re-seed note
+
+Period-sensitive knowledge (FTA `taxYear=2024`, AEP `taxYear=2025`, installment threshold tags) is refreshed on every `npx prisma db seed` — create-or-update, not create-if-missing. Existing installs pick up stamps without a manual SQL patch.
 npm test                    # static AI v3/v3.1 acceptance checks
 npm run ai:v3:rollout-check # database-backed AI readiness check
 npm run build

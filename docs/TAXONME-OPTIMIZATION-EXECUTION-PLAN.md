@@ -296,6 +296,7 @@ Waves 0–7 port the Imm engineering posture. Remaining product risk is **scenar
 | **D** | Wire V5.1 approval gate (fail closed) | Unsafe presentation cannot persist. Charter: `docs/v5.1/PACKAGE-D-APPROVAL-GATE-WIRE.md`. Gate: `npm run test:package-d`. |
 | **E** | Evidence-proportional UI (empty module = nothing) | Thin intakes stay short. Charter: `docs/v5.1/PACKAGE-E-PROPORTIONAL-UI.md`. Gate: `npm run test:package-e`. |
 | **F** | Thin → transcript deepening | After Account Transcript, findings deepen. Charter: `docs/v5.1/PACKAGE-F-TRANSCRIPT-DEEPEN.md`. Gate: `npm run test:package-f`. |
+| **G** | Knowledge freshness (FTA/AEP re-seed) | Period stamps survive re-seed. Charter: `docs/v5.1/PACKAGE-G-KNOWLEDGE-FRESHNESS.md`. Gate: `npm run test:package-g`. |
 
 These packages **increase** dynamic capability by retiring static templates; they do not narrow TaxOnMe to one demo case.
 

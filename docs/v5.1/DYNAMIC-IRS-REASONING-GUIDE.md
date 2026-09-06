@@ -92,6 +92,7 @@ Work packages that enforce this guide (do not treat as “make the app dumber”
 | **D** | Wire V5.1 approval gate into orchestrator (fail closed on BLOCK) |
 | **E** | Evidence-proportional UI — empty module = render nothing on thin intake |
 | **F** | Thin intake → transcript deepening (amount/year/composition when established) |
+| **G** | Knowledge freshness — FTA/AEP taxYear + installment re-seed upserts |
 
 Every package must preserve **Pipeline A** (arbitrary IRS/tax questions) and **Pipeline B** (matter engine) as general reasoners — never collapse the product into a single-scenario wizard.
 
