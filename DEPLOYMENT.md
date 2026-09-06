@@ -19,20 +19,31 @@ That's it. The app container waits for the database, applies migrations, seeds d
 - Logs: `docker compose logs -f app`
 - Backup: `docker compose exec db pg_dump -U taxonme taxonme > backup.sql`
 
-### Docker build runs out of memory (`signal: killed`)
+### Docker build runs out of memory (`signal: killed` / `SIGKILL`)
 
-`npm run build` inside Docker needs roughly **2 GB free RAM**. If Compose dies during
-`Creating an optimized production build ...` with `failed to execute bake: signal: killed`,
-the host OOM-killed the builder (not an app code error).
+`npm run build` inside Docker is memory-heavy. Two common failure points:
 
-On a small VPS, add temporary swap before rebuilding:
+1. Mid-webpack (`Creating an optimized production build ...`) — host OOM.
+2. After `✓ Compiled successfully` during `Running TypeScript ...` — Next's
+   post-compile typecheck peaks another large heap; Docker sets `DOCKER_BUILD=1`
+   so that pass is skipped (CI still runs `npm run typecheck`).
+
+If Compose still dies with `signal: killed` / `SIGKILL`, free RAM or add swap:
 
 ```bash
+# See free memory (need ~1.5–2 GB available during build)
+free -h
+# Optional: stop the running stack so Postgres is not competing for RAM
+docker compose --env-file .env.deploy stop
+# Temporary 2G swap if the VPS is tight
 sudo fallocate -l 2G /swapfile && sudo chmod 600 /swapfile
 sudo mkswap /swapfile && sudo swapon /swapfile
 docker compose --env-file .env.deploy build --no-cache app
+docker compose --env-file .env.deploy up -d
 # optional: sudo swapoff /swapfile && sudo rm /swapfile
 ```
+
+This is a host resource limit, not an application code error.
 
 ## Option B — Bare metal (no Docker)
 

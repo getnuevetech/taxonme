@@ -19,9 +19,13 @@ ENV NEXT_TELEMETRY_DISABLED=1
 # Keep the webpack build single-threaded so peak RSS stays lower on small VPS hosts.
 ENV NEXT_PRIVATE_BUILD_WORKER=1
 ENV UV_THREADPOOL_SIZE=2
-# 768MB was OOM-killing Next 16 webpack builds (~3–4 min in, "signal: killed").
-# Need ~2GB free host RAM (or temporary swap) for `docker compose build`.
-ENV NODE_OPTIONS="--max-old-space-size=2048"
+# Skip Next's post-compile `tsc` in Docker — it peaks another ~1GB and OOM-kills
+# 2GB VPS builds after "Compiled successfully" / "Running TypeScript ...".
+# Typecheck stays in CI (`npm run typecheck`).
+ENV DOCKER_BUILD=1
+# Cap the heap below a typical 2GB VPS free RAM so Node fails soft instead of
+# letting the host OOM-killer SIGKILL the build mid-pass.
+ENV NODE_OPTIONS="--max-old-space-size=1536"
 RUN npx prisma generate
 RUN npm run build
 
