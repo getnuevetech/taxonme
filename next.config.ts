@@ -1,9 +1,17 @@
 import type { NextConfig } from "next";
 
+// Docker builds on small VPS hosts OOM during Next's post-compile TypeScript
+// pass (SIGKILL after "✓ Compiled successfully"). Skip that pass when
+// DOCKER_BUILD=1; CI still typechecks via `npm run typecheck` + full build.
+const dockerBuild = process.env.DOCKER_BUILD === "1";
+
 const nextConfig: NextConfig = {
   // pdf-parse (pdfjs-dist) must run as a real Node dependency — bundling it
   // breaks its worker/DOM handling and silently kills PDF text extraction.
   serverExternalPackages: ["pdf-parse", "pdfjs-dist"],
+  typescript: dockerBuild
+    ? { ignoreBuildErrors: true }
+    : undefined,
   async redirects() {
     return [
       { source: "/updates", destination: "/irs-updates", permanent: true },
