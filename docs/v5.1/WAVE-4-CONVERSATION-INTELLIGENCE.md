@@ -30,10 +30,12 @@ Answer tax questions without forcing an agency matter; router is sole authority 
 
 ## Deferred (later waves)
 
-- Model Responsibility Contract (`model-capabilities`, document-intelligence roles) — Imm −1 model check  
 - −1.7 / −1.8 Pipeline A UX polish (structured widgets, starters)  
-- −1.9 Experience L0–L7 (Wave 7)  
-- First-class Situation workspace (Wave 5) — today unfiled strategy stays `workspace=situation` without a Situation table  
+
+## Follow-on packages
+
+- **Package I** — `model-capabilities` + live `enrichIntelligenceWithReasoningModel` (experience ask hints + low-confidence contract refine): `PACKAGE-I-REASONING-ENRICH.md`  
+
 
 ## Check
 
