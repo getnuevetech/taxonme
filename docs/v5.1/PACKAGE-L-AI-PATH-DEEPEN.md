@@ -12,7 +12,7 @@
 
 ## Non-goals
 
-- Admin ConversationIntelligence diagnostics
+- Admin ConversationIntelligence diagnostics _(→ Package M)_
 - Rewriting presenter prompts
 - Changing Package F fallback deepen behavior (still used when AI is off)
 

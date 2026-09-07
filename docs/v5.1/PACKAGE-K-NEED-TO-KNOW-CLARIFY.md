@@ -13,7 +13,7 @@
 
 ## Non-goals
 
-- Admin ConversationIntelligence diagnostics panel
+- Admin ConversationIntelligence diagnostics panel _(→ Package M)_
 - Orchestrator AI-path transcript deepen (Package L candidate)
 - Full rewrite of notice explainers beyond levy honesty tweak
 

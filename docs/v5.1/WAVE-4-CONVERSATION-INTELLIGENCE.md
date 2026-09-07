@@ -37,6 +37,8 @@ _(none for −1.8 — see Package J)_
 - **Package I** — `model-capabilities` + live `enrichIntelligenceWithReasoningModel`: `PACKAGE-I-REASONING-ENRICH.md`
 - **Package J** — Pipeline A UX (−1.8 + minimal −1.7 continuity): structured widgets, starters, focus chrome, promote CTA, guide `?q=` prefill, `QaThread.intelligenceJson`: `PACKAGE-J-PIPELINE-A-UX.md`
 - **Package K** — Case clarify → need-to-know planner (evidence-first thin debt asks): `PACKAGE-K-NEED-TO-KNOW-CLARIFY.md`
+- **Package L** — AI-path transcript deepen: `PACKAGE-L-AI-PATH-DEEPEN.md`
+- **Package M** — Admin ConversationIntelligence diagnostics: `PACKAGE-M-ADMIN-INTELLIGENCE-DIAGNOSTICS.md`
 
 
 ## Check

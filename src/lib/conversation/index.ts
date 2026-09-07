@@ -24,6 +24,12 @@ export {
 } from "./intelligence-enrich";
 export type { ExperienceAskHints, ContractRefinePatch } from "./intelligence-enrich";
 export {
+  summarizeConversationIntelligence,
+  summarizeFromStoredJson,
+  summarizeForCase,
+} from "./intelligence-diagnostics";
+export type { IntelligenceDiagnosticsSummary } from "./intelligence-diagnostics";
+export {
   buildQuestionContract,
   helpsDecisionTarget,
   mergeWithPrior,
