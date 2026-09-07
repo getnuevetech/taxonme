@@ -16,6 +16,13 @@ export {
   priorContractFromStored,
   enrichIntelligenceWithReasoningModel,
 } from "./intelligence";
+export type { EnrichIntelligenceOptions } from "./intelligence";
+export {
+  applyExperienceAskHints,
+  applyContractRefine,
+  parseContractRefineResponse,
+} from "./intelligence-enrich";
+export type { ExperienceAskHints, ContractRefinePatch } from "./intelligence-enrich";
 export {
   buildQuestionContract,
   helpsDecisionTarget,

@@ -98,20 +98,131 @@ export function priorContractFromStored(raw: string | null | undefined): Questio
   return parseStoredIntelligence(raw)?.question_contract ?? null;
 }
 
+export type EnrichIntelligenceOptions = {
+  /** Skip live DB experience search (tests). */
+  experienceHints?: import("./intelligence-enrich").ExperienceAskHints | null;
+  /** Injectable contract refine (tests / no provider). */
+  refineContract?: (
+    intel: ConversationIntelligence,
+    input: ConversationMessageInput,
+  ) => Promise<import("./intelligence-enrich").ContractRefinePatch | null>;
+  /** Force / skip model attempt regardless of confidence. */
+  attemptModelRefine?: boolean;
+};
+
 /**
- * Optional Sol enrichment when heuristic confidence is low.
- * Never invents document facts; only may refine interpreted_question / decision_target labels.
- * Falls back silently when no PRIMARY_REASONING provider/key is available.
- */
-/**
- * Optional model refinement of low-confidence contracts.
- * Wave 4: no-op until TaxOnMe ports model-capabilities + experience search (Waves 6–7).
+ * Optional enrichment when heuristic confidence is low or experience patterns apply.
+ * Never invents document facts; only may reorder existing asks and refine
+ * interpreted_question / decision_target labels (allowlisted).
+ * Fail-closed: any error or missing provider returns intel unchanged (after safe hint apply).
  */
 export async function enrichIntelligenceWithReasoningModel(
   intel: ConversationIntelligence,
-  _input: ConversationMessageInput,
+  input: ConversationMessageInput,
+  options: EnrichIntelligenceOptions = {},
 ): Promise<ConversationIntelligence> {
-  return intel;
+  const {
+    applyExperienceAskHints,
+    applyContractRefine,
+  } = await import("./intelligence-enrich");
+  const { shouldAttemptReasoningEnrichment, MODEL_ROLES, ROLE_CAPABILITIES } = await import(
+    "@/lib/ai/model-capabilities"
+  );
+
+  let next = intel;
+
+  try {
+    let hints = options.experienceHints;
+    if (hints === undefined) {
+      try {
+        const { searchProductionExperience, productionPatternAskHints } = await import(
+          "@/lib/experience/search"
+        );
+        const { extractSituationFeatures } = await import("@/lib/experience/what-mattered");
+        const message = String(input.message ?? "");
+        const hits = await searchProductionExperience({
+          decisionTarget: next.question_contract.decision_target,
+          workspace: next.route.workspace,
+          factKeys: extractSituationFeatures(message),
+          pathways: next.strategy.branches.map((b) => b.id),
+          limit: 5,
+        });
+        hints = productionPatternAskHints(hits);
+      } catch {
+        hints = null;
+      }
+    }
+    if (hints) next = applyExperienceAskHints(next, hints);
+  } catch {
+    // Experience apply must never break the turn.
+  }
+
+  const attemptModel =
+    options.attemptModelRefine ??
+    shouldAttemptReasoningEnrichment({
+      routing_confidence: next.intent.routing_confidence,
+      clarify_first_required: next.answerability.clarify_first_required,
+    });
+
+  if (!attemptModel) return next;
+  if (!ROLE_CAPABILITIES[MODEL_ROLES.PRIMARY_REASONING].may_refine_contract) return next;
+
+  try {
+    const patch =
+      options.refineContract != null
+        ? await options.refineContract(next, input)
+        : await defaultPrimaryReasoningRefine(next, input);
+    if (patch) next = applyContractRefine(next, patch);
+  } catch {
+    // Fail closed: keep heuristic (+ experience) result.
+  }
+
+  return next;
+}
+
+async function defaultPrimaryReasoningRefine(
+  intel: ConversationIntelligence,
+  input: ConversationMessageInput,
+): Promise<import("./intelligence-enrich").ContractRefinePatch | null> {
+  const { parseContractRefineResponse } = await import("./intelligence-enrich");
+  const { ALLOWED_DECISION_TARGETS } = await import("@/lib/ai/model-capabilities");
+
+  // Dynamic import keeps this module importable from client bundles that only use sync helpers.
+  const { db } = await import("@/lib/db");
+  const { providerAllowedForTaxData } = await import("@/lib/ai/provider-policy");
+  const { callProvider } = await import("@/lib/ai/adapters");
+
+  const providers = await db.aiProvider.findMany({
+    where: { isEnabled: true },
+    orderBy: [{ costTier: "desc" }, { name: "asc" }],
+    take: 12,
+  });
+  const provider = providers.find((p) => providerAllowedForTaxData(p));
+  if (!provider) return null;
+
+  const system = [
+    "You refine TaxOnMe conversation question contracts.",
+    "Return ONLY JSON: {\"interpreted_question\":\"...\",\"decision_target\":\"...\"}.",
+    `decision_target must be one of: ${ALLOWED_DECISION_TARGETS.join(", ")}.`,
+    "Do not invent documents, balances, notice codes, or legal conclusions.",
+    "Only clarify what the user is asking and the decision target label.",
+  ].join(" ");
+
+  const user = JSON.stringify({
+    message: String(input.message ?? "").slice(0, 2000),
+    goal: String(input.goal ?? "").slice(0, 400),
+    current: {
+      interpreted_question: intel.question_contract.interpreted_question,
+      decision_target: intel.question_contract.decision_target,
+      routing_confidence: intel.intent.routing_confidence,
+    },
+  });
+
+  const result = await callProvider(provider, [
+    { role: "system", content: system },
+    { role: "user", content: user },
+  ]);
+  return parseContractRefineResponse(result.text);
 }
 
 export function isQuestionShapedCaseNarrative(situation: string, goal: string): boolean {

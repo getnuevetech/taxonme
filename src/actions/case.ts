@@ -36,11 +36,19 @@ export async function startIntakeAction(_prev: ActionState, formData: FormData):
 
   const {
     runConversationIntelligence,
+    enrichIntelligenceWithReasoningModel,
     composeAssistantReply,
     mayPromoteAssistantToCase,
     detectGovernmentMatter,
   } = await import("@/lib/conversation");
-  const intel = runConversationIntelligence({
+  const baseIntel = runConversationIntelligence({
+    message: situation,
+    goal,
+    documentCount: files.length,
+    documentHints: files.map((f) => f.name),
+    forceCase: false,
+  });
+  const intel = await enrichIntelligenceWithReasoningModel(baseIntel, {
     message: situation,
     goal,
     documentCount: files.length,
@@ -193,11 +201,17 @@ export async function createCaseAction(_prev: ActionState, formData: FormData): 
 
   const {
     runConversationIntelligence,
+    enrichIntelligenceWithReasoningModel,
     composeAssistantReply,
     mayPromoteAssistantToCase,
     detectGovernmentMatter,
   } = await import("@/lib/conversation");
-  const intel = runConversationIntelligence({
+  const baseIntel = runConversationIntelligence({
+    message: situation,
+    goal,
+    forceCase: false,
+  });
+  const intel = await enrichIntelligenceWithReasoningModel(baseIntel, {
     message: situation,
     goal,
     forceCase: false,

@@ -74,10 +74,17 @@ export async function askQuestionAction(_prev: ActionState, formData: FormData):
   // Phase −1: router decides assistant vs case engine before any answer is shown.
   const {
     runConversationIntelligence,
+    enrichIntelligenceWithReasoningModel,
     composeAssistantReply,
     mayPromoteAssistantToCase,
   } = await import("@/lib/conversation");
-  const intel = runConversationIntelligence({
+  const baseIntel = runConversationIntelligence({
+    message: question,
+    goal: thread.title,
+    history,
+    documentCount: 0,
+  });
+  const intel = await enrichIntelligenceWithReasoningModel(baseIntel, {
     message: question,
     goal: thread.title,
     history,
