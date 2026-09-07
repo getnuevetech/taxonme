@@ -40,6 +40,7 @@ export { buildNeedToKnow, askableNow } from "./need-to-know";
 export {
   needToKnowClarifyQuestion,
   intelligenceForCase,
+  resolveCaseIntelligenceJson,
   unknownHelpsContract,
   rankNeedToKnowForDisplay,
 } from "./need-to-know-clarify";

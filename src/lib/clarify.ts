@@ -170,7 +170,8 @@ export async function nextClarifyQuestion(caseId: string): Promise<ClarifyQuesti
   const intel = intelligenceForCase({
     situation: c.situation,
     goal: c.goal,
-    intelligenceJson: c.originSituation?.intelligenceJson,
+    intelligenceJson: c.intelligenceJson,
+    situationIntelligenceJson: c.originSituation?.intelligenceJson,
   });
   const ntk = needToKnowClarifyQuestion(intel, [...answered]);
   if (ntk) {

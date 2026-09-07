@@ -19,7 +19,7 @@ export default async function AdminIntelligencePage({
     <div>
       <PageHeader
         title="Conversation intelligence"
-        subtitle="Read-only Pipeline A/B routing snapshots for Situation, Q&A thread, or Case ids. Does not re-run enrichment or mutate stored JSON."
+        subtitle="Read-only Pipeline A/B routing snapshots for Situation, Q&A thread, or Case ids. Cases use Case.intelligenceJson first, then linked Situation. Does not re-run enrichment or mutate stored JSON."
       />
 
       <Card>

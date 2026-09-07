@@ -8,6 +8,7 @@ import { CaseAnalysisView } from "@/components/case-analysis-view";
 import { CaseComments } from "@/components/case-comments";
 import { IntelligenceDiagnosticsPanel } from "@/components/admin/intelligence-diagnostics-panel";
 import { summarizeForCase } from "@/lib/conversation/intelligence-diagnostics";
+import { resolveCaseIntelligenceJson } from "@/lib/conversation/need-to-know-clarify";
 
 // Admins see EXACTLY what the customer sees, plus the case discussion (with
 // internal comments) and the technical pipeline diagnostics collapsed below.
@@ -34,7 +35,12 @@ export default async function AdminCaseDetailPage({ params }: { params: Promise<
   const intelSummary = summarizeForCase({
     situation: c.situation,
     goal: c.goal,
-    intelligenceJson: c.originSituation?.intelligenceJson,
+    intelligenceJson: c.intelligenceJson,
+    situationIntelligenceJson: c.originSituation?.intelligenceJson,
+  });
+  const rawIntel = resolveCaseIntelligenceJson({
+    caseIntelligenceJson: c.intelligenceJson,
+    situationIntelligenceJson: c.originSituation?.intelligenceJson,
   });
 
   return (
@@ -63,7 +69,7 @@ export default async function AdminCaseDetailPage({ params }: { params: Promise<
         <IntelligenceDiagnosticsPanel
           summary={intelSummary}
           title="Conversation intelligence (Pipeline A/B)"
-          rawJson={c.originSituation?.intelligenceJson ?? null}
+          rawJson={rawIntel}
         />
       </div>
 

@@ -4,7 +4,7 @@
  */
 import type { ConversationIntelligence } from "./types";
 import { parseStoredIntelligence } from "./intelligence";
-import { intelligenceForCase } from "./need-to-know-clarify";
+import { intelligenceForCase, resolveCaseIntelligenceJson } from "./need-to-know-clarify";
 
 export type IntelligenceDiagnosticsSummary = {
   decision_target: string;
@@ -57,13 +57,23 @@ export function summarizeFromStoredJson(
   return summarizeConversationIntelligence(intel, "stored");
 }
 
-/** Case: prefer origin Situation snapshot; else recompute from narrative. */
+/** Case: prefer Case.intelligenceJson, then origin Situation, else recompute. */
 export function summarizeForCase(opts: {
   situation: string;
   goal: string;
   intelligenceJson?: string | null;
+  situationIntelligenceJson?: string | null;
 }): IntelligenceDiagnosticsSummary {
-  const stored = parseStoredIntelligence(opts.intelligenceJson);
-  const intel = intelligenceForCase(opts);
+  const raw = resolveCaseIntelligenceJson({
+    caseIntelligenceJson: opts.intelligenceJson,
+    situationIntelligenceJson: opts.situationIntelligenceJson,
+  });
+  const stored = parseStoredIntelligence(raw);
+  const intel = intelligenceForCase({
+    situation: opts.situation,
+    goal: opts.goal,
+    intelligenceJson: opts.intelligenceJson,
+    situationIntelligenceJson: opts.situationIntelligenceJson,
+  });
   return summarizeConversationIntelligence(intel, stored ? "stored" : "recomputed");
 }

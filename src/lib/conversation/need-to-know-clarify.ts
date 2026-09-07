@@ -54,10 +54,31 @@ export function intelligenceForCase(opts: {
   situation: string;
   goal: string;
   intelligenceJson?: string | null;
+  /** Optional Situation snapshot when Case field is empty / unparseable. */
+  situationIntelligenceJson?: string | null;
 }): ConversationIntelligence {
-  const stored = parseStoredIntelligence(opts.intelligenceJson);
+  const raw =
+    resolveCaseIntelligenceJson({
+      caseIntelligenceJson: opts.intelligenceJson,
+      situationIntelligenceJson: opts.situationIntelligenceJson,
+    }) ?? opts.intelligenceJson;
+  const stored = parseStoredIntelligence(raw);
   if (stored) return stored;
   return runConversationIntelligence({ message: opts.situation, goal: opts.goal });
+}
+
+/** Prefer Case snapshot, then linked Situation; else null (caller recomputes). */
+export function resolveCaseIntelligenceJson(opts: {
+  caseIntelligenceJson?: string | null;
+  situationIntelligenceJson?: string | null;
+}): string | null {
+  if (parseStoredIntelligence(opts.caseIntelligenceJson)) {
+    return opts.caseIntelligenceJson ?? null;
+  }
+  if (parseStoredIntelligence(opts.situationIntelligenceJson)) {
+    return opts.situationIntelligenceJson ?? null;
+  }
+  return null;
 }
 
 /** Drop planned unknowns that do not help the current decision target. */
