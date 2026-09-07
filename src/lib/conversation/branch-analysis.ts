@@ -1,47 +1,75 @@
 import type { AnswerBranch, NeedToKnowItem, QuestionContract } from "./types";
+import { canSurfaceResolutionPathways } from "./pathway-eligibility";
 
-/** Tax pathway / notice branches before clarify (Wave 4). */
+/** Evidence-first branches when debt is alleged but amount/position is unknown. */
+function evidenceFirstBranches(): AnswerBranch[] {
+  return [
+    {
+      id: "establish_account_position",
+      condition: "If you do not yet know what the IRS shows",
+      explanation:
+        "Start with your IRS Account Transcript (or the notice stating the balance). That establishes tax years, current balance, and recent activity before any payment or relief pathway is sized.",
+    },
+    {
+      id: "use_existing_notice",
+      condition: "If you already have an IRS notice or letter",
+      explanation:
+        "Upload or identify the notice code (for example CP14, CP503, LT11). The notice’s printed amount and deadline usually set the next move.",
+    },
+  ];
+}
+
+function resolutionPathwayBranches(): AnswerBranch[] {
+  return [
+    {
+      id: "installment_agreement",
+      condition: "If you can pay over time",
+      explanation:
+        "You may request an IRS installment agreement (often Form 9465) once the balance and tax periods are confirmed. Confirm the amount on transcript before proposing a monthly payment.",
+    },
+    {
+      id: "currently_not_collectible",
+      condition: "If you cannot pay anything right now",
+      explanation:
+        "You may qualify to be placed in Currently Not Collectible status after proving financial hardship — collections pause while interest may still accrue.",
+    },
+    {
+      id: "offer_in_compromise",
+      condition: "If you can settle for less than the full balance",
+      explanation:
+        "An Offer in Compromise is a formal settlement path with strict financial disclosure. It is not the first step for most people.",
+    },
+    {
+      id: "penalty_abatement",
+      condition: "If penalties are a large part of what you owe",
+      explanation:
+        "Some penalties may qualify for administrative or reasonable-cause relief depending on the tax period and compliance history — evaluated after the periods and penalty types are known.",
+    },
+  ];
+}
+
+/** Tax pathway / notice branches before clarify (Wave 4 + Package H honesty). */
 export function analyzeBranches(opts: {
   contract: QuestionContract;
   message: string;
   askNow?: NeedToKnowItem[];
 }): { branch_before_clarify: boolean; branches: AnswerBranch[] } {
-  const text = `${opts.message}\n${opts.contract.interpreted_question}`.toLowerCase();
+  const text = `${opts.message}\n${opts.contract.interpreted_question}`;
+  const lower = text.toLowerCase();
   let branches: AnswerBranch[] = [];
 
-  if (
+  const wantsPathways =
     opts.contract.decision_target === "identify_available_pathways" ||
-    /\b(can'?t pay|cannot pay|owe|balance due|payment plan|installment|offer in compromise|penalty)\b/i.test(text)
-  ) {
-    branches = [
-      {
-        id: "installment_agreement",
-        condition: "If you can pay over time",
-        explanation:
-          "Many taxpayers set up an IRS installment agreement (for example Form 9465). Streamlined options often apply under common balance thresholds.",
-      },
-      {
-        id: "currently_not_collectible",
-        condition: "If you cannot pay anything right now",
-        explanation:
-          "You may qualify to be placed in Currently Not Collectible status after proving financial hardship — collections pause while interest may still accrue.",
-      },
-      {
-        id: "offer_in_compromise",
-        condition: "If you can settle for less than the full balance",
-        explanation:
-          "An Offer in Compromise is a formal settlement path with strict financial disclosure. It is not the first step for most people.",
-      },
-      {
-        id: "penalty_abatement",
-        condition: "If penalties are a large part of what you owe",
-        explanation:
-          "Some penalties may qualify for administrative or reasonable-cause relief depending on the tax period and compliance history — evaluated after the periods and penalty types are known, then requested with supporting explanation when appropriate.",
-      },
-    ];
+    /\b(can'?t pay|cannot pay|owe|balance due|payment plan|installment|offer in compromise|penalty|options?|pathways?)\b/i.test(
+      lower,
+    );
+
+  if (wantsPathways) {
+    // Package H: thin debt talk → evidence asks, not installment/CNC/OIC menu.
+    branches = canSurfaceResolutionPathways(text) ? resolutionPathwayBranches() : evidenceFirstBranches();
   } else if (
     opts.contract.decision_target === "explain_document_or_notice" ||
-    /\bcp\s?-?\d+|lt\s?-?\d+|notice\b/i.test(text)
+    /\bcp\s?-?\d+|lt\s?-?\d+|notice\b/i.test(lower)
   ) {
     branches = [
       {
@@ -55,7 +83,7 @@ export function analyzeBranches(opts: {
         explanation: "Compare the notice to your return, W-2/1099s, and transcripts before agreeing to any balance.",
       },
     ];
-  } else if (/\bspouse|married|joint return|dependent\b/i.test(text)) {
+  } else if (/\bspouse|married|joint return|dependent\b/i.test(lower)) {
     branches = [
       {
         id: "joint_vs_separate",

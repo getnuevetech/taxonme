@@ -93,6 +93,7 @@ Work packages that enforce this guide (do not treat as “make the app dumber”
 | **E** | Evidence-proportional UI — empty module = render nothing on thin intake |
 | **F** | Thin intake → transcript deepening (amount/year/composition when established) |
 | **G** | Knowledge freshness — FTA/AEP taxYear + installment re-seed upserts |
+| **H** | Pipeline A pathway honesty — no keyword → installment/CNC/OIC on thin debt |
 
 Every package must preserve **Pipeline A** (arbitrary IRS/tax questions) and **Pipeline B** (matter engine) as general reasoners — never collapse the product into a single-scenario wizard.
 
