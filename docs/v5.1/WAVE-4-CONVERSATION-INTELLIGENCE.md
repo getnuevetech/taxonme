@@ -30,11 +30,12 @@ Answer tax questions without forcing an agency matter; router is sole authority 
 
 ## Deferred (later waves)
 
-- −1.7 / −1.8 Pipeline A UX polish (structured widgets, starters)  
+_(none for −1.8 — see Package J)_
 
 ## Follow-on packages
 
-- **Package I** — `model-capabilities` + live `enrichIntelligenceWithReasoningModel` (experience ask hints + low-confidence contract refine): `PACKAGE-I-REASONING-ENRICH.md`  
+- **Package I** — `model-capabilities` + live `enrichIntelligenceWithReasoningModel`: `PACKAGE-I-REASONING-ENRICH.md`
+- **Package J** — Pipeline A UX (−1.8 + minimal −1.7 continuity): structured widgets, starters, focus chrome, promote CTA, guide `?q=` prefill, `QaThread.intelligenceJson`: `PACKAGE-J-PIPELINE-A-UX.md`
 
 
 ## Check

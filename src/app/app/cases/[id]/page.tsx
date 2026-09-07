@@ -6,6 +6,7 @@ import { formatCaseNumber } from "@/lib/case-number";
 import { CaseAnalysisView } from "@/components/case-analysis-view";
 import { CaseComments } from "@/components/case-comments";
 import { CaseClarify } from "@/components/case-clarify";
+import { CaseAnswerFirstPanel } from "@/components/case-answer-first";
 import { CaseReportCta } from "@/components/case-report-cta";
 import { formatUsdCents, getCaseReportAccess } from "@/lib/case-report-quota";
 import { hasFeature } from "@/lib/access";
@@ -23,7 +24,15 @@ export default async function CaseDetailPage({
   const user = await requireUser();
   const c = await db.case.findFirst({
     where: { id, userId: user.id },
-    select: { id: true, title: true, number: true, createdAt: true, _count: { select: { issues: true } } },
+    select: {
+      id: true,
+      title: true,
+      number: true,
+      createdAt: true,
+      situation: true,
+      goal: true,
+      _count: { select: { issues: true } },
+    },
   });
   if (!c) notFound();
 
@@ -65,7 +74,8 @@ export default async function CaseDetailPage({
           Payment received — your extra download unlocks as soon as the processor confirms it. Refresh this page shortly.
         </div>
       )}
-      <div className="mb-6">
+      <div className="mb-6 space-y-4">
+        <CaseAnswerFirstPanel situation={c.situation} goal={c.goal} />
         <CaseClarify caseId={c.id} />
       </div>
       <CaseAnalysisView caseId={c.id} viewer={{ role: "customer", userId: user.id, fullResults }} />

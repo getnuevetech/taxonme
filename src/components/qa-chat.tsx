@@ -1,10 +1,11 @@
 "use client";
 
-import { useActionState, useRef, useEffect } from "react";
+import { useActionState, useEffect, useRef, useState } from "react";
 import { useFormStatus } from "react-dom";
 import Link from "next/link";
 import { askQuestionAction } from "@/actions/user";
 import { AssistantMessageText } from "@/components/assistant-reply";
+import { STARTER_PROMPTS } from "@/lib/conversation/starter-prompts";
 
 function Submit() {
   const { pending } = useFormStatus();
@@ -22,14 +23,16 @@ function Submit() {
 export function QaChat({
   threadId,
   messages,
-  suggestions = [
-    "What should I do before responding to an IRS notice?",
-    "Which document would help verify my situation?",
-    "How do I know if I need professional help?",
-  ],
+  suggestions = [...STARTER_PROMPTS],
   showRegisterCta = false,
   showUpgradeCta = false,
   showConsultantCta = false,
+  focusLabel,
+  interpretedQuestion,
+  defaultQuestion = "",
+  showPromoteCta = false,
+  promoteSituationHref = "/app/cases/new",
+  promoteCaseHref = "/app/cases/new",
 }: {
   threadId: string;
   messages: { id: string; role: string; content: string }[];
@@ -37,8 +40,17 @@ export function QaChat({
   showRegisterCta?: boolean;
   showUpgradeCta?: boolean;
   showConsultantCta?: boolean;
+  focusLabel?: string;
+  interpretedQuestion?: string;
+  defaultQuestion?: string;
+  showPromoteCta?: boolean;
+  promoteSituationHref?: string;
+  promoteCaseHref?: string;
 }) {
   const [state, formAction] = useActionState(askQuestionAction, null);
+  const [draft, setDraft] = useState(defaultQuestion);
+  const [defaultSeen, setDefaultSeen] = useState(defaultQuestion);
+  const [clearedForLength, setClearedForLength] = useState(messages.length);
   const formRef = useRef<HTMLFormElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
   const registerHref = threadId
@@ -49,6 +61,18 @@ export function QaChat({
     : "/login";
   const showGuestKeep =
     Boolean(threadId) && showRegisterCta && messages.some((m) => m.role === "assistant");
+  const starterList = suggestions.length ? suggestions : [...STARTER_PROMPTS];
+
+  // Adjust draft when the server-provided prefill changes (no effect setState).
+  if (defaultQuestion !== defaultSeen) {
+    setDefaultSeen(defaultQuestion);
+    setDraft(defaultQuestion);
+  }
+  // Clear the draft once after a successful send (messages grew).
+  if (state?.ok && messages.length !== clearedForLength) {
+    setClearedForLength(messages.length);
+    setDraft("");
+  }
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -57,15 +81,35 @@ export function QaChat({
 
   return (
     <div className="flex flex-col rounded-2xl border border-slate-200 bg-white shadow-sm">
+      {(focusLabel || interpretedQuestion) && (
+        <div className="border-b border-slate-100 bg-slate-50/90 px-5 py-3">
+          {focusLabel ? (
+            <p className="text-xs font-semibold uppercase tracking-wide text-indigo-700">
+              Working on: {focusLabel}
+            </p>
+          ) : null}
+          {interpretedQuestion ? (
+            <p className="mt-1 text-sm text-slate-600">{interpretedQuestion}</p>
+          ) : null}
+        </div>
+      )}
+
       <div className="max-h-[55vh] min-h-[200px] space-y-4 overflow-y-auto p-5">
         {messages.length === 0 && (
-          <div className="py-8 text-center text-sm text-slate-400">
-            <p className="font-medium text-slate-500">Try one of these:</p>
-            {suggestions.map((suggestion, index) => (
-              <p key={suggestion} className={index === 0 ? "mt-2" : ""}>
-                &ldquo;{suggestion}&rdquo;
-              </p>
-            ))}
+          <div className="py-6 text-center text-sm text-slate-500">
+            <p className="font-medium text-slate-600">Try one of these:</p>
+            <div className="mt-3 flex flex-col items-center gap-2">
+              {starterList.map((suggestion) => (
+                <button
+                  key={suggestion}
+                  type="button"
+                  onClick={() => setDraft(suggestion)}
+                  className="max-w-xl rounded-xl border border-slate-200 bg-white px-3 py-2 text-left text-sm text-slate-700 transition hover:border-indigo-300 hover:bg-indigo-50/50"
+                >
+                  {suggestion}
+                </button>
+              ))}
+            </div>
           </div>
         )}
         {messages.map((m) => (
@@ -82,8 +126,20 @@ export function QaChat({
         <div ref={bottomRef} />
       </div>
 
-      {(showRegisterCta || showUpgradeCta || showConsultantCta || showGuestKeep) && (
+      {(showRegisterCta || showUpgradeCta || showConsultantCta || showGuestKeep || showPromoteCta) && (
         <div className="space-y-2 border-t border-slate-100 bg-slate-50/80 px-4 py-3 text-sm text-slate-700">
+          {showPromoteCta && messages.some((m) => m.role === "assistant") && (
+            <p>
+              Ready to go further?{" "}
+              <Link href={promoteSituationHref} className="font-semibold text-teal-700 underline">
+                Continue with my situation
+              </Link>
+              {" · "}
+              <Link href={promoteCaseHref} className="font-semibold text-teal-700 underline">
+                Track this government case
+              </Link>
+            </p>
+          )}
           {showGuestKeep && (
             <p>
               Want to keep this conversation?{" "}
@@ -134,6 +190,8 @@ export function QaChat({
         <div className="flex gap-2">
           <input
             name="question"
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
             placeholder="Ask about your notice, deadline, payment options, or documents…"
             autoComplete="off"
             className="flex-1 rounded-xl border border-slate-300 px-4 py-2.5 text-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-100"
