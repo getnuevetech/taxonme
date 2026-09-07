@@ -7,12 +7,12 @@
 
 1. Read-only summarizer `summarizeConversationIntelligence` / `summarizeFromStoredJson` / `summarizeForCase` exposes decision_target, response_mode, pipeline, workspace, routing_confidence, ask_now, clarification fields, and source (`stored` | `recomputed`).
 2. Admin page `/admin/intelligence` (area `admin.ai`) looks up by Situation id / SIT-number, QaThread id, or Case id via `lookupIntelligenceDiagnostics`.
-3. Admin Case detail embeds `IntelligenceDiagnosticsPanel`; Cases with an origin Situation prefer that snapshot; otherwise recompute from narrative.
+3. Admin Case detail embeds `IntelligenceDiagnosticsPanel`; Cases prefer `Case.intelligenceJson`, then origin Situation, else recompute.
 4. Nav: Intelligence → Conversation intel (does not replace `/admin/diagnostics` AI ops).
 
 ## Non-goals
 
-- `Case.intelligenceJson` persistence / migration
+- `Case.intelligenceJson` persistence / migration _(→ Package N)_
 - Mutate or re-run enrichment from the admin UI
 - Replacing AI ops Diagnostics (tokens, queue, readiness)
 

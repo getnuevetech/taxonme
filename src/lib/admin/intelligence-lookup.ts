@@ -6,6 +6,7 @@ import {
   summarizeFromStoredJson,
   type IntelligenceDiagnosticsSummary,
 } from "@/lib/conversation/intelligence-diagnostics";
+import { resolveCaseIntelligenceJson } from "@/lib/conversation/need-to-know-clarify";
 
 export type IntelligenceLookupResult = {
   kind: "situation" | "qa_thread" | "case";
@@ -63,8 +64,14 @@ export async function lookupIntelligenceDiagnostics(
     const summary = summarizeForCase({
       situation: caseRow.situation,
       goal: caseRow.goal,
-      intelligenceJson: caseRow.originSituation?.intelligenceJson,
+      intelligenceJson: caseRow.intelligenceJson,
+      situationIntelligenceJson: caseRow.originSituation?.intelligenceJson,
     });
+    const raw =
+      resolveCaseIntelligenceJson({
+        caseIntelligenceJson: caseRow.intelligenceJson,
+        situationIntelligenceJson: caseRow.originSituation?.intelligenceJson,
+      }) ?? null;
     return {
       kind: "case",
       id: caseRow.id,
@@ -72,7 +79,7 @@ export async function lookupIntelligenceDiagnostics(
         caseRow.originSituation ? ` (from Situation #${caseRow.originSituation.number})` : ""
       }`,
       summary,
-      rawJson: caseRow.originSituation?.intelligenceJson ?? null,
+      rawJson: raw,
     };
   }
 

@@ -144,6 +144,13 @@ export async function applyLegacyCaseReclassification(opts?: {
       data: { situationId: situation.id },
     });
 
+    // Package N: seed empty Case.intelligenceJson from Situation once (never clobber).
+    const { parseStoredIntelligence } = await import("@/lib/conversation");
+    const existingCase = await db.case.findUnique({
+      where: { id: row.id },
+      select: { intelligenceJson: true },
+    });
+    const caseHasIntel = Boolean(parseStoredIntelligence(existingCase?.intelligenceJson));
     await db.case.update({
       where: { id: row.id },
       data: {
@@ -152,6 +159,9 @@ export async function applyLegacyCaseReclassification(opts?: {
         closedAt: new Date(),
         closedReason: "reclassified_to_situation",
         closingRemarks: `Reclassified to Situation ${situation.id}; legacy Case retained for audit.`,
+        ...(!caseHasIntel && situation.intelligenceJson
+          ? { intelligenceJson: situation.intelligenceJson }
+          : {}),
       },
     });
   }

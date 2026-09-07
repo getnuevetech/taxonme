@@ -118,6 +118,7 @@ export async function startIntakeAction(_prev: ActionState, formData: FormData):
     primaryGovernmentSystem(matter.systems) || (matter.existing_government_case ? "irs" : "");
 
   let caseId: string;
+  const intelligenceJson = JSON.stringify(intel);
   if (user) {
     const c = await db.case.create({
       data: {
@@ -126,6 +127,7 @@ export async function startIntakeAction(_prev: ActionState, formData: FormData):
         situation,
         goal,
         governmentSystem,
+        intelligenceJson,
         status: runEngine ? "analyzing" : "intake",
       },
     });
@@ -138,6 +140,7 @@ export async function startIntakeAction(_prev: ActionState, formData: FormData):
         situation,
         goal,
         governmentSystem,
+        intelligenceJson,
         status: runEngine ? "analyzing" : "intake",
       },
     });
@@ -263,6 +266,7 @@ export async function createCaseAction(_prev: ActionState, formData: FormData): 
       situation,
       goal,
       governmentSystem,
+      intelligenceJson: JSON.stringify(intel),
       status: runEngine ? "analyzing" : "intake",
     },
   });

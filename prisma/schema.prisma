@@ -433,6 +433,8 @@ model Case {
   title          String
   situation      String    @default("")
   goal           String    @default("")
+  /** Package N: ConversationIntelligence snapshot at Case create (or seeded from Situation). */
+  intelligenceJson String @default("{}")
   status         String    @default("intake") // intake | analyzing | analyzed | needs_info | consultant_recommended | resolved | closed
   readinessScore Int       @default(0)
   // v3.2 keeps the customer's side and our side of readiness apart, so a document

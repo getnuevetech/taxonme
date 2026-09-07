@@ -1,7 +1,7 @@
 import {
   caseMustAnswerBeforeClarify,
   composeAssistantView,
-  runConversationIntelligence,
+  intelligenceForCase,
 } from "@/lib/conversation";
 import { AssistantReplyBlocks } from "@/components/assistant-reply";
 
@@ -12,12 +12,18 @@ import { AssistantReplyBlocks } from "@/components/assistant-reply";
 export function CaseAnswerFirstPanel({
   situation,
   goal,
+  intelligenceJson,
 }: {
   situation: string;
   goal: string;
+  intelligenceJson?: string | null;
 }) {
   if (!caseMustAnswerBeforeClarify(situation, goal || "")) return null;
-  const intel = runConversationIntelligence({ message: situation, goal });
+  const intel = intelligenceForCase({
+    situation,
+    goal,
+    intelligenceJson,
+  });
   const sections = composeAssistantView(intel, situation);
   if (!sections.length) return null;
 

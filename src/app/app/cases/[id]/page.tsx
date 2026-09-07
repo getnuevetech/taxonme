@@ -31,6 +31,7 @@ export default async function CaseDetailPage({
       createdAt: true,
       situation: true,
       goal: true,
+      intelligenceJson: true,
       _count: { select: { issues: true } },
     },
   });
@@ -75,7 +76,11 @@ export default async function CaseDetailPage({
         </div>
       )}
       <div className="mb-6 space-y-4">
-        <CaseAnswerFirstPanel situation={c.situation} goal={c.goal} />
+        <CaseAnswerFirstPanel
+          situation={c.situation}
+          goal={c.goal}
+          intelligenceJson={c.intelligenceJson}
+        />
         <CaseClarify caseId={c.id} />
       </div>
       <CaseAnalysisView caseId={c.id} viewer={{ role: "customer", userId: user.id, fullResults }} />
