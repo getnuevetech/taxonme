@@ -34,7 +34,7 @@ async function main() {
     year: null,
     hasDocs: false,
     docCount: 0,
-    guidance: { state: "action_needed", action: "GET_TRANSCRIPT" },
+    guidance: { what: "Get transcript", state: "action_needed", action: "GET_TRANSCRIPT" },
     evidenceLine: "No documents yet.",
   }) as Record<string, unknown>;
 
