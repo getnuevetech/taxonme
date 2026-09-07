@@ -65,11 +65,14 @@ export async function CaseClarify({ caseId }: { caseId: string }) {
           <AutoRefresh />
         </div>
       ) : question ? (
-        <div className="mt-4">
+          <div className="mt-4">
           <div className="flex justify-start">
-            <p className="max-w-[85%] rounded-2xl rounded-bl-sm bg-white px-3.5 py-2.5 text-sm leading-relaxed text-slate-800 shadow-sm ring-1 ring-slate-200">
-              {question.text}
-            </p>
+            <div className="max-w-[85%] rounded-2xl rounded-bl-sm bg-white px-3.5 py-2.5 text-sm leading-relaxed text-slate-800 shadow-sm ring-1 ring-slate-200">
+              <p>{question.text}</p>
+              {question.reason ? (
+                <p className="mt-2 text-xs text-slate-500">Why this matters: {question.reason}</p>
+              ) : null}
+            </div>
           </div>
           <div className="mt-3">
             <ClarifyAnswerForm caseId={caseId} placeholder={question.placeholder} />

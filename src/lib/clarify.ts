@@ -10,7 +10,13 @@ import { isAccountTranscriptDoc, isNoticeDoc } from "./evidence/is-transcript";
 // form the extraction engine parses, and the analysis re-runs automatically —
 // so each answer visibly sharpens the findings.
 
-export type ClarifyQuestion = { key: string; text: string; placeholder: string };
+export type ClarifyQuestion = {
+  key: string;
+  text: string;
+  placeholder: string;
+  /** Optional need-to-know reason shown in Case clarify UI. */
+  reason?: string;
+};
 
 function hasUnfiledReturnIntent(text: string): boolean {
   return /(didn'?t file|haven'?t filed|have not file[dn]?|has not file[dn]?|not filed|unfiled|late filing|missed filing|never filed|file taxes for (the )?past|years behind|behind on (my )?taxes|out of compliance)/i.test(text);
@@ -24,6 +30,9 @@ function hasRefundIntent(text: string): boolean {
 // matters: it gives the amount-classifier the context words it needs.
 export function situationLine(key: string, questionText: string, answer: string): string {
   const a = answer.trim();
+  if (key.startsWith("need_to_know:")) {
+    return `[Clarified] ${questionText} — ${a}.`;
+  }
   switch (key) {
     case "tax_year":
       return `[Clarified] Tax year(s) involved: ${a}.`;
@@ -48,7 +57,7 @@ export function situationLine(key: string, questionText: string, answer: string)
 
 /**
  * The next unanswered question for this case, or null when the interview is
- * complete. Questions are derived from what the analysis actually lacks.
+ * complete. Prefer need-to-know / evidence asks over schema completeness.
  */
 export async function nextClarifyQuestion(caseId: string): Promise<ClarifyQuestion | null> {
   const c = await db.case.findUnique({
@@ -57,6 +66,7 @@ export async function nextClarifyQuestion(caseId: string): Promise<ClarifyQuesti
       issues: { orderBy: [{ priority: "asc" }, { createdAt: "asc" }] },
       documents: { where: { deletedAt: null } },
       clarifyMessages: { where: { role: "user" } },
+      originSituation: { select: { intelligenceJson: true } },
     },
   });
   if (!c || c.status === "closed") return null;
@@ -118,6 +128,34 @@ export async function nextClarifyQuestion(caseId: string): Promise<ClarifyQuesti
     }
   }
 
+  // Package K: Phase −1 need-to-know before schema-fill / unclear loops.
+  const { intelligenceForCase, needToKnowClarifyQuestion, unknownHelpsContract } = await import(
+    "@/lib/conversation"
+  );
+  const intel = intelligenceForCase({
+    situation: c.situation,
+    goal: c.goal,
+    intelligenceJson: c.originSituation?.intelligenceJson,
+  });
+  const ntk = needToKnowClarifyQuestion(intel, [...answered]);
+  if (ntk) {
+    const resolution = resolveQuestionFromFacts("have_transcript", evidenceFacts);
+    // Evidence already established account position → skip transcript-style NTK.
+    if (
+      /transcript|notice that shows what you owe/i.test(ntk.text) &&
+      (hasTranscript || resolution.suppressed)
+    ) {
+      await suppress(ntk.key, ntk.text, resolution);
+    } else {
+      return {
+        key: ntk.key,
+        text: ntk.text,
+        placeholder: "Answer with what you know, or say you need help getting the record...",
+        reason: ntk.reason,
+      };
+    }
+  }
+
   for (const issue of c.issues) {
     if (unfiledDominant && issue.issueType === "refund_discrepancy") continue;
     let unclear: string[] = [];
@@ -136,6 +174,9 @@ export async function nextClarifyQuestion(caseId: string): Promise<ClarifyQuesti
       }
       const key = `unclear:${issue.id}:${index}`;
       if (answered.has(key)) continue;
+      if (!unknownHelpsContract(item, intel) && !unknownHelpsContract(key, intel)) {
+        continue;
+      }
       const year = issue.taxYear ? ` for ${issue.taxYear}` : "";
       const text = `About "${issue.title}"${year}: ${item}`;
       const resolution = resolveUnknownTextFromFacts(item, evidenceFacts);
@@ -209,6 +250,13 @@ export async function nextClarifyQuestion(caseId: string): Promise<ClarifyQuesti
 
   for (const q of questions) {
     if (!q.needed || answered.has(q.key)) continue;
+    // Schema completeness keys that do not help the active contract wait until NTK is done.
+    if (q.key !== "anything_else" && !unknownHelpsContract(q.key, intel) && q.key !== "have_transcript") {
+      // Still allow tax_year / notice_details / unfiled when those issues exist.
+      if (!["tax_year", "notice_details", "unfiled_years", "refund_expected", "refund_received", "balance_amount"].includes(q.key)) {
+        continue;
+      }
+    }
     const resolution = resolveQuestionFromFacts(q.key, evidenceFacts);
     if (resolution.suppressed) {
       await suppress(q.key, q.text, resolution);
