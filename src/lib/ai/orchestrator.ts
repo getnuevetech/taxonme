@@ -850,6 +850,27 @@ export async function runCaseAnalysis(caseId: string, opts?: { trigger?: string;
     }
   }
 
+  // Package L: AI presenter issues deepen when Account Transcript establishes balance
+  // (Package F previously only did this inside fallbackAnalyze).
+  const { applyTranscriptDeepening } = await import("./transcript-deepen");
+  const deepen = applyTranscriptDeepening({
+    issues: issues as Record<string, unknown>[],
+    transcriptText: rawDocText,
+    hasDocs: c.documents.length > 0,
+    evidenceLine:
+      c.documents
+        .filter(
+          (d) =>
+            d.docKind === "transcript" ||
+            d.documentType === "IRS_ACCOUNT_TRANSCRIPT" ||
+            /transcript/i.test(d.fileName),
+        )
+        .map((d) => d.fileName)
+        .slice(0, 3)
+        .join(", ") || "IRS Account Transcript text on file.",
+  });
+  issues = deepen.issues as Json[];
+
   // Path forward: prefer presentation path → ranked actions → thin evidence stubs.
   // Never fall through to a static resolution playbook on thin evidence.
   const pathEvidence: EvidenceSnapshot = {
@@ -859,12 +880,15 @@ export async function runCaseAnalysis(caseId: string, opts?: { trigger?: string;
         d.docKind === "transcript" ||
         d.documentType === "IRS_ACCOUNT_TRANSCRIPT" ||
         /TRANSCRIPT|RECORD_OF_ACCOUNT/i.test(d.documentType || ""),
-    ),
+    ) || deepen.deepened,
     hasAmount: Boolean(
-      (facts as Json).balance_due ||
+      deepen.deepened ||
+        deepen.amount != null ||
+        (facts as Json).balance_due ||
         (typeof (facts as Json).expected_refund === "number" && typeof (facts as Json).received_refund === "number"),
     ),
     hasTaxYear:
+      Boolean(deepen.year) ||
       issues.some((i) => i.tax_year != null && i.tax_year !== "") ||
       (Array.isArray((facts as Json).tax_years) && ((facts as Json).tax_years as unknown[]).length > 0),
   };

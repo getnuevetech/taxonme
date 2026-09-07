@@ -1,8 +1,10 @@
 /**
  * Package F — deepen customer balance-due finding once Account Transcript establishes amount.
+ * Package L — same deepen applied to AI presenter issue lists (not only fallbackAnalyze).
  */
 
 import type { TranscriptData } from "@/lib/evidence/transcript";
+import { parseTranscript } from "@/lib/evidence/transcript";
 import { shouldNameFtaOrAep, shouldRetrieveInstallmentThresholds, neutralPenaltyReliefCopy } from "@/lib/authority-gates";
 
 function usd(n: number): string {
@@ -101,4 +103,82 @@ export function deepenedBalanceDueFinding(opts: {
       },
     ],
   };
+}
+
+function isBalanceDueIssue(issue: Record<string, unknown>): boolean {
+  return String(issue.issue_type ?? "") === "balance_due";
+}
+
+function needsTranscriptDeepen(issue: Record<string, unknown>): boolean {
+  if (!isBalanceDueIssue(issue)) return false;
+  const status = String(issue.evidence_status ?? "").toLowerCase();
+  const kind = String(issue.item_kind ?? "").toLowerCase();
+  const confidence = String(issue.confidence ?? "").toLowerCase();
+  if (kind === "missing_info") return true;
+  if (status === "confirmed" && Number(issue.expected_amount) > 0) return false;
+  if (status === "possible" || status === "likely" || status === "needs_verification") return true;
+  if (confidence === "low" || confidence === "medium") return true;
+  if (!issue.expected_amount && !issue.expectedCents) return true;
+  // AI cards often omit evidence_status entirely while remaining speculative.
+  if (!status) return true;
+  return false;
+}
+
+/**
+ * Replace speculative / thin balance-due presenter issues with the Package F
+ * deepened finding when Account Transcript text establishes the balance.
+ * Fail-closed: no transcript balance → issues unchanged.
+ */
+export function applyTranscriptDeepening(opts: {
+  issues: Record<string, unknown>[];
+  transcriptText: string;
+  hasDocs: boolean;
+  evidenceLine?: string;
+}): {
+  issues: Record<string, unknown>[];
+  deepened: boolean;
+  amount: number | null;
+  year: number | null;
+} {
+  const transcript = parseTranscript(opts.transcriptText || "");
+  const amount = transcript.accountBalance;
+  if (amount == null || !(amount > 0)) {
+    return { issues: opts.issues, deepened: false, amount: null, year: null };
+  }
+  const year =
+    transcript.taxPeriods.map((p) => Number(p)).find((n) => Number.isFinite(n) && n >= 2000) ?? null;
+  const evidenceLine =
+    opts.evidenceLine ||
+    "IRS Account Transcript on file establishing the current account balance.";
+  const deep = deepenedBalanceDueFinding({
+    amount,
+    year,
+    transcript,
+    evidenceLine,
+    hasDocs: opts.hasDocs,
+  });
+
+  let replaced = false;
+  const next = opts.issues.map((issue) => {
+    if (!needsTranscriptDeepen(issue)) return issue;
+    replaced = true;
+    return deep;
+  });
+  if (!replaced && !opts.issues.some(isBalanceDueIssue)) {
+    next.unshift(deep);
+    replaced = true;
+  } else if (!replaced) {
+    // Already has a confirmed balance_due — still force deepen if amount mismatches transcript.
+    const idx = next.findIndex(isBalanceDueIssue);
+    if (idx >= 0) {
+      const existing = next[idx];
+      const existingAmount = Number(existing.expected_amount ?? existing.expectedCents ?? 0);
+      if (existingAmount !== amount || String(existing.evidence_status).toLowerCase() !== "confirmed") {
+        next[idx] = deep;
+        replaced = true;
+      }
+    }
+  }
+
+  return { issues: next, deepened: replaced, amount, year };
 }
