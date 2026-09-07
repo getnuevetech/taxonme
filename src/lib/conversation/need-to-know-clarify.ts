@@ -28,7 +28,13 @@ export function needToKnowClarifyQuestion(
   const candidates = [...intel.strategy.ask_now, ...askableNow(intel.need_to_know)];
   for (const item of candidates) {
     if (!item.changes_branch || item.tier !== "critical_now") continue;
-    if (situationLike && /medical\s*exam|i-?693|priority\s*date|passport|i-?864/i.test(item.question)) {
+    // Drop immigration residue / non-tax asks if any still appear in stored intel.
+    if (
+      situationLike &&
+      /medical\s*exam|i-?693|priority\s*date|passport|i-?864|green\s*card|uscis|i-?130|i-?485/i.test(
+        item.question,
+      )
+    ) {
       continue;
     }
     const key = `need_to_know:${slug(item.question)}`;

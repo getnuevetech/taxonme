@@ -1,4 +1,6 @@
 import type { Answerability, NeedToKnowItem, QuestionContract } from "./types";
+import { amountUnknownFromText } from "@/lib/clarify-evidence";
+import { canSurfaceResolutionPathways } from "./pathway-eligibility";
 
 /** Need-to-know clarify — only critical_now + changes_branch. */
 export function buildNeedToKnow(opts: {
@@ -20,12 +22,24 @@ export function buildNeedToKnow(opts: {
     );
   const knownNoticeCode = /\b(cp\s?-?\d{3,4}|lt\s?-?\d+|notice\s+(cp|lt)\s?-?\d+)\b/i.test(text);
   const knownTaxYear = /\b(20\d{2}|tax year|ty\s*20\d{2})\b/i.test(text);
+  const debtTalk =
+    opts.contract.decision_target === "identify_available_pathways" ||
+    /\b(owe|balance|can'?t pay|payment)\b/i.test(text);
+  const pathwaysReady = canSurfaceResolutionPathways(text);
+  const amountUnknown = amountUnknownFromText(text);
 
-  if (
-    (opts.contract.decision_target === "identify_available_pathways" ||
-      /\b(owe|balance|can'?t pay|payment)\b/i.test(text)) &&
-    !knownAbilityToPay
-  ) {
+  // Package K: thin debt / unknown amount → evidence ask, not installment vs CNC.
+  if (debtTalk && !pathwaysReady && (amountUnknown || !knownAbilityToPay)) {
+    items.push({
+      question:
+        "Do you have an IRS notice or Account Transcript that shows what you owe — or do you need help getting your transcript?",
+      tier: "critical_now",
+      reason:
+        "Account position (amount, years, recent notices) must be established before payment or relief pathways are sized.",
+      changes_branch: true,
+      branches_affected: ["establish_account_position", "use_existing_notice"],
+    });
+  } else if (debtTalk && pathwaysReady && !knownAbilityToPay) {
     items.push({
       question: "Can you make any monthly payment toward the balance, or is paying anything right now impossible?",
       tier: "critical_now",
@@ -48,7 +62,8 @@ export function buildNeedToKnow(opts: {
   if (
     opts.contract.decision_target === "identify_available_pathways" &&
     !knownTaxYear &&
-    /\b(owe|balance|years?|back taxes)\b/i.test(text)
+    /\b(owe|balance|years?|back taxes)\b/i.test(text) &&
+    pathwaysReady
   ) {
     items.push({
       question: "Which tax year(s) does this balance cover?",

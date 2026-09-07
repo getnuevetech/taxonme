@@ -75,7 +75,7 @@ export function composeAssistantView(
     } else if (/\b(lt\s?-?11|final\s+notice|intent\s+to\s+levy)\b/i.test(rawMessage)) {
       sections.push({
         type: "paragraph",
-        text: "This kind of collection notice is a serious step toward levy. Calendar any deadline, confirm the balance on transcript, and decide quickly between payment, an installment agreement, or another relief path.",
+        text: "This kind of collection notice is a serious step toward levy. Calendar any deadline and confirm the balance on your IRS Account Transcript before choosing a response.",
       });
     } else {
       sections.push({

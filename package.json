@@ -54,6 +54,7 @@
     "test:package-h": "tsx scripts/phase-package-h-check.ts",
     "test:package-i": "tsx scripts/phase-package-i-check.ts",
     "test:package-j": "tsx scripts/phase-package-j-check.ts",
+    "test:package-k": "tsx scripts/phase-package-k-check.ts",
     "db:push": "prisma db push",
     "db:seed": "prisma db seed",
     "db:migrate": "prisma migrate deploy"
