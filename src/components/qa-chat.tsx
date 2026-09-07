@@ -49,6 +49,8 @@ export function QaChat({
 }) {
   const [state, formAction] = useActionState(askQuestionAction, null);
   const [draft, setDraft] = useState(defaultQuestion);
+  const [defaultSeen, setDefaultSeen] = useState(defaultQuestion);
+  const [clearedForLength, setClearedForLength] = useState(messages.length);
   const formRef = useRef<HTMLFormElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
   const registerHref = threadId
@@ -61,17 +63,21 @@ export function QaChat({
     Boolean(threadId) && showRegisterCta && messages.some((m) => m.role === "assistant");
   const starterList = suggestions.length ? suggestions : [...STARTER_PROMPTS];
 
-  useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-    if (state?.ok) {
-      formRef.current?.reset();
-      setDraft("");
-    }
-  }, [messages.length, state]);
+  // Adjust draft when the server-provided prefill changes (no effect setState).
+  if (defaultQuestion !== defaultSeen) {
+    setDefaultSeen(defaultQuestion);
+    setDraft(defaultQuestion);
+  }
+  // Clear the draft once after a successful send (messages grew).
+  if (state?.ok && messages.length !== clearedForLength) {
+    setClearedForLength(messages.length);
+    setDraft("");
+  }
 
   useEffect(() => {
-    if (defaultQuestion) setDraft(defaultQuestion);
-  }, [defaultQuestion]);
+    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+    if (state?.ok) formRef.current?.reset();
+  }, [messages.length, state]);
 
   return (
     <div className="flex flex-col rounded-2xl border border-slate-200 bg-white shadow-sm">
