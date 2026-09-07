@@ -93,9 +93,12 @@ export function composeAssistantView(
       text: "You do not need to upload those documents for me to explain the checklist.",
     });
   } else if (target === "interpret_situation_offer_next_step") {
+    const evidenceFirst = intel.strategy.branches.some((b) => b.id === "establish_account_position");
     sections.push({
       type: "paragraph",
-      text: "Thanks for sharing that background. I can help outline payment or relief pathways, explain a notice, or — if something is already before the IRS or a state tax agency — help you track that agency matter.",
+      text: evidenceFirst
+        ? "Thanks for sharing that background. With the amount still unknown, the useful next step is establishing what the IRS currently shows — then pathways like payment plans or hardship status can be sized to your facts."
+        : "Thanks for sharing that background. I can help outline payment or relief pathways, explain a notice, or — if something is already before the IRS or a state tax agency — help you track that agency matter.",
     });
   } else if (!(intel.strategy.branch_before_clarify && intel.strategy.branches.length)) {
     sections.push({

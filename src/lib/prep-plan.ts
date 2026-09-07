@@ -26,7 +26,7 @@ const INSTALLMENT: PrepPlanContent = {
   pathwayLabel: "IRS installment agreement",
   eligibility: {
     summary:
-      "Many taxpayers who owe a balance can request a monthly payment plan (often Form 9465). Streamlined options may apply under common balance thresholds — confirm against your transcript balance and ability to pay.",
+      "Many taxpayers who owe a confirmed balance can request a monthly payment plan (often Form 9465). Confirm the transcript balance and ability to pay before proposing an amount — threshold-based streamlined options only apply once the balance is known.",
     requirements: [
       "Confirmed balance due on IRS account transcript for the years at issue",
       "Ability to propose a realistic monthly payment",
@@ -173,6 +173,45 @@ const PENALTY: PrepPlanContent = {
   selfFileHint: "Follow current IRS penalty relief guidance for the specific penalty codes and tax years on your transcript.",
 };
 
+const EVIDENCE_FIRST: PrepPlanContent = {
+  selectedPathway: "establish_account_position",
+  pathwayLabel: "Establish what the IRS shows",
+  eligibility: {
+    summary:
+      "Before choosing installment, Currently Not Collectible, Offer in Compromise, or penalty relief, confirm the IRS account position from an Account Transcript or notice. This plan gathers that evidence — it is not a resolution filing yet.",
+    requirements: [
+      "IRS Account Transcript for the years that may be involved (or the notice stating the balance)",
+      "Any IRS letters you already received",
+      "A rough sense of whether you can pay something monthly once the amount is known",
+    ],
+  },
+  blockers: [
+    "Guessing a payment plan amount before the balance is confirmed",
+    "Naming FTA/AEP or streamlined thresholds before tax year and balance are known",
+  ],
+  filings: [
+    {
+      form: "—",
+      role: "No resolution form yet",
+      notes: "Choose Form 9465, CNC request, OIC, or penalty relief only after the transcript/notice establishes the facts",
+    },
+  ],
+  evidenceNeeds: [
+    "IRS Account Transcript (preferred)",
+    "Copies of any CP/LT notices",
+    "Notes on tax years you believe are involved",
+  ],
+  sequence: [
+    "Get or upload Account Transcript / notice",
+    "Confirm tax years and current balance",
+    "Then choose installment vs CNC vs OIC vs penalty relief from those facts",
+    "Build a pathway-specific Prep Plan or file — Case tracking starts when something is before the agency",
+  ],
+  preparationStatus: "draft",
+  consultantHint: "A CPA/EA can help read the transcript and pick the right next pathway once amounts are known.",
+  selfFileHint: "Use IRS Get Transcript / your online account — do not invent a balance to unlock options.",
+};
+
 const GENERIC: PrepPlanContent = {
   selectedPathway: "general_tax_path",
   pathwayLabel: "Tax path preparation",
@@ -219,6 +258,14 @@ export function buildPrepPlanContent(opts: {
     opts.pathways?.[0]?.id ||
     inferPathwayFromNarrative(opts.narrative ?? "");
 
+  if (
+    selected === "establish_account_position" ||
+    selected === "use_existing_notice" ||
+    selected === "get_transcript" ||
+    selected === "evidence_first"
+  ) {
+    return { ...EVIDENCE_FIRST, selectedPathway: "establish_account_position" };
+  }
   if (selected === "installment_agreement" || selected === "payment_plan") {
     return { ...INSTALLMENT, selectedPathway: "installment_agreement" };
   }
@@ -248,14 +295,22 @@ export function buildPrepPlanContent(opts: {
   return { ...GENERIC, selectedPathway: selected || GENERIC.selectedPathway };
 }
 
-function inferPathwayFromNarrative(text: string): string {
+/** Exported for Package H gate — do not map bare "owe" to installment. */
+export function inferPathwayFromNarrative(text: string): string {
   if (/\b(offer in compromise|oic)\b/i.test(text)) return "offer_in_compromise";
   if (/\b(currently not collectible|cnc|hardship|can'?t pay.*expense)\b/i.test(text)) {
     return "currently_not_collectible";
   }
-  if (/\b(penalty|abatement|first.?time)\b/i.test(text)) return "penalty_abatement";
-  if (/\b(installment|payment plan|9465|can'?t pay|owe|balance due)\b/i.test(text)) {
-    return "installment_agreement";
+  // Explicit payment-plan ask — not bare "owe" / "balance due".
+  if (/\b(installment|payment plan|9465)\b/i.test(text)) return "installment_agreement";
+  if (/\b(penalty|abatement|first.?time)\b/i.test(text) && /\b(20\d{2}|transcript|notice|cp\s?-?\d+)\b/i.test(text)) {
+    return "penalty_abatement";
+  }
+  if (/\b(owe|balance due|debt|amount due)\b/i.test(text) && !/\$\s?[\d,]/.test(text)) {
+    return "establish_account_position";
+  }
+  if (/\b(can'?t pay|cannot pay)\b/i.test(text) && !/\$\s?[\d,]/.test(text) && !/\b(20\d{2}|transcript|cp\s?-?\d+)\b/i.test(text)) {
+    return "establish_account_position";
   }
   return "general_tax_path";
 }

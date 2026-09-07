@@ -297,6 +297,7 @@ Waves 0–7 port the Imm engineering posture. Remaining product risk is **scenar
 | **E** | Evidence-proportional UI (empty module = nothing) | Thin intakes stay short. Charter: `docs/v5.1/PACKAGE-E-PROPORTIONAL-UI.md`. Gate: `npm run test:package-e`. |
 | **F** | Thin → transcript deepening | After Account Transcript, findings deepen. Charter: `docs/v5.1/PACKAGE-F-TRANSCRIPT-DEEPEN.md`. Gate: `npm run test:package-f`. |
 | **G** | Knowledge freshness (FTA/AEP re-seed) | Period stamps survive re-seed. Charter: `docs/v5.1/PACKAGE-G-KNOWLEDGE-FRESHNESS.md`. Gate: `npm run test:package-g`. |
+| **H** | Pipeline A pathway honesty | Thin Q&A/Prep Plan no longer dump resolution menus. Charter: `docs/v5.1/PACKAGE-H-PIPELINE-A-PATHWAY-HONESTY.md`. Gate: `npm run test:package-h`. |
 
 These packages **increase** dynamic capability by retiring static templates; they do not narrow TaxOnMe to one demo case.
 
