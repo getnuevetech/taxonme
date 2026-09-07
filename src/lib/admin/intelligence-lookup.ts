@@ -149,6 +149,7 @@ export function emptySummaryProbe(): IntelligenceDiagnosticsSummary {
         response_mode: "answer_then_targeted_question",
         invokes_case_engine: false,
         existing_government_case: false,
+        interaction_intent: "strategy_question",
       },
     },
     "recomputed",
