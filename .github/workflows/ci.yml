@@ -67,3 +67,4 @@ jobs:
       - run: npm run test:package-j
       - run: npm run test:package-k
       - run: npm run test:package-l
+      - run: npm run test:package-m

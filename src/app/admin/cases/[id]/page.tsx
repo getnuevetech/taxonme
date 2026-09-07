@@ -1,10 +1,13 @@
 import { notFound } from "next/navigation";
+import Link from "next/link";
 import { db } from "@/lib/db";
 import { guardAdminPage } from "@/lib/admin-guard";
 import { PageHeader, Card, CardBody, Badge } from "@/components/ui";
 import { formatCaseNumber } from "@/lib/case-number";
 import { CaseAnalysisView } from "@/components/case-analysis-view";
 import { CaseComments } from "@/components/case-comments";
+import { IntelligenceDiagnosticsPanel } from "@/components/admin/intelligence-diagnostics-panel";
+import { summarizeForCase } from "@/lib/conversation/intelligence-diagnostics";
 
 // Admins see EXACTLY what the customer sees, plus the case discussion (with
 // internal comments) and the technical pipeline diagnostics collapsed below.
@@ -15,6 +18,7 @@ export default async function AdminCaseDetailPage({ params }: { params: Promise<
     where: { id },
     include: {
       user: { select: { email: true, firstName: true, lastName: true } },
+      originSituation: { select: { id: true, number: true, intelligenceJson: true } },
       runs: {
         orderBy: { startedAt: "desc" },
         include: {
@@ -27,6 +31,11 @@ export default async function AdminCaseDetailPage({ params }: { params: Promise<
   if (!c) notFound();
   const usedAi = c.runs.some((r) => r.stepResults.length > 0);
   const failedCalls = c.runs.flatMap((r) => r.stepResults).filter((sr) => sr.status === "failed");
+  const intelSummary = summarizeForCase({
+    situation: c.situation,
+    goal: c.goal,
+    intelligenceJson: c.originSituation?.intelligenceJson,
+  });
 
   return (
     <div>
@@ -40,6 +49,22 @@ export default async function AdminCaseDetailPage({ params }: { params: Promise<
         {failedCalls.length > 0 && (
           <Badge color="red">{failedCalls.length} failed model call{failedCalls.length === 1 ? "" : "s"} — see diagnostics below</Badge>
         )}
+        {c.originSituation ? (
+          <Link
+            href={`/admin/intelligence?q=${encodeURIComponent(c.originSituation.id)}`}
+            className="text-xs font-medium text-indigo-600 hover:underline"
+          >
+            Open Situation intel · SIT-{c.originSituation.number}
+          </Link>
+        ) : null}
+      </div>
+
+      <div className="mb-6">
+        <IntelligenceDiagnosticsPanel
+          summary={intelSummary}
+          title="Conversation intelligence (Pipeline A/B)"
+          rawJson={c.originSituation?.intelligenceJson ?? null}
+        />
       </div>
 
       <CaseAnalysisView caseId={c.id} viewer={{ role: "admin", userId: admin.id }} />

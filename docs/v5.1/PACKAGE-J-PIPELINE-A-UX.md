@@ -13,8 +13,8 @@
 
 ## Non-goals
 
-- Full Case clarify → need-to-know planner rewrite
-- Admin intelligence diagnostics panel
+- Full Case clarify → need-to-know planner rewrite _(→ Package K)_
+- Admin intelligence diagnostics panel _(→ Package M)_
 - Pathway honesty / enrichment changes (Packages H / I)
 
 ## Check

@@ -98,6 +98,7 @@ Work packages that enforce this guide (do not treat as “make the app dumber”
 | **J** | Pipeline A UX polish — starters, focus chrome, promote CTAs, Q&A continuity |
 | **K** | Case clarify → need-to-know — evidence-first asks on thin debt; schema-fill last |
 | **L** | AI-path transcript deepen — presenter issues deepen when Account Transcript establishes balance |
+| **M** | Admin ConversationIntelligence diagnostics — read-only Situation / Q&A / Case routing snapshots |
 
 Every package must preserve **Pipeline A** (arbitrary IRS/tax questions) and **Pipeline B** (matter engine) as general reasoners — never collapse the product into a single-scenario wizard.
 
