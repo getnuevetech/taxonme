@@ -11,6 +11,10 @@
 4. Penalty/interest composition is stated when TC 276/196/166 appear; otherwise composition is not invented.
 5. FTA/AEP naming and installment thresholds still require year/amount gates (Package B).
 
+## Follow-on
+
+- **Package L** — apply the same deepen on the AI presenter path (`applyTranscriptDeepening` in orchestrator): `PACKAGE-L-AI-PATH-DEEPEN.md`
+
 ## Check
 
 ```bash
