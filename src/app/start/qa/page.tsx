@@ -50,6 +50,10 @@ export default async function GuestQaPage({
           threadId={thread?.id ?? ""}
           messages={thread?.messages.map((m) => ({ id: m.id, role: m.role, content: m.content })) ?? []}
           showRegisterCta
+          defaultQuestion={prefillQuestion?.trim() || ""}
+          showPromoteCta
+          promoteSituationHref="/start"
+          promoteCaseHref={`/app/cases/new${prefillQuestion?.trim() ? `?prefill=${encodeURIComponent(prefillQuestion.trim().slice(0, 500))}` : ""}`}
         />
       </main>
       <SiteFooter />

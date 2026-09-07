@@ -192,6 +192,29 @@ export async function guideRespond(
       ],
     };
   }
+
+  // Question-shaped asks: hand off to Pipeline A Q&A with prefill (Package J / −1.7 continuity).
+  try {
+    const { runConversationIntelligence } = await import("@/lib/conversation");
+    const intel = runConversationIntelligence({ message: lastQuestion });
+    if (intel.route.pipeline === "assistant" && !intel.route.invokes_case_engine) {
+      const q = encodeURIComponent(lastQuestion.slice(0, 500));
+      return {
+        message:
+          "That's a tax question I can answer in Ask the assistant — I'll open it there with your wording ready so you can refine or send it.",
+        actions: [
+          { type: "link", label: "Open in Ask the assistant", href: `/app/qa?q=${q}` },
+          ...(snapshot.currentStep
+            ? [{ type: "link" as const, label: "Stay on my case", href: `/app/cases/${snapshot.currentStep.caseId}` }]
+            : []),
+          ...baseActions(),
+        ],
+      };
+    }
+  } catch {
+    // Fall through to AI coaching if intelligence fails.
+  }
+
   if (intent === "tech") {
     return {
       message:

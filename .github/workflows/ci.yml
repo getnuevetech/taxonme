@@ -64,3 +64,4 @@ jobs:
       - run: npm run test:package-g
       - run: npm run test:package-h
       - run: npm run test:package-i
+      - run: npm run test:package-j

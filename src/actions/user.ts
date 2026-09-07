@@ -77,18 +77,22 @@ export async function askQuestionAction(_prev: ActionState, formData: FormData):
     enrichIntelligenceWithReasoningModel,
     composeAssistantReply,
     mayPromoteAssistantToCase,
+    priorContractFromStored,
   } = await import("@/lib/conversation");
+  const priorContract = priorContractFromStored(thread.intelligenceJson);
   const baseIntel = runConversationIntelligence({
     message: question,
     goal: thread.title,
     history,
     documentCount: 0,
+    priorContract: priorContract ?? undefined,
   });
   const intel = await enrichIntelligenceWithReasoningModel(baseIntel, {
     message: question,
     goal: thread.title,
     history,
     documentCount: 0,
+    priorContract: priorContract ?? undefined,
   });
   const promo = mayPromoteAssistantToCase({
     contract: intel.question_contract,
@@ -111,6 +115,13 @@ export async function askQuestionAction(_prev: ActionState, formData: FormData):
   }
 
   await db.qaMessage.create({ data: { threadId: thread.id, role: "assistant", content: answer } });
+  await db.qaThread.update({
+    where: { id: thread.id },
+    data: {
+      intelligenceJson: JSON.stringify(intel),
+      title: thread.title || intel.question_contract.explicit_question.slice(0, 60) || question.slice(0, 60),
+    },
+  });
 
   if (!threadId) redirect(user ? `/app/qa/${thread.id}` : `/start/qa?thread=${thread.id}`);
   revalidatePath(`/app/qa/${thread.id}`);

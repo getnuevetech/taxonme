@@ -1,37 +1,10 @@
 import Link from "next/link";
 import { ActionForm, SubmitButton } from "@/components/action-form";
 import { createPrepPlanAction } from "@/actions/prep-plan";
-import { composeAssistantView, parseStoredIntelligence, type AssistantViewSection } from "@/lib/conversation";
+import { composeAssistantView, parseStoredIntelligence } from "@/lib/conversation";
+import { AssistantReplyBlocks } from "@/components/assistant-reply";
 import { situationRefLabel } from "@/lib/situation";
 import { parsePathwaysJson } from "@/lib/prep-plan";
-
-function SectionBlock({ section }: { section: AssistantViewSection }) {
-  if (section.type === "paragraph" || section.type === "disclaimer") {
-    return <p className="text-slate-700 leading-relaxed">{section.text}</p>;
-  }
-  if (section.type === "ask") {
-    return (
-      <div className="rounded-xl border border-amber-200 bg-amber-50/80 px-4 py-3">
-        <p className="text-xs font-semibold uppercase tracking-wide text-amber-800">One fact that changes the path</p>
-        <p className="mt-1 font-medium text-slate-900">{section.question}</p>
-        <p className="mt-1 text-sm text-slate-600">{section.reason}</p>
-      </div>
-    );
-  }
-  return (
-    <div>
-      <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{section.intro}</p>
-      <ul className="mt-3 space-y-3">
-        {section.branches.map((b) => (
-          <li key={b.id} className="border-l-2 border-indigo-500 pl-3">
-            <p className="font-medium text-slate-900">{b.condition}</p>
-            <p className="text-sm text-slate-600">{b.explanation}</p>
-          </li>
-        ))}
-      </ul>
-    </div>
-  );
-}
 
 export function SituationWorkspaceView(props: {
   id: string;
@@ -82,9 +55,7 @@ export function SituationWorkspaceView(props: {
 
       <section className="space-y-4">
         <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">What this may mean</h2>
-        {sections.map((section, i) => (
-          <SectionBlock key={i} section={section} />
-        ))}
+        <AssistantReplyBlocks sections={sections} />
       </section>
 
       <section className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4">

@@ -1067,6 +1067,8 @@ model QaThread {
   situationId    String?
   title          String       @default("Tax question")
   kind           String       @default("qa") // qa | guide
+  /** Latest ConversationIntelligence snapshot for contract continuity (−1.7 / Package J). */
+  intelligenceJson String     @default("{}")
   createdAt      DateTime     @default(now())
   user           User?        @relation(fields: [userId], references: [id], onDelete: Cascade)
   guestSession   GuestSession? @relation(fields: [guestSessionId], references: [id])
