@@ -107,6 +107,41 @@ export async function nextClarifyQuestion(caseId: string): Promise<ClarifyQuesti
     balanceIssue && balanceIssue.expectedCents === null && balanceIssue.differenceCents === null,
   );
 
+  // Audit pass: record suppressions for evidence-answered unclear / schema asks
+  // before choosing the next customer-facing question.
+  for (const issue of c.issues) {
+    let unclear: string[] = [];
+    try {
+      const parsed = JSON.parse(issue.unclearJson || "[]");
+      if (Array.isArray(parsed)) unclear = parsed.map(String).filter(Boolean);
+    } catch {
+      unclear = [];
+    }
+    for (const [index, item] of unclear.entries()) {
+      const key = `unclear:${issue.id}:${index}`;
+      if (answered.has(key)) continue;
+      const year = issue.taxYear ? ` for ${issue.taxYear}` : "";
+      const text = `About "${issue.title}"${year}: ${item}`;
+      const resolution = resolveUnknownTextFromFacts(item, evidenceFacts);
+      if (resolution.suppressed) await suppress(key, text, resolution);
+    }
+  }
+  for (const key of ["balance_amount", "have_transcript", "tax_year"] as const) {
+    if (answered.has(key)) continue;
+    const resolution = resolveQuestionFromFacts(key, evidenceFacts);
+    if (resolution.suppressed) {
+      await suppress(
+        key,
+        key === "balance_amount"
+          ? "What amount does the IRS say you owe?"
+          : key === "have_transcript"
+            ? "Do you have your IRS Account Transcript?"
+            : "Which tax year does your situation involve?",
+        resolution,
+      );
+    }
+  }
+
   // Package B: if the user already said they don't know the amount, prefer
   // notice/transcript evidence over asking for the figure.
   if (!answered.has("prefer_evidence") && !answered.has("have_transcript") && !answered.has("balance_amount")) {
@@ -166,22 +201,23 @@ export async function nextClarifyQuestion(caseId: string): Promise<ClarifyQuesti
       unclear = [];
     }
     for (const [index, item] of unclear.entries()) {
-      if (
-        amountUnknownFromText(narrative) &&
-        /(current balance|how much|amount you owe|the amount)/i.test(item)
-      ) {
-        continue;
-      }
       const key = `unclear:${issue.id}:${index}`;
       if (answered.has(key)) continue;
-      if (!unknownHelpsContract(item, intel) && !unknownHelpsContract(key, intel)) {
-        continue;
-      }
       const year = issue.taxYear ? ` for ${issue.taxYear}` : "";
       const text = `About "${issue.title}"${year}: ${item}`;
+      // Always attempt evidence suppression first so audit rows are recorded.
       const resolution = resolveUnknownTextFromFacts(item, evidenceFacts);
       if (resolution.suppressed) {
         await suppress(key, text, resolution);
+        continue;
+      }
+      if (
+        amountUnknownFromText(narrative) &&
+        /(current balance|how much|amount you owe|the amount|proposed balance)\b/i.test(item)
+      ) {
+        continue;
+      }
+      if (!unknownHelpsContract(item, intel) && !unknownHelpsContract(key, intel)) {
         continue;
       }
       return {
