@@ -82,6 +82,8 @@ export async function startIntakeAction(_prev: ActionState, formData: FormData):
         guestSessionId: user ? null : guest!.id,
         title: (intel.question_contract.explicit_question || situation).slice(0, 60),
         kind: "qa",
+        // Package W: persist intake ConversationIntelligence (same as Case/Situation paths).
+        intelligenceJson: JSON.stringify(intel),
       },
     });
     for (const file of files.slice(0, 10)) {
@@ -238,6 +240,8 @@ export async function createCaseAction(_prev: ActionState, formData: FormData): 
         userId: user.id,
         title: (intel.question_contract.explicit_question || situation).slice(0, 60),
         kind: "qa",
+        // Package W: persist intake ConversationIntelligence on Pipeline A threads.
+        intelligenceJson: JSON.stringify(intel),
       },
     });
     const opening = [situation, goal ? `Goal: ${goal}` : ""].filter(Boolean).join("\n\n");

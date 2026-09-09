@@ -17,7 +17,7 @@
 - Force re-enrich of non-empty `intelligenceJson`
 - Vector / embedding authority rewrite _(→ Package U)_
 - Form 433 / complete financial-statement interview
-- Mass Situation / QaThread backfill in the same package
+- Mass Situation / QaThread backfill _(→ Package W)_
 - Replacing AI ops Diagnostics
 
 ## Check
