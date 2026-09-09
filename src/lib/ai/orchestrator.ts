@@ -871,26 +871,41 @@ export async function runCaseAnalysis(caseId: string, opts?: { trigger?: string;
   });
   issues = deepen.issues as Json[];
 
-  // Path forward: prefer presentation path → ranked actions → thin evidence stubs.
-  // Never fall through to a static resolution playbook on thin evidence.
-  const pathEvidence: EvidenceSnapshot = {
+  // Package O: strip speculative thin-intake modules the presenter may have invented
+  // (explanations / forensic outline / resolution playbook) before path eligibility.
+  const { sanitizeThinPresenterIssues } = await import("./presenter-honesty");
+  const preSanitizeEvidence: EvidenceSnapshot = {
     hasDocs: c.documents.length > 0,
-    hasTranscript: c.documents.some(
-      (d) =>
-        d.docKind === "transcript" ||
-        d.documentType === "IRS_ACCOUNT_TRANSCRIPT" ||
-        /TRANSCRIPT|RECORD_OF_ACCOUNT/i.test(d.documentType || ""),
-    ) || deepen.deepened,
+    hasTranscript:
+      c.documents.some(
+        (d) =>
+          d.docKind === "transcript" ||
+          d.documentType === "IRS_ACCOUNT_TRANSCRIPT" ||
+          /TRANSCRIPT|RECORD_OF_ACCOUNT/i.test(d.documentType || ""),
+      ) || deepen.deepened,
     hasAmount: Boolean(
       deepen.deepened ||
         deepen.amount != null ||
         (facts as Json).balance_due ||
-        (typeof (facts as Json).expected_refund === "number" && typeof (facts as Json).received_refund === "number"),
+        (typeof (facts as Json).expected_refund === "number" &&
+          typeof (facts as Json).received_refund === "number") ||
+        issues.some((i) => typeof i.expected_amount === "number" || typeof i.difference_amount === "number"),
     ),
     hasTaxYear:
       Boolean(deepen.year) ||
       issues.some((i) => i.tax_year != null && i.tax_year !== "") ||
       (Array.isArray((facts as Json).tax_years) && ((facts as Json).tax_years as unknown[]).length > 0),
+  };
+  const honesty = sanitizeThinPresenterIssues(issues as Record<string, unknown>[], preSanitizeEvidence);
+  issues = honesty.issues as Json[];
+
+  // Path forward: prefer presentation path → ranked actions → thin evidence stubs.
+  // Never fall through to a static resolution playbook on thin evidence.
+  const pathEvidence: EvidenceSnapshot = {
+    hasDocs: preSanitizeEvidence.hasDocs,
+    hasTranscript: preSanitizeEvidence.hasTranscript,
+    hasAmount: preSanitizeEvidence.hasAmount,
+    hasTaxYear: preSanitizeEvidence.hasTaxYear,
   };
   const eligibility = resolutionEligibility(pathEvidence);
   const thinPath = thinEvidencePathSteps({

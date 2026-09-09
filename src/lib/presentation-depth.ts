@@ -24,6 +24,13 @@ export function isThinCustomerPresentation(ev: PresentationDepthInput): boolean 
   return !ev.hasAmount;
 }
 
+/** "Most likely explanations" — only with transcript/arithmetic-backed facts. */
+export function shouldShowExplanations(ev: PresentationDepthInput): boolean {
+  if (ev.hasTranscript && ev.hasAmount) return true;
+  if (ev.hasNotice && ev.hasAmount && ev.hasEstablishedPosition) return true;
+  return false;
+}
+
 /** "Why TaxOnMe says this" / analysis outline — only after evidence depth. */
 export function shouldShowAnalysisOutline(ev: PresentationDepthInput): boolean {
   return !isThinCustomerPresentation(ev);

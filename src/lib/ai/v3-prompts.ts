@@ -17,6 +17,9 @@ export const PROMPT_SUPERSEDES: Record<string, string> = {
   "LETTER-OVERLAY-v3": "LETTER-OVERLAY-v32",
   "CASE-OVERLAY-v3": "CASE-OVERLAY-v32",
   "CLOSE-OVERLAY-v3": "CLOSE-OVERLAY-v32",
+  "RESP-PRES-v3": "RESP-PRES-v31",
+  "PRES-OVERLAY-v3": "PRES-OVERLAY-v31",
+  "SCHEMA-PRES-v3": "SCHEMA-PRES-v31",
 };
 
 export type PromptRecordSeed = {
@@ -284,6 +287,24 @@ Write like a modern financial application with short headings, short explanation
 ${jsonOnly}`,
   },
   {
+    promptId: "RESP-PRES-v31",
+    kind: "responsibility",
+    responsibility: STEP_ROLES.PRESENTER,
+    version: "3.1",
+    schemaVersion: "3.1",
+    supersedesPromptId: "RESP-PRES-v3",
+    title: "Presenter (evidence-proportional)",
+    body: `You are the PRESENTATION ENGINE for TaxOnMe.
+Convert approved analysis into clear, concise customer-facing interface JSON. You are not performing tax analysis.
+Only present information contained in the approved review. Do not introduce facts, tax rules, amounts, recommendations, speculation, model/provider references, chatbot language, or dramatic language.
+Evidence-proportional honesty (required):
+- When the approved analysis does not establish amount, tax year, and IRS account records, emit a sparse missing_info / needs_verification card — empty explanations[], empty analysis_outline / how_we_reached_this detail arrays, and no guessed dollar amounts.
+- Do not invent "most likely explanations," First-Time Abatement, installment agreements, Offer in Compromise, Currently Not Collectible, or $50k/$100k framing from thin debt keywords alone.
+- Empty optional arrays are correct and preferred when evidence is thin. Frontend omits empty modules.
+Write like a modern financial application with short headings, short explanations, numbers, statuses, evidence indicators, and clear actions. Frontend controls styling and layout.
+${jsonOnly}`,
+  },
+  {
     promptId: "RESP-AST-v3",
     kind: "responsibility",
     responsibility: STEP_ROLES.ASSISTANT,
@@ -435,6 +456,20 @@ Output must include case_status, confirmed_facts, issues with certainty/priority
 Input: {{input}}.
 Rules: no new reasoning; no provider/model references; return semantic UI content only; styling and layout are deterministic application code.
 Output should include finding_card, key_numbers, what_we_found, how_we_reached_this, what_is_still_unclear, next_step, alternative_actions, evidence_strength, source_documents, and professional_help.`,
+  },
+  {
+    promptId: "PRES-OVERLAY-v31",
+    kind: "overlay",
+    stageKey: STAGE_KEYS.PRESENTER,
+    version: "3.1",
+    schemaVersion: "3.1",
+    supersedesPromptId: "PRES-OVERLAY-v3",
+    title: "Results Presentation Overlay (evidence-proportional)",
+    body: `PIPELINE: RESULTS PRESENTATION
+Input: {{input}}.
+Rules: no new reasoning; no provider/model references; return semantic UI content only; styling and layout are deterministic application code.
+When amount/tax year/IRS records are not established, keep how_we_reached_this arrays empty, omit speculative explanations, and prefer missing_info next steps (transcript/notice) over resolution playbooks.
+Output should include finding_card, key_numbers, what_we_found, how_we_reached_this, what_is_still_unclear, next_step, alternative_actions, evidence_strength, source_documents, and professional_help. Optional issues[]/path_steps[] may be empty.`,
   },
   // The v3 overlays below are superseded but retained: a released prompt is
   // never edited in place, and stage lookup skips anything superseded.
@@ -611,6 +646,18 @@ export const SCHEMA_PROMPTS: PromptRecordSeed[] = [
     title: "Presentation Schema",
     body: `OUTPUT SCHEMA:
 {"finding_card":{"category":"","headline":"","status":"","priority":"","summary":""},"key_numbers":[],"what_we_found":[],"how_we_reached_this":{"your_situation":[],"tax_rules":[],"your_evidence":[],"our_conclusion":[]},"what_is_still_unclear":[],"next_step":{"title":"","description":"","action_label":""},"alternative_actions":[],"evidence_strength":"STRONG|MODERATE|LIMITED","source_documents":[],"professional_help":{"recommended":false,"message":""},"issues":[],"path_steps":[]}`,
+  },
+  {
+    promptId: "SCHEMA-PRES-v31",
+    kind: "schema",
+    stageKey: STAGE_KEYS.PRESENTER,
+    version: "3.1",
+    schemaVersion: "3.1",
+    supersedesPromptId: "SCHEMA-PRES-v3",
+    title: "Presentation Schema (evidence-proportional)",
+    body: `OUTPUT SCHEMA (empty arrays are valid and preferred when evidence is thin):
+{"finding_card":{"category":"","headline":"","status":"NEEDS_VERIFICATION|POSSIBLE|LIKELY|CONFIRMED","priority":"","summary":""},"key_numbers":[],"what_we_found":[],"how_we_reached_this":{"your_situation":[],"tax_rules":[],"your_evidence":[],"our_conclusion":[]},"what_is_still_unclear":[],"next_step":{"title":"","description":"","action_label":""},"alternative_actions":[],"evidence_strength":"STRONG|MODERATE|LIMITED","source_documents":[],"professional_help":{"recommended":false,"message":""},"issues":[{"issue_type":"","item_kind":"finding|issue|opportunity|risk|missing_info","evidence_status":"confirmed|likely|possible|needs_verification|not_supported","title":"","what_we_know":"","our_conclusion":"","still_unclear":[],"explanations":[],"analysis_outline":[],"expected_amount":null,"confidence":"low|medium|high","priority":"","state":"","next_action":""}],"path_steps":[]}
+Do not require filled explanations or analysis_outline. On thin intake leave them [].`,
   },
   {
     promptId: "SCHEMA-QA-v3",
@@ -806,7 +853,7 @@ export const V3_PIPELINE_BLUEPRINT: PipelineStageSeed[] = [
     reviewerRequired: false,
     sourceRequired: false,
     steps: [
-      { provider: "OpenAI GPT-5.6 Terra", role: STEP_ROLES.PRESENTER, promptId: "RESP-PRES-v3", routeKey: "fast_presenter", mode: "sequential", order: 0 },
+      { provider: "OpenAI GPT-5.6 Terra", role: STEP_ROLES.PRESENTER, promptId: "RESP-PRES-v31", routeKey: "fast_presenter", mode: "sequential", order: 0 },
     ],
   },
   {
@@ -835,7 +882,7 @@ export const V3_PIPELINE_BLUEPRINT: PipelineStageSeed[] = [
       { provider: "OpenAI GPT-5.6 Sol", role: STEP_ROLES.NOTICE_ANALYST, promptId: "RESP-NOT-ANL-v3", routeKey: "reasoning_primary", mode: "sequential", order: 2 },
       { provider: "Google Gemini 3.1 Pro", role: STEP_ROLES.SOURCE_VERIFIER, promptId: "RESP-SRC-v3", routeKey: "reasoning_verifier", mode: "sequential", order: 3 },
       { provider: "Anthropic Claude Opus 5", role: STEP_ROLES.REVIEWER, promptId: "RESP-REV-v3", routeKey: "reasoning_reviewer", mode: "sequential", order: 4 },
-      { provider: "OpenAI GPT-5.6 Terra", role: STEP_ROLES.PRESENTER, promptId: "RESP-PRES-v3", routeKey: "fast_presenter", mode: "sequential", order: 5 },
+      { provider: "OpenAI GPT-5.6 Terra", role: STEP_ROLES.PRESENTER, promptId: "RESP-PRES-v31", routeKey: "fast_presenter", mode: "sequential", order: 5 },
     ],
   },
   {
@@ -899,7 +946,7 @@ export const V3_PIPELINE_BLUEPRINT: PipelineStageSeed[] = [
     steps: [
       { provider: "OpenAI GPT-5.6 Sol", role: STEP_ROLES.CLOSURE_SUMMARIZER, promptId: "RESP-CLOSE-SUM-v3", routeKey: "reasoning_primary", mode: "sequential", order: 0 },
       { provider: "Anthropic Claude Opus 5", role: STEP_ROLES.CLOSURE_REVIEWER, promptId: "RESP-CLOSE-REV-v3", routeKey: "reasoning_reviewer", mode: "sequential", order: 1 },
-      { provider: "OpenAI GPT-5.6 Terra", role: STEP_ROLES.PRESENTER, promptId: "RESP-PRES-v3", routeKey: "fast_presenter", mode: "sequential", order: 2 },
+      { provider: "OpenAI GPT-5.6 Terra", role: STEP_ROLES.PRESENTER, promptId: "RESP-PRES-v31", routeKey: "fast_presenter", mode: "sequential", order: 2 },
     ],
   },
 ];
