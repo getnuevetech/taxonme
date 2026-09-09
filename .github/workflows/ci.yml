@@ -79,3 +79,4 @@ jobs:
       - run: npm run test:package-v
       - run: npm run test:package-w
       - run: npm run test:package-x
+      - run: npm run test:package-y

@@ -2,6 +2,8 @@
  * Package B — authority timing gates.
  * Do not surface installment dollar thresholds or FTA/AEP names before facts support them.
  * Package P — same gates apply to Pipeline A / notice keyword retrieval.
+ * Package Y — thin debt also blocks resolution-playbook haystacks (installment/CNC/OIC/9465)
+ * even without $50k wording; dedicated education asks still open the gate.
  */
 
 import type { EvidenceSnapshot } from "@/lib/ai/evidence-proportional";
@@ -10,6 +12,7 @@ export type QueryAuthoritySnapshot = EvidenceSnapshot & {
   amountCents?: number | null;
   userAskedInstallmentEducation?: boolean;
   userAskedReliefEducation?: boolean;
+  userAskedResolutionEducation?: boolean;
   caseTaxYear: number | null;
 };
 
@@ -23,15 +26,20 @@ export function snapshotFromQueryText(query: string): QueryAuthoritySnapshot {
   const years = Array.from(q.matchAll(/\b(?:19|20)\d{2}\b/g))
     .map((m) => Number(m[0]))
     .filter((y) => y >= 1990 && y <= 2100);
+  const userAskedInstallmentEducation = /\b(installment|payment plan|9465|streamlined)\b/i.test(lower);
+  const userAskedResolutionEducation =
+    userAskedInstallmentEducation ||
+    /\b(offer in compromise|\boic\b|currently not collectible|\bcnc\b)\b/i.test(lower);
   return {
     hasDocs: false,
     hasTranscript: /\btranscript\b/i.test(q),
     hasAmount,
     hasTaxYear: years.length > 0,
     amountCents: hasAmount ? Math.round(amount * 100) : null,
-    userAskedInstallmentEducation: /\b(installment|payment plan|9465|streamlined)\b/i.test(lower),
+    userAskedInstallmentEducation,
     userAskedReliefEducation:
       /\b(first[\s-]?time\s+abat(?:e|ement)|fta|aep|penalty relief|abatement)\b/i.test(lower),
+    userAskedResolutionEducation,
     caseTaxYear: years.length ? years[years.length - 1] : null,
   };
 }
@@ -45,6 +53,19 @@ export function shouldRetrieveInstallmentThresholds(
   if (ev.userAskedInstallmentEducation) return true;
   if (ev.hasAmount) return true;
   if (typeof ev.amountCents === "number" && ev.amountCents > 0) return true;
+  return false;
+}
+
+/** Resolution playbooks (installment/CNC/OIC menus) need amount, education ask, or explicit path ask. */
+export function shouldRetrieveResolutionPlaybooks(
+  ev: EvidenceSnapshot & {
+    amountCents?: number | null;
+    userAskedInstallmentEducation?: boolean;
+    userAskedResolutionEducation?: boolean;
+  },
+): boolean {
+  if (shouldRetrieveInstallmentThresholds(ev)) return true;
+  if (ev.userAskedResolutionEducation) return true;
   return false;
 }
 
@@ -75,18 +96,25 @@ export function neutralPenaltyReliefCopy(taxYear: number | null | undefined): st
 
 const INSTALLMENT_THRESHOLD_RE = /\$\s?50,?000|\$\s?100,?000|streamlined monthly|180-day short-term/i;
 const FTA_AEP_RE = /first[- ]?time abate|first[- ]?time abatement|\bFTA\b|\bAEP\b|automatic exemption from penalty/i;
+/** Package Y — resolution menus without requiring dollar thresholds. */
+export const RESOLUTION_PLAYBOOK_RE =
+  /installment\s+agreement|form\s*9465|payment\s+plan|offer\s+in\s+compromise|\bOIC\b|currently[\s-]?not[\s-]?collectible|\bCNC\b/i;
 
 export function authoritySourceBlockedByGates(
   source: { title: string; tags: string; content: string; taxYear: number | null },
   opts: {
     allowInstallmentThresholds: boolean;
     allowNamedRelief: boolean;
+    allowResolutionPlaybooks?: boolean;
     caseTaxYear: number | null;
   },
 ): boolean {
   const hay = `${source.title} ${source.tags} ${source.content}`;
   if (!opts.allowInstallmentThresholds && INSTALLMENT_THRESHOLD_RE.test(hay)) return true;
   if (!opts.allowNamedRelief && FTA_AEP_RE.test(hay)) return true;
+  const allowPlaybooks =
+    opts.allowResolutionPlaybooks ?? opts.allowInstallmentThresholds;
+  if (!allowPlaybooks && RESOLUTION_PLAYBOOK_RE.test(hay)) return true;
   // Year-stamped sources must match when case year is known.
   if (
     opts.caseTaxYear &&
@@ -104,11 +132,14 @@ export function authorityGateOptsFromQuery(query: string): {
   snap: QueryAuthoritySnapshot;
   allowInstallmentThresholds: boolean;
   allowNamedRelief: boolean;
+  allowResolutionPlaybooks: boolean;
 } {
   const snap = snapshotFromQueryText(query);
+  const allowInstallmentThresholds = shouldRetrieveInstallmentThresholds(snap);
   return {
     snap,
-    allowInstallmentThresholds: shouldRetrieveInstallmentThresholds(snap),
+    allowInstallmentThresholds,
     allowNamedRelief: shouldNameFtaOrAep(snap.caseTaxYear) || Boolean(snap.userAskedReliefEducation),
+    allowResolutionPlaybooks: shouldRetrieveResolutionPlaybooks(snap),
   };
 }

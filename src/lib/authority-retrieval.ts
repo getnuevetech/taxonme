@@ -5,6 +5,7 @@ import {
   authoritySourceBlockedByGates,
   shouldNameFtaOrAep,
   shouldRetrieveInstallmentThresholds,
+  shouldRetrieveResolutionPlaybooks,
   authorityGateOptsFromQuery,
 } from "./authority-gates";
 import type { EvidenceSnapshot } from "./ai/evidence-proportional";
@@ -57,6 +58,7 @@ function collectAuthorityQueries(state: Json | null, fallbackQuery: string): str
 function snapshotFromState(state: Json | null, fallbackQuery: string): EvidenceSnapshot & {
   amountCents?: number | null;
   userAskedInstallmentEducation?: boolean;
+  userAskedResolutionEducation?: boolean;
   caseTaxYear: number | null;
 } {
   const issues = Array.isArray(state?.issues) ? (state.issues as Json[]) : [];
@@ -65,13 +67,17 @@ function snapshotFromState(state: Json | null, fallbackQuery: string): EvidenceS
     .filter((n) => Number.isFinite(n) && n > 0);
   const years = issues.map((i) => Number(i.tax_year ?? i.taxYear ?? NaN)).filter((y) => y > 1990 && y < 2100);
   const q = fallbackQuery.toLowerCase();
+  const userAskedInstallmentEducation = /\b(installment|payment plan|9465|streamlined)\b/i.test(q);
   return {
     hasDocs: Boolean(state && Array.isArray((state as Json).documents) && ((state as Json).documents as unknown[]).length),
     hasTranscript: /transcript/i.test(JSON.stringify(state?.documents ?? "")),
     hasAmount: amounts.length > 0,
     hasTaxYear: years.length > 0,
     amountCents: amounts.length ? Math.round(amounts[0] * 100) : null,
-    userAskedInstallmentEducation: /\b(installment|payment plan|9465|streamlined)\b/i.test(q),
+    userAskedInstallmentEducation,
+    userAskedResolutionEducation:
+      userAskedInstallmentEducation ||
+      /\b(offer in compromise|\boic\b|currently not collectible|\bcnc\b)\b/i.test(q),
     caseTaxYear: years.length ? years[years.length - 1] : null,
   };
 }
@@ -87,6 +93,7 @@ export async function retrieveAuthorityForCase(
   const snap = { ...snapshotFromState(state, fallbackQuery), ...evidenceHints };
   const allowInstallmentThresholds = shouldRetrieveInstallmentThresholds(snap);
   const allowNamedRelief = shouldNameFtaOrAep(snap.caseTaxYear ?? null);
+  const allowResolutionPlaybooks = shouldRetrieveResolutionPlaybooks(snap);
   const sources = await db.knowledgeSource.findMany({ where: { isActive: true } });
   const queryEmbed =
     (await embedQueryText(queries.join("\n").slice(0, 4000)))?.embedding ?? null;
@@ -106,6 +113,7 @@ export async function retrieveAuthorityForCase(
           {
             allowInstallmentThresholds,
             allowNamedRelief,
+            allowResolutionPlaybooks,
             caseTaxYear: snap.caseTaxYear ?? null,
           },
         )
@@ -150,7 +158,8 @@ export async function retrieveAuthorityForCase(
  * Fail closed: empty string when every hit is gated out / score 0.
  */
 export async function retrieveKnowledgeForQuery(query: string, limit = 5): Promise<string> {
-  const { snap, allowInstallmentThresholds, allowNamedRelief } = authorityGateOptsFromQuery(query);
+  const { snap, allowInstallmentThresholds, allowNamedRelief, allowResolutionPlaybooks } =
+    authorityGateOptsFromQuery(query);
   const sources = await db.knowledgeSource.findMany({ where: { isActive: true } });
   const terms = Array.from(
     new Set(
@@ -175,6 +184,7 @@ export async function retrieveKnowledgeForQuery(query: string, limit = 5): Promi
           {
             allowInstallmentThresholds,
             allowNamedRelief,
+            allowResolutionPlaybooks,
             caseTaxYear: snap.caseTaxYear,
           },
         )
