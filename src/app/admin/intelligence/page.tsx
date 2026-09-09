@@ -4,6 +4,7 @@ import { IntelligenceDiagnosticsPanel } from "@/components/admin/intelligence-di
 import { IntelligenceReenrichButton } from "@/components/admin/intelligence-reenrich-button";
 import { IntelligenceBackfillPanel } from "@/components/admin/intelligence-backfill-panel";
 import { SituationQaIntelligenceBackfillPanel } from "@/components/admin/situation-qa-intelligence-backfill-panel";
+import { IntelligenceForceReenrichPanel } from "@/components/admin/intelligence-force-reenrich-panel";
 import { lookupIntelligenceDiagnostics } from "@/lib/admin/intelligence-lookup";
 
 export const metadata = { title: "Conversation intelligence" };
@@ -22,7 +23,7 @@ export default async function AdminIntelligencePage({
     <div>
       <PageHeader
         title="Conversation intelligence"
-        subtitle="Pipeline A/B routing snapshots for Situation, Q&A thread, or Case ids. Cases use Case.intelligenceJson first, then linked Situation. Lookup is read-only; use Re-enrich or empty-entity backfill to persist Package I enrichment."
+        subtitle="Pipeline A/B routing snapshots for Situation, Q&A thread, or Case ids. Cases use Case.intelligenceJson first, then linked Situation. Lookup is read-only; use Re-enrich, empty-entity backfill, or force overwrite to persist Package I enrichment."
       />
 
       <Card>
@@ -59,6 +60,7 @@ export default async function AdminIntelligencePage({
       <div className="mt-6 space-y-4">
         <IntelligenceBackfillPanel />
         <SituationQaIntelligenceBackfillPanel />
+        <IntelligenceForceReenrichPanel />
       </div>
 
       <div className="mt-6">

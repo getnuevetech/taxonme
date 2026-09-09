@@ -14,7 +14,7 @@
 
 ## Non-goals
 
-- Force re-enrich of non-empty `intelligenceJson`
+- Force re-enrich of non-empty `intelligenceJson` _(→ Package X)_
 - Form 433 / complete financial-statement interview
 - Broad KB seed / embedding corpus growth
 - Experience Search vector rewrite / pgvector

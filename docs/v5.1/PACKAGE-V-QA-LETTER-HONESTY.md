@@ -15,7 +15,7 @@
 
 - Form 433 / complete financial-statement interview
 - Situation / QaThread mass empty-intel backfill _(→ Package W)_
-- Force overwrite batch re-enrich
+- Force overwrite batch re-enrich _(→ Package X)_
 - Broad KB seed corpus / embedding corpus growth
 - Experience Search vector rewrite / pgvector
 - Case presenter rewrite (Package O) or notice explainer rewrite (Package Q)
