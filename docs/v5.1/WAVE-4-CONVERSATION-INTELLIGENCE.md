@@ -44,6 +44,7 @@ _(none for −1.8 — see Package J)_
 - **Package P** — Gated knowledge retrieval (Q&A / notice): `PACKAGE-P-GATED-KNOWLEDGE-RETRIEVAL.md`
 - **Package Q** — Notice-explainer honesty: `PACKAGE-Q-NOTICE-EXPLAINER.md`
 - **Package R** — Admin ConversationIntelligence re-enrich: `PACKAGE-R-ADMIN-INTELLIGENCE-REENRICH.md`
+- **Package S** — Experience L3/L4 Production corpus: `PACKAGE-S-EXPERIENCE-CORPUS.md`
 
 
 ## Check
