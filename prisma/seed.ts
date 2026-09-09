@@ -738,7 +738,7 @@ async function seedKnowledge() {
       content: "When a required return is not filed, the IRS may prepare a Substitute for Return (SFR) under IRC 6020(b) using payer information, often with filing status and deductions that overstate tax relative to a complete original return. Filing an accurate original return generally replaces the SFR assessment for that period. Refund claims remain subject to statute of limitations (commonly within 3 years of the return due date or 2 years of payment). Getting compliant for required open years (often discussed with reference to IRS Policy Statement 5-133) is usually a prerequisite before evaluating any later collection or relief options. Establish which years are unfiled and what the Account Transcript shows before sizing next steps.",
     },
   ];
-  // Package G/Y: create-or-update so re-seed refreshes taxYear / tags / content
+  // Package G: create-or-update so re-seed refreshes taxYear / tags / content
   // (create-if-missing left stale FTA rows without taxYear on existing installs).
   // Package Y: clear embeddings when content changes so stale vectors cannot re-rank old playbook prose.
   for (const s of sources) {
