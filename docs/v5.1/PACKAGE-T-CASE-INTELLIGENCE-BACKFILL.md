@@ -15,7 +15,7 @@
 ## Non-goals
 
 - Force re-enrich of non-empty `intelligenceJson`
-- Vector / embedding authority rewrite
+- Vector / embedding authority rewrite _(→ Package U)_
 - Form 433 / complete financial-statement interview
 - Mass Situation / QaThread backfill in the same package
 - Replacing AI ops Diagnostics

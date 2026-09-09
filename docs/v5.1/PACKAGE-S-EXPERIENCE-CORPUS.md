@@ -14,7 +14,7 @@
 ## Non-goals
 
 - Full Form 433 / complete financial-statement interview
-- Vector / embedding authority rewrite
+- Vector / embedding authority rewrite _(→ Package U)_
 - Mass historical Case intel backfill _(→ Package T)_
 - Changing Experience Search scoring beyond corpus wiring
 - Expanding KB seed content or presenter/notice honesty (Packages O/P/Q)

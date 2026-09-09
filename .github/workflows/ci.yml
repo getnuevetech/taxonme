@@ -75,3 +75,4 @@ jobs:
       - run: npm run test:package-r
       - run: npm run test:package-s
       - run: npm run test:package-t
+      - run: npm run test:package-u

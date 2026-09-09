@@ -27,6 +27,9 @@ export default async function AdminKnowledgePage() {
                   {s.reference && <Badge>{s.reference}</Badge>}
                   {s.taxYear && <Badge>{s.taxYear}</Badge>}
                   <Badge color={s.isActive ? "green" : "red"}>{s.isActive ? "active" : "inactive"}</Badge>
+                  <Badge color={s.embeddingJson ? "green" : "slate"}>
+                    {s.embeddingJson ? `embedded${s.embeddingModel ? ` · ${s.embeddingModel}` : ""}` : "keyword-only"}
+                  </Badge>
                 </summary>
                 <div className="mt-4">
                   <KnowledgeForm

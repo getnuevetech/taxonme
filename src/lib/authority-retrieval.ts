@@ -8,6 +8,11 @@ import {
   authorityGateOptsFromQuery,
 } from "./authority-gates";
 import type { EvidenceSnapshot } from "./ai/evidence-proportional";
+import {
+  embedQueryText,
+  hybridAuthorityScore,
+  parseEmbeddingJson,
+} from "./ai/embeddings";
 
 type Json = Record<string, unknown>;
 
@@ -16,6 +21,17 @@ function termsFrom(value: unknown): string[] {
     .toLowerCase()
     .split(/[^a-z0-9]+/)
     .filter((term) => term.length > 3 && !/^\d+$/.test(term));
+}
+
+function keywordScoreForSource(
+  hay: string,
+  terms: Iterable<string>,
+  codes: string[],
+): number {
+  let score = 0;
+  for (const term of terms) if (hay.includes(term)) score++;
+  for (const code of codes) if (hay.toUpperCase().includes(code.replace(/\s|-/g, ""))) score += 10;
+  return score;
 }
 
 function collectAuthorityQueries(state: Json | null, fallbackQuery: string): string[] {
@@ -72,6 +88,8 @@ export async function retrieveAuthorityForCase(
   const allowInstallmentThresholds = shouldRetrieveInstallmentThresholds(snap);
   const allowNamedRelief = shouldNameFtaOrAep(snap.caseTaxYear ?? null);
   const sources = await db.knowledgeSource.findMany({ where: { isActive: true } });
+  const queryEmbed =
+    (await embedQueryText(queries.join("\n").slice(0, 4000)))?.embedding ?? null;
   const scored = new Map<string, { source: (typeof sources)[number]; score: number }>();
   for (const query of queries) {
     const terms = new Set(termsFrom(query));
@@ -95,10 +113,10 @@ export async function retrieveAuthorityForCase(
         continue;
       }
       const hay = `${source.title} ${source.reference} ${source.sourceType} ${source.tags} ${source.content}`.toLowerCase();
-      let score = 0;
-      for (const term of terms) if (hay.includes(term)) score++;
-      for (const code of codes) if (hay.toUpperCase().includes(code.replace(/\s|-/g, ""))) score += 10;
-      if (score === 0) continue;
+      const keyword = keywordScoreForSource(hay, terms, codes);
+      const sourceEmbed = parseEmbeddingJson(source.embeddingJson);
+      const score = hybridAuthorityScore(keyword, queryEmbed, sourceEmbed);
+      if (score <= 0) continue;
       const existing = scored.get(source.id);
       if (!existing || score > existing.score) scored.set(source.id, { source, score });
     }
@@ -127,8 +145,9 @@ export async function retrieveAuthorityForCase(
 }
 
 /**
- * Package P — keyword retrieval for Q&A / notice / lab with Package B/G authority gates.
- * Fail closed: empty string when every hit is gated out.
+ * Package P/U — gated hybrid retrieval for Q&A / notice / lab.
+ * Keyword + optional embedding cosine; Package B/G gates always applied.
+ * Fail closed: empty string when every hit is gated out / score 0.
  */
 export async function retrieveKnowledgeForQuery(query: string, limit = 5): Promise<string> {
   const { snap, allowInstallmentThresholds, allowNamedRelief } = authorityGateOptsFromQuery(query);
@@ -142,6 +161,7 @@ export async function retrieveKnowledgeForQuery(query: string, limit = 5): Promi
     ),
   );
   const codes = query.toUpperCase().match(/\b(CP|LT|LTR)\s?-?\d{2,5}\b/g) ?? [];
+  const queryEmbed = (await embedQueryText(query))?.embedding ?? null;
   const scored = sources
     .map((s) => {
       if (
@@ -162,9 +182,9 @@ export async function retrieveKnowledgeForQuery(query: string, limit = 5): Promi
         return { s, score: 0 };
       }
       const hay = `${s.title} ${s.reference} ${s.tags} ${s.content}`.toLowerCase();
-      let score = 0;
-      for (const t of terms) if (hay.includes(t)) score++;
-      for (const c of codes) if (hay.toUpperCase().includes(c.replace(/\s|-/g, ""))) score += 10;
+      const keyword = keywordScoreForSource(hay, terms, codes);
+      const sourceEmbed = parseEmbeddingJson(s.embeddingJson);
+      const score = hybridAuthorityScore(keyword, queryEmbed, sourceEmbed);
       return { s, score };
     })
     .filter((x) => x.score > 0)

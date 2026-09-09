@@ -15,7 +15,7 @@
 
 - Notice-explainer prompt/UI full rewrite _(→ Package Q)_
 - Experience L3/L4 corpus seeding
-- Vector/embedding search rewrite
+- Vector/embedding search rewrite _(→ Package U)_
 - New knowledge seed content beyond gate behavior
 
 ## Check
