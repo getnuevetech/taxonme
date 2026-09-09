@@ -19,7 +19,7 @@
 - LLM re-ranker / chunking overhaul / full RAG rewrite
 - pgvector / external vector DB
 - Broad new KB seed corpus
-- Force re-enrich of non-empty Case intel
+- Force re-enrich of non-empty Case intel _(→ Package X)_
 
 ## Check
 

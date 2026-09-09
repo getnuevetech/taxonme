@@ -14,7 +14,7 @@
 
 ## Non-goals
 
-- Force re-enrich of non-empty `intelligenceJson`
+- Force re-enrich of non-empty `intelligenceJson` _(→ Package X)_
 - Vector / embedding authority rewrite _(→ Package U)_
 - Form 433 / complete financial-statement interview
 - Mass Situation / QaThread backfill _(→ Package W)_

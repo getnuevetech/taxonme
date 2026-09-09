@@ -1021,3 +1021,44 @@ export async function backfillSituationQaIntelligenceAction(
   revalidatePath("/admin/intelligence");
   return { ok: true, info: formatBackfillSummary(result) };
 }
+
+// ---------- Package X: force overwrite re-enrich ----------
+
+export async function forceReenrichIntelligenceAction(
+  _prev: ActionState,
+  formData: FormData,
+): Promise<ActionState> {
+  await requireAdminArea("admin.ai");
+  const dryRun = formData.get("dryRun") === "1" || formData.get("dryRun") === "on";
+  const confirmOverwrite =
+    formData.get("confirmOverwrite") === "1" || formData.get("confirmOverwrite") === "on";
+  const limitRaw = Number(formData.get("limit") ?? 25);
+  const entityId = String(formData.get("entityId") ?? "").trim();
+  const cursor = String(formData.get("cursor") ?? "").trim();
+  const kindRaw = String(formData.get("kind") ?? "case").trim();
+  if (kindRaw !== "case" && kindRaw !== "situation" && kindRaw !== "qa_thread") {
+    return { error: "Kind must be case, situation, or qa_thread." };
+  }
+  if (!dryRun && !confirmOverwrite) {
+    return {
+      error: "Apply requires acknowledging overwrite (confirmOverwrite). Use dry-run to preview.",
+    };
+  }
+
+  const {
+    forceReenrichIntelligence,
+    formatForceReenrichSummary,
+  } = await import("@/lib/admin/intelligence-force-reenrich");
+  const result = await forceReenrichIntelligence(kindRaw, {
+    dryRun,
+    force: confirmOverwrite,
+    limit: limitRaw,
+    entityId: entityId || undefined,
+    cursor: cursor || undefined,
+  });
+  revalidatePath("/admin/intelligence");
+  if (result.failed > 0 && result.written === 0 && result.eligible === 0 && !dryRun) {
+    return { error: formatForceReenrichSummary(result) };
+  }
+  return { ok: true, info: formatForceReenrichSummary(result) };
+}
