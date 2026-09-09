@@ -935,3 +935,29 @@ export async function deleteFormTemplateAction(id: string) {
   await db.irsFormTemplate.delete({ where: { id } });
   revalidatePath("/admin/forms");
 }
+
+// ---------- Package R: ConversationIntelligence re-enrich ----------
+
+export async function reenrichIntelligenceAction(
+  _prev: ActionState,
+  formData: FormData,
+): Promise<ActionState> {
+  await requireAdminArea("admin.ai");
+  const kind = String(formData.get("kind") ?? "").trim();
+  const id = String(formData.get("id") ?? "").trim();
+  if (kind !== "situation" && kind !== "qa_thread" && kind !== "case") {
+    return { error: "Invalid entity kind." };
+  }
+  if (!id) return { error: "Missing entity id." };
+
+  const { reenrichEntityIntelligence } = await import("@/lib/admin/intelligence-reenrich");
+  const result = await reenrichEntityIntelligence({ kind, id });
+  if (!result.ok) return { error: result.error };
+
+  revalidatePath("/admin/intelligence");
+  if (kind === "case") revalidatePath(`/admin/cases/${id}`);
+  return {
+    ok: true,
+    info: `Re-enriched ${kind} intelligence and saved intelligenceJson.`,
+  };
+}

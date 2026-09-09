@@ -13,7 +13,7 @@
 ## Non-goals
 
 - `Case.intelligenceJson` persistence / migration _(→ Package N)_
-- Mutate or re-run enrichment from the admin UI
+- Mutate or re-run enrichment from the admin UI _(→ Package R)_
 - Replacing AI ops Diagnostics (tokens, queue, readiness)
 
 ## Check
