@@ -697,7 +697,7 @@ async function seedKnowledge() {
       sourceType: "notice_guide",
       reference: "CP14",
       tags: "notice, balance due, first notice",
-      content: "A CP14 is the first notice that a taxpayer owes tax. It shows the tax assessed, payments credited, penalties, and interest. Payment is generally requested within 21 days. Options if the taxpayer cannot pay in full: short-term payment plan (up to 180 days), long-term installment agreement (Form 9465 or IRS online payment agreement), currently-not-collectible status, or offer in compromise in hardship cases. Interest and failure-to-pay penalties continue to accrue until paid.",
+      content: "A CP14 is typically the IRS's first balance-due notice after assessment. It lists tax assessed, credits, penalties, and interest, and usually asks for payment within about 21 days of the notice date. Confirm the printed amount, tax period, and respond-by language on the notice. An Account Transcript establishes the same figures independently. Interest and failure-to-pay penalties generally continue until the balance is resolved. Do not choose a specific payment or relief path from this guide alone — establish what the IRS shows first.",
     },
     {
       title: "CP49 — Refund applied to other taxes",
@@ -711,14 +711,14 @@ async function seedKnowledge() {
       sourceType: "notice_guide",
       reference: "LT11",
       tags: "levy, urgent, collection, due process, appeal",
-      content: "LT11 is a FINAL notice of intent to levy and notice of the right to a Collection Due Process (CDP) hearing. The taxpayer has 30 days from the notice date to request a CDP hearing (Form 12153) or make payment arrangements before the IRS can levy wages, bank accounts, or other property. This is urgent. Setting up an installment agreement or having a pending CDP request generally stops levy action. Professional review is strongly recommended at this stage.",
+      content: "LT11 (Letter 1058) is a final notice of intent to levy and notice of Collection Due Process (CDP) hearing rights. The taxpayer generally has 30 days from the notice date to request a CDP hearing (Form 12153) or otherwise respond before levy of wages, bank accounts, or other property may proceed. Calendar the printed deadline and keep the notice. Confirm the balance and recent activity on an Account Transcript. Professional review is often warranted at this stage because levy timing is short.",
     },
     {
       title: "IRS account transcript transaction codes",
       sourceType: "rule",
       reference: "TC codes",
       tags: "transcript, transaction codes, 846, 826, 570, 971",
-      content: "Key IRS account transcript transaction codes: TC 150 = tax return filed and tax assessed. TC 806 = withholding credit. TC 846 = refund issued (with date and amount). TC 826 = credit transferred to another tax period (refund used to pay another year's debt). TC 570 = additional account action pending (refund hold). TC 971 = notice issued. TC 971/977 = amended return received. TC 276 = failure-to-pay penalty. TC 196 = interest assessed. TC 480 = offer in compromise pending. TC 971 with 'collection due process' = CDP request received. Comparing TC 846 amounts against the refund claimed on the return reveals offsets and adjustments.",
+      content: "Key IRS account transcript transaction codes: TC 150 = tax return filed and tax assessed. TC 806 = withholding credit. TC 846 = refund issued (with date and amount). TC 826 = credit transferred to another tax period (refund used to pay another year's debt). TC 570 = additional account action pending (refund hold). TC 971 = notice issued. TC 971/977 = amended return received. TC 276 = failure-to-pay penalty. TC 196 = interest assessed. TC 480 = settlement request pending (see Account Transcript legend). TC 971 with 'collection due process' = CDP request received. Comparing TC 846 amounts against the refund claimed on the return reveals offsets and adjustments.",
     },
     periodByTitle.get("Installment agreements (payment plans)")!,
     periodByTitle.get("First-time penalty abatement")!,
@@ -735,11 +735,12 @@ async function seedKnowledge() {
       sourceType: "rule",
       reference: "SFR / IRC 6020(b)",
       tags: "unfiled, substitute for return, late filing",
-      content: "When a required return is not filed, the IRS may prepare a Substitute for Return (SFR) using payer information — with single/married-filing-separate status and no itemized deductions or credits, usually overstating the true tax. Filing an accurate original return generally replaces the SFR assessment. Refunds are only payable if claimed within 3 years of the return due date (or 2 years of payment). Getting compliant (typically the last 6 years of returns per IRS Policy Statement 5-133) is a prerequisite for most resolution options such as installment agreements and offers in compromise.",
+      content: "When a required return is not filed, the IRS may prepare a Substitute for Return (SFR) under IRC 6020(b) using payer information, often with filing status and deductions that overstate tax relative to a complete original return. Filing an accurate original return generally replaces the SFR assessment for that period. Refund claims remain subject to statute of limitations (commonly within 3 years of the return due date or 2 years of payment). Getting compliant for required open years (often discussed with reference to IRS Policy Statement 5-133) is usually a prerequisite before evaluating any later collection or relief options. Establish which years are unfiled and what the Account Transcript shows before sizing next steps.",
     },
   ];
-  // Package G: create-or-update so re-seed refreshes taxYear / tags / content
+  // Package G/Y: create-or-update so re-seed refreshes taxYear / tags / content
   // (create-if-missing left stale FTA rows without taxYear on existing installs).
+  // Package Y: clear embeddings when content changes so stale vectors cannot re-rank old playbook prose.
   for (const s of sources) {
     const write = knowledgeSourceWriteData({
       title: s.title,
@@ -753,9 +754,15 @@ async function seedKnowledge() {
     if (!exists) {
       await db.knowledgeSource.create({ data: { title: s.title, ...write } });
     } else {
+      const contentChanged = exists.content !== write.content;
       await db.knowledgeSource.update({
         where: { id: exists.id },
-        data: write,
+        data: {
+          ...write,
+          ...(contentChanged
+            ? { embeddingJson: "", embeddingModel: "", embeddedAt: null }
+            : {}),
+        },
       });
     }
   }

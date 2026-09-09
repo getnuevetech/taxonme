@@ -50,6 +50,7 @@ _(none for −1.8 — see Package J)_
 - **Package V** — QA + letter playbook honesty: `PACKAGE-V-QA-LETTER-HONESTY.md`
 - **Package W** — Situation / QaThread empty-intel backfill: `PACKAGE-W-SITUATION-QA-INTEL-BACKFILL.md`
 - **Package X** — Force overwrite ConversationIntelligence re-enrich: `PACKAGE-X-FORCE-INTEL-REENRICH.md`
+- **Package Y** — Authority seed honesty: `PACKAGE-Y-AUTHORITY-SEED-HONESTY.md`
 
 
 ## Check

@@ -110,6 +110,7 @@ Work packages that enforce this guide (do not treat as “make the app dumber”
 | **V** | QA + letter playbook honesty — sanitize thin debt free-text; no invented resolution paths |
 | **W** | Situation / QaThread empty-intel backfill — empty `intelligenceJson` via Package R; intake persist |
 | **X** | Force overwrite ConversationIntelligence re-enrich — parseable snapshots via Package R |
+| **Y** | Authority seed honesty — identify-only CP14/LT11/SFR; thin debt blocks resolution playbooks |
 
 Every package must preserve **Pipeline A** (arbitrary IRS/tax questions) and **Pipeline B** (matter engine) as general reasoners — never collapse the product into a single-scenario wizard.
 

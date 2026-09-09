@@ -1384,6 +1384,7 @@ export async function explainNoticeContent(content: string, caseId?: string): Pr
       {
         allowInstallmentThresholds: gate.allowInstallmentThresholds,
         allowNamedRelief: gate.allowNamedRelief,
+        allowResolutionPlaybooks: gate.allowResolutionPlaybooks,
         caseTaxYear: gate.snap.caseTaxYear,
       },
     )
