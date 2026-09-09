@@ -2,6 +2,10 @@ import { db } from "@/lib/db";
 import { requireUser } from "@/lib/auth";
 import { PageHeader, Card, CardBody, Badge, Money, EmptyState, ButtonLink } from "@/components/ui";
 import { NoticeUpload } from "@/components/notice-upload";
+import {
+  shouldShowNoticeLetterCta,
+  shouldShowNoticeNextSteps,
+} from "@/lib/ai/notice-honesty";
 
 export const metadata = { title: "IRS notices" };
 
@@ -30,6 +34,15 @@ export default async function NoticesPage() {
         <div className="space-y-4">
           {notices.map((n) => {
             const steps: { title: string; description: string }[] = JSON.parse(n.nextStepsJson || "[]");
+            const showSteps = shouldShowNoticeNextSteps({
+              noticeType: n.noticeType,
+              status: n.status,
+              stepCount: steps.length,
+            });
+            const showLetter = shouldShowNoticeLetterCta({
+              noticeType: n.noticeType,
+              status: n.status,
+            });
             return (
               <Card key={n.id}>
                 <CardBody>
@@ -39,20 +52,28 @@ export default async function NoticesPage() {
                       {n.taxYear ? ` · Tax year ${n.taxYear}` : ""}
                     </h2>
                     <div className="flex gap-2">
-                      {n.amountCents !== null && <Badge color="amber"><Money cents={n.amountCents} /></Badge>}
+                      {n.amountCents !== null && (
+                        <Badge color="amber">
+                          <Money cents={n.amountCents} />
+                        </Badge>
+                      )}
                       {n.deadline && (
                         <Badge color="red">Respond by {n.deadline.toLocaleDateString("en-US")}</Badge>
                       )}
-                      <Badge color={n.status === "explained" ? "green" : "slate"}>{n.status.replace(/_/g, " ")}</Badge>
+                      <Badge color={n.status === "explained" ? "green" : "slate"}>
+                        {n.status.replace(/_/g, " ")}
+                      </Badge>
                     </div>
                   </div>
                   {n.explanation && (
                     <div className="mt-3 rounded-xl bg-slate-50 p-4">
                       <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">What this means</p>
-                      <p className="mt-1 whitespace-pre-line text-sm leading-relaxed text-slate-700">{n.explanation}</p>
+                      <p className="mt-1 whitespace-pre-line text-sm leading-relaxed text-slate-700">
+                        {n.explanation}
+                      </p>
                     </div>
                   )}
-                  {steps.length > 0 && (
+                  {showSteps && (
                     <div className="mt-3">
                       <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Your next steps</p>
                       <ol className="mt-2 space-y-2">
@@ -70,11 +91,17 @@ export default async function NoticesPage() {
                       </ol>
                     </div>
                   )}
-                  <div className="mt-4 flex gap-2">
-                    <ButtonLink href={`/app/letters/new?notice=${n.id}`} variant="secondary" className="!px-3 !py-1.5 text-xs">
-                      Draft a response letter
-                    </ButtonLink>
-                  </div>
+                  {showLetter && (
+                    <div className="mt-4 flex gap-2">
+                      <ButtonLink
+                        href={`/app/letters/new?notice=${n.id}`}
+                        variant="secondary"
+                        className="!px-3 !py-1.5 text-xs"
+                      >
+                        Draft a response letter
+                      </ButtonLink>
+                    </div>
+                  )}
                 </CardBody>
               </Card>
             );

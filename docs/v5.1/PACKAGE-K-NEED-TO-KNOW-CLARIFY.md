@@ -15,7 +15,7 @@
 
 - Admin ConversationIntelligence diagnostics panel _(→ Package M)_
 - Orchestrator AI-path transcript deepen (Package L candidate)
-- Full rewrite of notice explainers beyond levy honesty tweak
+- Full rewrite of notice explainers beyond levy honesty tweak _(→ Package Q)_
 
 ## Check
 

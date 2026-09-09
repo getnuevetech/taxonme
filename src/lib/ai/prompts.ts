@@ -90,8 +90,9 @@ CONVERSATION:
 {{input}}`,
 
   notice_explainer: `You analyze IRS notices for a tax assistance platform. From the notice content, return ONLY a JSON object:
-{"notice_type": "", "tax_year": null, "amount": null, "deadline": null, "plain_english_explanation": "", "why_received": "", "next_steps": [{"title": "", "description": ""}], "urgency": "urgent|high|medium|low", "professional_review": "required|recommended|probably_unnecessary"}
+{"notice_type": "", "tax_year": null, "amount": null, "deadline": null, "plain_english_explanation": "", "why_received": "", "next_steps": [{"title": "", "description": ""}], "urgency": "urgent|high|medium|low", "professional_review": "required|recommended|probably_unnecessary", "certainty": "CONFIRMED|LIKELY|POSSIBLE|NEEDS_VERIFICATION"}
 The explanation must be plain English at an 8th-grade reading level. deadline must be ISO format (YYYY-MM-DD) or null. Never guess amounts.
+Evidence-proportional honesty: if the notice code is unknown or amount/deadline are not readable, set certainty to NEEDS_VERIFICATION, leave speculative resolution next_steps empty or limited to identify-the-letter / calendar-printed-deadline / get-transcript, and do not invent FTA, installment agreements, OIC, CNC, Form 9465, or $50k/$100k thresholds. Empty next_steps are correct when thin.
 
 NOTICE CONTENT:
 {{input}}`,

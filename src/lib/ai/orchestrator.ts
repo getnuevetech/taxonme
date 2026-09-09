@@ -1345,9 +1345,18 @@ export async function explainNoticeContent(content: string, caseId?: string): Pr
     review: "(use prior reviewer output when present)",
   }, { sequentialContext: true, metadata: { helper: "notice", caseId: caseId ?? "" } });
   const parsed = outcome.stepOutputs.at(-1)?.data ?? outcome.stepOutputs.find((o) => o.data)?.data ?? null;
-  if (parsed) return parsed;
+
+  const { sanitizeNoticeExplanation, sparseNoticeNextSteps, extractNoticeCode } = await import(
+    "./notice-honesty"
+  );
+
+  if (parsed) {
+    const sanitized = sanitizeNoticeExplanation(parsed as Record<string, unknown>, content);
+    return sanitized.result as Json;
+  }
+
   // Deterministic fallback: identify notice code and match knowledge base (still gated).
-  const code = (content.toUpperCase().match(/\b(CP|LT|LTR)\s?-?\d{2,5}\b/) ?? [])[0]?.replace(/\s|-/g, "") ?? "";
+  const code = extractNoticeCode(content);
   const { authorityGateOptsFromQuery, authoritySourceBlockedByGates } = await import("../authority-gates");
   const gate = authorityGateOptsFromQuery(content);
   const kb = code
@@ -1370,18 +1379,20 @@ export async function explainNoticeContent(content: string, caseId?: string): Pr
     )
       ? kb
       : null;
-  return {
+
+  // Package Q: sparse fallback — meaning only from gated KB; no invented resolution playbooks.
+  const fallbackRaw: Record<string, unknown> = {
     notice_type: code || null,
     plain_english_explanation: kbAllowed
       ? kbAllowed.content.slice(0, 1200)
       : "We stored your notice safely. Our reference library doesn't cover this notice type yet — a professional review can explain it, and it will be re-examined automatically on your next analysis.",
-    next_steps: [
-      { title: "Keep the notice safe", description: "It's stored in your document vault." },
-      { title: "Check the deadline", description: "IRS notices usually show a respond-by date near the top right. Add it to your deadlines." },
-    ],
+    next_steps: sparseNoticeNextSteps({ hasCode: Boolean(code), hasDeadline: false }),
+    certainty: code && kbAllowed ? "LIKELY" : "NEEDS_VERIFICATION",
     urgency: "medium",
     fallback: true,
   };
+  const sanitized = sanitizeNoticeExplanation(fallbackRaw, content);
+  return sanitized.result as Json;
 }
 
 export async function generateLetterDraft(context: string, caseId?: string): Promise<string> {
