@@ -1718,6 +1718,16 @@ async function seedMessageTemplates() {
   }
 }
 
+async function seedExperiencePatterns() {
+  const { seedCuratedProductionPatterns } = await import(
+    "../src/lib/experience/seed-patterns"
+  );
+  const result = await seedCuratedProductionPatterns();
+  console.log(
+    `Experience Production patterns upserted: ${result.upserted} (${result.digests.join(", ")})`,
+  );
+}
+
 async function main() {
   await seedSettings();
   await seedAdmin();
@@ -1727,6 +1737,7 @@ async function main() {
   await seedAiAndPipelines();
   await seedContent();
   await seedKnowledge();
+  await seedExperiencePatterns();
   await seedFormTemplates();
   await seedCannedResponses();
   await seedMessageTemplates();

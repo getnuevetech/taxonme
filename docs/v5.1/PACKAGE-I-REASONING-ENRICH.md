@@ -9,6 +9,7 @@
 2. Experience Search may **reorder/suppress existing** `ask_now` items via production pattern hints — it must **not** invent new clarify questions or document facts.
 3. Optional PRIMARY_REASONING refine may update only `interpreted_question` / allowlisted `decision_target` when routing confidence is low (or clarify-first) — fail closed if no provider/key or parse fails.
 4. `model-capabilities` documents role surfaces: reasoning may refine contract labels; never invent document facts or state authority from this hook.
+5. Live Production ask hints require curated L4 corpus _(→ Package S)_.
 
 ## Call sites
 

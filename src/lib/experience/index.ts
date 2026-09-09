@@ -143,3 +143,11 @@ export type {
   ExperienceFixtureKind,
   ExperienceFixtureResult,
 } from "./fixture-pack";
+export {
+  curatedProductionPatterns,
+  seedCuratedProductionPatterns,
+  PACKAGE_S_TAX_RELIEF_DIGEST,
+  PACKAGE_S_NOTICE_DIGEST,
+  PACKAGE_S_THIN_DEBT_DIGEST,
+} from "./seed-patterns";
+export type { SeedProductionPatternsResult } from "./seed-patterns";
