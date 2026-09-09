@@ -13,7 +13,7 @@
 
 ## Non-goals
 
-- Mass historical Case intel backfill job
+- Mass historical Case intel backfill job _(→ Package T)_
 - Experience L3/L4 corpus depth _(→ Package S)_
 - Vector / embedding authority search
 - Form 433 / full financial-statement depth

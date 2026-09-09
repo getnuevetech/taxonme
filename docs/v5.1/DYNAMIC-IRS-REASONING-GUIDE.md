@@ -105,6 +105,7 @@ Work packages that enforce this guide (do not treat as “make the app dumber”
 | **Q** | Notice-explainer honesty — sanitize thin/unknown notices; no invented resolution playbooks |
 | **R** | Admin ConversationIntelligence re-enrich — mutate via Package I path; fail-closed persist |
 | **S** | Experience L3/L4 Production corpus — curated institutional patterns activate Package I ask hints |
+| **T** | Historical Case intelligence backfill — empty `intelligenceJson` only via Package R re-enrich |
 
 Every package must preserve **Pipeline A** (arbitrary IRS/tax questions) and **Pipeline B** (matter engine) as general reasoners — never collapse the product into a single-scenario wizard.
 
