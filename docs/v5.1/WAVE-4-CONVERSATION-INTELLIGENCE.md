@@ -41,6 +41,7 @@ _(none for −1.8 — see Package J)_
 - **Package M** — Admin ConversationIntelligence diagnostics: `PACKAGE-M-ADMIN-INTELLIGENCE-DIAGNOSTICS.md`
 - **Package N** — Case ConversationIntelligence persistence: `PACKAGE-N-CASE-INTELLIGENCE-PERSIST.md`
 - **Package O** — Presenter honesty (thin intake): `PACKAGE-O-PRESENTER-HONESTY.md`
+- **Package P** — Gated knowledge retrieval (Q&A / notice): `PACKAGE-P-GATED-KNOWLEDGE-RETRIEVAL.md`
 
 
 ## Check

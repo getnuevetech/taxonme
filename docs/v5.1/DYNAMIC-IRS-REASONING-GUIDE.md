@@ -101,6 +101,7 @@ Work packages that enforce this guide (do not treat as “make the app dumber”
 | **M** | Admin ConversationIntelligence diagnostics — read-only Situation / Q&A / Case routing snapshots |
 | **N** | Case ConversationIntelligence persistence — `Case.intelligenceJson` at create; Case → Situation → recompute |
 | **O** | Presenter honesty — sanitize thin AI `balance_due` / explanations at source; `RESP-PRES-v31` |
+| **P** | Gated knowledge retrieval — Q&A / notice keyword path uses Package B/G authority gates |
 
 Every package must preserve **Pipeline A** (arbitrary IRS/tax questions) and **Pipeline B** (matter engine) as general reasoners — never collapse the product into a single-scenario wizard.
 

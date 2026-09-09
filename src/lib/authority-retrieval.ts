@@ -5,6 +5,7 @@ import {
   authoritySourceBlockedByGates,
   shouldNameFtaOrAep,
   shouldRetrieveInstallmentThresholds,
+  authorityGateOptsFromQuery,
 } from "./authority-gates";
 import type { EvidenceSnapshot } from "./ai/evidence-proportional";
 
@@ -123,4 +124,53 @@ export async function retrieveAuthorityForCase(
     sourceIds: ranked.map(({ source }) => source.id),
     queries,
   };
+}
+
+/**
+ * Package P — keyword retrieval for Q&A / notice / lab with Package B/G authority gates.
+ * Fail closed: empty string when every hit is gated out.
+ */
+export async function retrieveKnowledgeForQuery(query: string, limit = 5): Promise<string> {
+  const { snap, allowInstallmentThresholds, allowNamedRelief } = authorityGateOptsFromQuery(query);
+  const sources = await db.knowledgeSource.findMany({ where: { isActive: true } });
+  const terms = Array.from(
+    new Set(
+      query
+        .toLowerCase()
+        .split(/[^a-z0-9]+/)
+        .filter((t) => t.length > 3),
+    ),
+  );
+  const codes = query.toUpperCase().match(/\b(CP|LT|LTR)\s?-?\d{2,5}\b/g) ?? [];
+  const scored = sources
+    .map((s) => {
+      if (
+        authoritySourceBlockedByGates(
+          {
+            title: s.title,
+            tags: s.tags || "",
+            content: s.content,
+            taxYear: s.taxYear,
+          },
+          {
+            allowInstallmentThresholds,
+            allowNamedRelief,
+            caseTaxYear: snap.caseTaxYear,
+          },
+        )
+      ) {
+        return { s, score: 0 };
+      }
+      const hay = `${s.title} ${s.reference} ${s.tags} ${s.content}`.toLowerCase();
+      let score = 0;
+      for (const t of terms) if (hay.includes(t)) score++;
+      for (const c of codes) if (hay.toUpperCase().includes(c.replace(/\s|-/g, ""))) score += 10;
+      return { s, score };
+    })
+    .filter((x) => x.score > 0)
+    .sort((a, b) => b.score - a.score)
+    .slice(0, limit);
+  return scored
+    .map(({ s }) => `[${s.reference || s.sourceType}] ${s.title}\n${s.content.slice(0, 2500)}`)
+    .join("\n\n---\n\n");
 }

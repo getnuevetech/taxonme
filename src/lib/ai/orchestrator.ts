@@ -32,7 +32,7 @@ import { readUpload } from "../uploads";
 import { verifyCaseProgress } from "../case-progress";
 import { buildCanonicalCaseState, upsertCanonicalCaseState } from "../canonical-case-state";
 import { recordCaseDiscovery } from "../case-discovery";
-import { retrieveAuthorityForCase } from "../authority-retrieval";
+import { retrieveAuthorityForCase, retrieveKnowledgeForQuery } from "../authority-retrieval";
 import { rebuildCaseIssueAndActionGraph } from "../action-graph";
 import { compileCaseEvidence } from "../evidence/compile";
 import { recordExtractionLineage, recordProcessingFailure } from "../evidence/document-processing";
@@ -157,33 +157,9 @@ async function getRunnableSteps(stageKey: string) {
   return stage.steps.filter((s) => providerAllowedForTaxData(s.provider));
 }
 
-// Naive keyword retrieval over the admin-curated IRS knowledge base.
+// Package P: keyword retrieval applies Package B/G authority gates (same honesty as Case path).
 export async function retrieveKnowledge(query: string, limit = 5): Promise<string> {
-  const sources = await db.knowledgeSource.findMany({ where: { isActive: true } });
-  const terms = Array.from(
-    new Set(
-      query
-        .toLowerCase()
-        .split(/[^a-z0-9]+/)
-        .filter((t) => t.length > 3),
-    ),
-  );
-  const scored = sources
-    .map((s) => {
-      const hay = `${s.title} ${s.reference} ${s.tags} ${s.content}`.toLowerCase();
-      let score = 0;
-      for (const t of terms) if (hay.includes(t)) score++;
-      // Notice codes like CP2000 are strong signals.
-      const codes = query.toUpperCase().match(/\b(CP|LT|LTR)\s?-?\d{2,4}\b/g) ?? [];
-      for (const c of codes) if (hay.toUpperCase().includes(c.replace(/\s|-/g, ""))) score += 10;
-      return { s, score };
-    })
-    .filter((x) => x.score > 0)
-    .sort((a, b) => b.score - a.score)
-    .slice(0, limit);
-  return scored
-    .map(({ s }) => `[${s.reference || s.sourceType}] ${s.title}\n${s.content.slice(0, 2500)}`)
-    .join("\n\n---\n\n");
+  return retrieveKnowledgeForQuery(query, limit);
 }
 
 export type StageOutcome = {
@@ -1370,15 +1346,34 @@ export async function explainNoticeContent(content: string, caseId?: string): Pr
   }, { sequentialContext: true, metadata: { helper: "notice", caseId: caseId ?? "" } });
   const parsed = outcome.stepOutputs.at(-1)?.data ?? outcome.stepOutputs.find((o) => o.data)?.data ?? null;
   if (parsed) return parsed;
-  // Deterministic fallback: identify notice code and match knowledge base.
-  const code = (content.toUpperCase().match(/\b(CP|LT|LTR)\s?-?\d{2,4}\b/) ?? [])[0]?.replace(/\s|-/g, "") ?? "";
+  // Deterministic fallback: identify notice code and match knowledge base (still gated).
+  const code = (content.toUpperCase().match(/\b(CP|LT|LTR)\s?-?\d{2,5}\b/) ?? [])[0]?.replace(/\s|-/g, "") ?? "";
+  const { authorityGateOptsFromQuery, authoritySourceBlockedByGates } = await import("../authority-gates");
+  const gate = authorityGateOptsFromQuery(content);
   const kb = code
     ? await db.knowledgeSource.findFirst({ where: { reference: { contains: code }, isActive: true } })
     : null;
+  const kbAllowed =
+    kb &&
+    !authoritySourceBlockedByGates(
+      {
+        title: kb.title,
+        tags: kb.tags || "",
+        content: kb.content,
+        taxYear: kb.taxYear,
+      },
+      {
+        allowInstallmentThresholds: gate.allowInstallmentThresholds,
+        allowNamedRelief: gate.allowNamedRelief,
+        caseTaxYear: gate.snap.caseTaxYear,
+      },
+    )
+      ? kb
+      : null;
   return {
     notice_type: code || null,
-    plain_english_explanation: kb
-      ? kb.content.slice(0, 1200)
+    plain_english_explanation: kbAllowed
+      ? kbAllowed.content.slice(0, 1200)
       : "We stored your notice safely. Our reference library doesn't cover this notice type yet — a professional review can explain it, and it will be re-examined automatically on your next analysis.",
     next_steps: [
       { title: "Keep the notice safe", description: "It's stored in your document vault." },
