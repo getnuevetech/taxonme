@@ -961,3 +961,29 @@ export async function reenrichIntelligenceAction(
     info: `Re-enriched ${kind} intelligence and saved intelligenceJson.`,
   };
 }
+
+// ---------- Package T: empty Case intelligence backfill ----------
+
+export async function backfillCaseIntelligenceAction(
+  _prev: ActionState,
+  formData: FormData,
+): Promise<ActionState> {
+  await requireAdminArea("admin.ai");
+  const dryRun = formData.get("dryRun") === "1" || formData.get("dryRun") === "on";
+  const limitRaw = Number(formData.get("limit") ?? 50);
+  const caseId = String(formData.get("caseId") ?? "").trim();
+  const cursor = String(formData.get("cursor") ?? "").trim();
+
+  const {
+    backfillEmptyCaseIntelligence,
+    formatBackfillSummary,
+  } = await import("@/lib/admin/intelligence-backfill");
+  const result = await backfillEmptyCaseIntelligence({
+    dryRun,
+    limit: limitRaw,
+    caseId: caseId || undefined,
+    cursor: cursor || undefined,
+  });
+  revalidatePath("/admin/intelligence");
+  return { ok: true, info: formatBackfillSummary(result) };
+}

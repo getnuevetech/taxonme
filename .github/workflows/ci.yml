@@ -74,3 +74,4 @@ jobs:
       - run: npm run test:package-q
       - run: npm run test:package-r
       - run: npm run test:package-s
+      - run: npm run test:package-t

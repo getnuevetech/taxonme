@@ -2,6 +2,7 @@ import { guardAdminPage } from "@/lib/admin-guard";
 import { PageHeader, Card, CardBody } from "@/components/ui";
 import { IntelligenceDiagnosticsPanel } from "@/components/admin/intelligence-diagnostics-panel";
 import { IntelligenceReenrichButton } from "@/components/admin/intelligence-reenrich-button";
+import { IntelligenceBackfillPanel } from "@/components/admin/intelligence-backfill-panel";
 import { lookupIntelligenceDiagnostics } from "@/lib/admin/intelligence-lookup";
 
 export const metadata = { title: "Conversation intelligence" };
@@ -20,7 +21,7 @@ export default async function AdminIntelligencePage({
     <div>
       <PageHeader
         title="Conversation intelligence"
-        subtitle="Pipeline A/B routing snapshots for Situation, Q&A thread, or Case ids. Cases use Case.intelligenceJson first, then linked Situation. Lookup is read-only; use Re-enrich to re-run Package I and persist."
+        subtitle="Pipeline A/B routing snapshots for Situation, Q&A thread, or Case ids. Cases use Case.intelligenceJson first, then linked Situation. Lookup is read-only; use Re-enrich or empty-Case backfill to persist Package I enrichment."
       />
 
       <Card>
@@ -53,6 +54,10 @@ export default async function AdminIntelligencePage({
           </p>
         </CardBody>
       </Card>
+
+      <div className="mt-6">
+        <IntelligenceBackfillPanel />
+      </div>
 
       <div className="mt-6">
         {!query ? (
