@@ -108,6 +108,7 @@ Work packages that enforce this guide (do not treat as “make the app dumber”
 | **T** | Historical Case intelligence backfill — empty `intelligenceJson` only via Package R re-enrich |
 | **U** | Gated hybrid authority retrieval — keyword + embeddings under Package P/B/G gates |
 | **V** | QA + letter playbook honesty — sanitize thin debt free-text; no invented resolution paths |
+| **W** | Situation / QaThread empty-intel backfill — empty `intelligenceJson` via Package R; intake persist |
 
 Every package must preserve **Pipeline A** (arbitrary IRS/tax questions) and **Pipeline B** (matter engine) as general reasoners — never collapse the product into a single-scenario wizard.
 

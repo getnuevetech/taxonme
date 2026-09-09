@@ -77,3 +77,4 @@ jobs:
       - run: npm run test:package-t
       - run: npm run test:package-u
       - run: npm run test:package-v
+      - run: npm run test:package-w

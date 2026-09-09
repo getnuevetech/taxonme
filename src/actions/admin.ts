@@ -968,7 +968,7 @@ export async function reenrichIntelligenceAction(
   };
 }
 
-// ---------- Package T: empty Case intelligence backfill ----------
+// ---------- Package T / W: empty intelligence backfill ----------
 
 export async function backfillCaseIntelligenceAction(
   _prev: ActionState,
@@ -988,6 +988,34 @@ export async function backfillCaseIntelligenceAction(
     dryRun,
     limit: limitRaw,
     caseId: caseId || undefined,
+    cursor: cursor || undefined,
+  });
+  revalidatePath("/admin/intelligence");
+  return { ok: true, info: formatBackfillSummary(result) };
+}
+
+export async function backfillSituationQaIntelligenceAction(
+  _prev: ActionState,
+  formData: FormData,
+): Promise<ActionState> {
+  await requireAdminArea("admin.ai");
+  const dryRun = formData.get("dryRun") === "1" || formData.get("dryRun") === "on";
+  const limitRaw = Number(formData.get("limit") ?? 50);
+  const entityId = String(formData.get("entityId") ?? "").trim();
+  const cursor = String(formData.get("cursor") ?? "").trim();
+  const kindRaw = String(formData.get("kind") ?? "qa_thread").trim();
+  if (kindRaw !== "situation" && kindRaw !== "qa_thread") {
+    return { error: "Kind must be situation or qa_thread." };
+  }
+
+  const {
+    backfillEmptyIntelligence,
+    formatBackfillSummary,
+  } = await import("@/lib/admin/intelligence-backfill");
+  const result = await backfillEmptyIntelligence(kindRaw, {
+    dryRun,
+    limit: limitRaw,
+    entityId: entityId || undefined,
     cursor: cursor || undefined,
   });
   revalidatePath("/admin/intelligence");

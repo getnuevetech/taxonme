@@ -14,7 +14,7 @@
 ## Non-goals
 
 - Form 433 / complete financial-statement interview
-- Situation / QaThread mass empty-intel backfill
+- Situation / QaThread mass empty-intel backfill _(→ Package W)_
 - Force overwrite batch re-enrich
 - Broad KB seed corpus / embedding corpus growth
 - Experience Search vector rewrite / pgvector
