@@ -15,7 +15,7 @@
 
 - New KB seed corpus / vector search
 - Case presenter rewrite (Package O)
-- Approval-gate / letter pipeline changes
+- Approval-gate / letter pipeline changes _(→ Package V)_
 - Experience L3/L4 corpus depth
 - Full Form 433 financial-statement interview
 

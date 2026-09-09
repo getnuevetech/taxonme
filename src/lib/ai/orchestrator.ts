@@ -1322,7 +1322,17 @@ export async function runQaChat(history: { role: string; content: string }[], us
       verified_answer: "(use prior source verification output when present)",
     }, { sequentialContext: true, metadata: { helper: "qa", userId: userId ?? "" } });
     const final = outcome.stepOutputs.at(-1);
-    if (final) return extractUserFacingText(final.data, final.rawText);
+    if (final) {
+      const raw = extractUserFacingText(final.data, final.rawText);
+      // Package V: fail-closed strip speculative resolution playbooks on thin debt Q&A.
+      const { sanitizeQaAnswer } = await import("./qa-letter-honesty");
+      const honesty = sanitizeQaAnswer(raw, {
+        question,
+        conversation: convo,
+        caseEvidence: brief.text,
+      });
+      return honesty.answer;
+    }
   } catch (err) {
     const { logSystem } = await import("../syslog");
     await logSystem("error", "ai_call", "AI tax Q&A pipeline failed", String(err));
@@ -1442,7 +1452,16 @@ export async function generateLetterDraft(context: string, caseId?: string): Pro
           draft = "";
         }
       }
-      if (draft) return draft;
+      if (draft) {
+        // Package V: strip speculative resolution playbooks when amount/IRS record is not established.
+        const { sanitizeLetterDraft } = await import("./qa-letter-honesty");
+        const honesty = sanitizeLetterDraft(draft, {
+          context,
+          caseEvidence: brief.text,
+          allowedAmounts,
+        });
+        return honesty.draft;
+      }
     } catch (err) {
       const { logSystem } = await import("../syslog");
       await logSystem("error", "ai_call", "Response letter pipeline failed", String(err));

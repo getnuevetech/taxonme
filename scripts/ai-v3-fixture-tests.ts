@@ -581,20 +581,22 @@ assert.match(letterCorrectionInstruction([3412.55]), /\$3,412\.55/);
 assert.match(letterCorrectionInstruction([3412.55]), /does not establish/);
 
 // Every customer-facing surface must be told to work from the evidence.
-for (const overlayId of ["QA-OVERLAY-v32", "NOTICE-OVERLAY-v32", "LETTER-OVERLAY-v32", "CASE-OVERLAY-v32", "CLOSE-OVERLAY-v32"]) {
+for (const overlayId of ["QA-OVERLAY-v33", "NOTICE-OVERLAY-v33", "LETTER-OVERLAY-v33", "CASE-OVERLAY-v32", "CLOSE-OVERLAY-v32"]) {
   const overlay = V3_PROMPT_RECORDS.find((p) => p.promptId === overlayId);
   assert.ok(overlay, `${overlayId} must exist`);
   assert.match(overlay!.body, /\{\{case_evidence\}\}/, `${overlayId} must consume the evidence brief`);
   assert.ok(overlay!.supersedesPromptId, `${overlayId} must supersede its v3 predecessor rather than silently replacing it`);
   assert.equal(PROMPT_SUPERSEDES[overlay!.supersedesPromptId!], overlayId, `${overlayId} must be reachable from the supersedes map`);
 }
-// The stage lookup must resolve to the evidence-first overlay, not the old one.
-assert.equal(overlayPromptIdForStage(STAGE_KEYS.LETTER), "LETTER-OVERLAY-v32");
-assert.equal(overlayPromptIdForStage(STAGE_KEYS.QA), "QA-OVERLAY-v32");
+// The stage lookup must resolve to the evidence-proportional overlay tip.
+assert.equal(overlayPromptIdForStage(STAGE_KEYS.LETTER), "LETTER-OVERLAY-v33");
+assert.equal(overlayPromptIdForStage(STAGE_KEYS.QA), "QA-OVERLAY-v33");
+assert.equal(overlayPromptIdForStage(STAGE_KEYS.NOTICE), "NOTICE-OVERLAY-v33");
 // The letter overlay carries the reason the rule exists, not just the rule.
-const letterOverlay = V3_PROMPT_RECORDS.find((p) => p.promptId === "LETTER-OVERLAY-v32")!;
+const letterOverlay = V3_PROMPT_RECORDS.find((p) => p.promptId === "LETTER-OVERLAY-v33")!;
 assert.match(letterOverlay.body, /over the customer's name/);
 assert.match(letterOverlay.body, /Never estimate, round, or infer a figure/);
+assert.match(letterOverlay.body, /evidence-proportional honesty/i);
 
 // Appendix C/H: user belief must not become confirmed IRS fact.
 assert.match(promptBody("RESP-FACT-v3"), /belief/);
@@ -646,7 +648,9 @@ assert.match(promptBody("RESP-MATCH-ANL-v3"), /rank only candidates who already 
 assert.match(promptBody("RESP-MATCH-REV-v3"), /deterministic eligible pool/);
 
 // Letter and closure safety.
-assert.match(promptBody("RESP-LTR-DRAFT-v3"), /do not fabricate/);
+assert.match(promptBody("RESP-LTR-DRAFT-v31"), /do not fabricate/);
+assert.match(promptBody("RESP-LTR-DRAFT-v31"), /evidence-proportional honesty/i);
+assert.match(promptBody("RESP-AST-v31"), /evidence-proportional honesty/i);
 assert.match(promptBody("RESP-CLOSE-SUM-v3"), /do not call an issue resolved/);
 assert.deepEqual(stageRoles(STAGE_KEYS.CLOSING), [
   STEP_ROLES.CLOSURE_SUMMARIZER,
