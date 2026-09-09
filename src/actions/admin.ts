@@ -1051,7 +1051,7 @@ export async function forceReenrichIntelligenceAction(
   } = await import("@/lib/admin/intelligence-force-reenrich");
   const result = await forceReenrichIntelligence(kindRaw, {
     dryRun,
-    force: dryRun ? true : confirmOverwrite,
+    force: confirmOverwrite,
     limit: limitRaw,
     entityId: entityId || undefined,
     cursor: cursor || undefined,
