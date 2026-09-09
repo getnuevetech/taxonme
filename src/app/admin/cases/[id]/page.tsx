@@ -63,6 +63,12 @@ export default async function AdminCaseDetailPage({ params }: { params: Promise<
             Open Situation intel · SIT-{c.originSituation.number}
           </Link>
         ) : null}
+        <Link
+          href={`/admin/intelligence?q=${encodeURIComponent(c.id)}`}
+          className="text-xs font-medium text-indigo-600 hover:underline"
+        >
+          Look up / re-enrich Case intel
+        </Link>
       </div>
 
       <div className="mb-6">

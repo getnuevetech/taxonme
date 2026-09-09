@@ -13,7 +13,7 @@
 
 ## Non-goals
 
-- Admin mutate / re-run enrichment (Package M)
+- Admin mutate / re-run enrichment _(→ Package R)_
 - Presenter prompt rewrite (Package L deferred)
 - Forced backfill of historical Cases (empty → recompute until next write)
 

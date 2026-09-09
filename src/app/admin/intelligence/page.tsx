@@ -1,6 +1,7 @@
 import { guardAdminPage } from "@/lib/admin-guard";
 import { PageHeader, Card, CardBody } from "@/components/ui";
 import { IntelligenceDiagnosticsPanel } from "@/components/admin/intelligence-diagnostics-panel";
+import { IntelligenceReenrichButton } from "@/components/admin/intelligence-reenrich-button";
 import { lookupIntelligenceDiagnostics } from "@/lib/admin/intelligence-lookup";
 
 export const metadata = { title: "Conversation intelligence" };
@@ -19,7 +20,7 @@ export default async function AdminIntelligencePage({
     <div>
       <PageHeader
         title="Conversation intelligence"
-        subtitle="Read-only Pipeline A/B routing snapshots for Situation, Q&A thread, or Case ids. Cases use Case.intelligenceJson first, then linked Situation. Does not re-run enrichment or mutate stored JSON."
+        subtitle="Pipeline A/B routing snapshots for Situation, Q&A thread, or Case ids. Cases use Case.intelligenceJson first, then linked Situation. Lookup is read-only; use Re-enrich to re-run Package I and persist."
       />
 
       <Card>
@@ -63,11 +64,14 @@ export default async function AdminIntelligencePage({
             {result.error}
           </div>
         ) : (
-          <IntelligenceDiagnosticsPanel
-            summary={result.summary}
-            title={result.label}
-            rawJson={result.rawJson}
-          />
+          <div className="space-y-4">
+            <IntelligenceReenrichButton kind={result.kind} id={result.id} />
+            <IntelligenceDiagnosticsPanel
+              summary={result.summary}
+              title={result.label}
+              rawJson={result.rawJson}
+            />
+          </div>
         )}
       </div>
     </div>
