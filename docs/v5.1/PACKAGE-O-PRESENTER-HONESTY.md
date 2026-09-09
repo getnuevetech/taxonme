@@ -13,7 +13,7 @@
 
 ## Non-goals
 
-- Broader authority retrieval rewrite
+- Broader authority retrieval rewrite _(→ Package P)_
 - Experience L3/L4 corpus depth
 - Notice-explainer full rewrite
 - Admin mutate / re-run enrichment
