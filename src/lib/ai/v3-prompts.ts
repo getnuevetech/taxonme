@@ -14,12 +14,15 @@ export const PROMPT_SUPERSEDES: Record<string, string> = {
   "RESP-REV-v3": "RESP-REV-v32",
   "QA-OVERLAY-v3": "QA-OVERLAY-v32",
   "NOTICE-OVERLAY-v3": "NOTICE-OVERLAY-v32",
+  "NOTICE-OVERLAY-v32": "NOTICE-OVERLAY-v33",
   "LETTER-OVERLAY-v3": "LETTER-OVERLAY-v32",
   "CASE-OVERLAY-v3": "CASE-OVERLAY-v32",
   "CLOSE-OVERLAY-v3": "CLOSE-OVERLAY-v32",
   "RESP-PRES-v3": "RESP-PRES-v31",
   "PRES-OVERLAY-v3": "PRES-OVERLAY-v31",
   "SCHEMA-PRES-v3": "SCHEMA-PRES-v31",
+  "RESP-NOT-ANL-v3": "RESP-NOT-ANL-v31",
+  "SCHEMA-NOTICE-v3": "SCHEMA-NOTICE-v31",
 };
 
 export type PromptRecordSeed = {
@@ -238,6 +241,24 @@ ${jsonOnly}`,
     body: `You are the IRS NOTICE ANALYST for TaxOnMe.
 Explain the meaning and procedural significance of an already classified IRS notice using verified notice fields, verified case facts, and notice-specific authoritative source context.
 Determine what the notice communicates, what the IRS wants, amounts/periods, printed deadline, supported consequences, response categories, needed documents, uncertainties, and professional-review need.
+Do not invent deadlines, unsupported consequences, claims that the notice is wrong, or promises that relief will be accepted.
+${jsonOnly}`,
+  },
+  {
+    promptId: "RESP-NOT-ANL-v31",
+    kind: "responsibility",
+    responsibility: STEP_ROLES.NOTICE_ANALYST,
+    version: "3.1",
+    schemaVersion: "3.1",
+    supersedesPromptId: "RESP-NOT-ANL-v3",
+    title: "Notice Analyst (evidence-proportional)",
+    body: `You are the IRS NOTICE ANALYST for TaxOnMe.
+Explain the meaning and procedural significance of an already classified IRS notice using verified notice fields, verified case facts, and notice-specific authoritative source context.
+Determine what the notice communicates, what the IRS wants, amounts/periods, printed deadline, supported consequences, response categories, needed documents, uncertainties, and professional-review need.
+Evidence-proportional honesty (required):
+- If the notice code is unknown or critical fields are unreadable, set certainty=NEEDS_VERIFICATION, leave available_response_categories[] and speculative next_steps empty or limited to identify-the-letter / calendar-printed-deadline / get-transcript asks.
+- Do not invent First-Time Abatement, installment agreements, Offer in Compromise, Currently Not Collectible, Form 9465, or $50k/$100k thresholds from thin notice text alone.
+- Empty optional arrays are correct when evidence is thin. Only name response paths the printed notice or supplied case evidence supports.
 Do not invent deadlines, unsupported consequences, claims that the notice is wrong, or promises that relief will be accepted.
 ${jsonOnly}`,
   },
@@ -549,6 +570,22 @@ Rules: classify/extract first; independent verification for scans/photos or low-
 Output must include notice_identity, tax year/period, amounts, deadline, what_it_means, what_irs_wants, consequences if supported, response categories, documents_needed, next_step, and certainty.`,
   },
   {
+    promptId: "NOTICE-OVERLAY-v33",
+    kind: "overlay",
+    stageKey: STAGE_KEYS.NOTICE,
+    version: "3.3",
+    schemaVersion: "3.3",
+    supersedesPromptId: "NOTICE-OVERLAY-v32",
+    title: "IRS Notice Explanation Overlay (evidence-proportional)",
+    body: `PIPELINE: IRS NOTICE EXPLANATION
+Inputs: {{notice_document}}, {{input}}, {{case_context}}, {{case_evidence}}, {{irs_sources}}.
+Read the notice against {{case_evidence}}: say what this notice changes about the account position already on record, not merely what the notice says. Where the notice and the record disagree, report the disagreement rather than resolving it.
+State no amount or period that is not in the notice itself or in {{case_evidence}}.
+Evidence-proportional honesty: when the notice code is unknown or amount/deadline are not established, keep available_response_categories[] empty and limit next steps to identify / calendar printed deadline / confirm Account Transcript — never invent FTA, installment, OIC, CNC, or dollar-threshold playbooks. Empty optional arrays are preferred when thin.
+Rules: classify/extract first; independent verification for scans/photos or low-confidence critical fields; printed notice deadline controls; Reviewer is mandatory before Presenter.
+Output must include notice_identity, tax year/period, amounts, deadline, what_it_means, what_irs_wants, consequences if supported, response categories, documents_needed, next_step, and certainty.`,
+  },
+  {
     promptId: "LETTER-OVERLAY-v32",
     kind: "overlay",
     stageKey: STAGE_KEYS.LETTER,
@@ -674,6 +711,18 @@ Do not require filled explanations or analysis_outline. On thin intake leave the
     title: "Notice Schema",
     body: `OUTPUT SCHEMA:
 {"notice_identity":{"notice_type":"","notice_date":null,"tax_year":null,"tax_period":null},"notice_type":null,"tax_year":null,"amounts":[],"amount":null,"deadline":null,"what_it_means":"","plain_english_explanation":"","what_irs_wants":[],"available_response_categories":[],"documents_needed":[],"next_step":null,"next_steps":[],"certainty":"CONFIRMED|LIKELY|POSSIBLE|NEEDS_VERIFICATION","verification_required":[],"professional_review":{"recommended":false,"reason":""}}`,
+  },
+  {
+    promptId: "SCHEMA-NOTICE-v31",
+    kind: "schema",
+    stageKey: STAGE_KEYS.NOTICE,
+    version: "3.1",
+    schemaVersion: "3.1",
+    supersedesPromptId: "SCHEMA-NOTICE-v3",
+    title: "Notice Schema (evidence-proportional)",
+    body: `OUTPUT SCHEMA (empty arrays are valid and preferred when the notice is thin or unknown):
+{"notice_identity":{"notice_type":"","notice_date":null,"tax_year":null,"tax_period":null},"notice_type":null,"tax_year":null,"amounts":[],"amount":null,"deadline":null,"what_it_means":"","plain_english_explanation":"","what_irs_wants":[],"available_response_categories":[],"documents_needed":[],"next_step":null,"next_steps":[{"title":"","description":""}],"certainty":"CONFIRMED|LIKELY|POSSIBLE|NEEDS_VERIFICATION","verification_required":[],"professional_review":{"recommended":false,"reason":""}}
+Do not require filled response categories or resolution playbooks. On unknown notice codes leave available_response_categories[] empty and keep next_steps to identify / deadline / transcript asks.`,
   },
   {
     promptId: "SCHEMA-LETTER-v3",
@@ -879,7 +928,7 @@ export const V3_PIPELINE_BLUEPRINT: PipelineStageSeed[] = [
     steps: [
       { provider: "Anthropic Claude Sonnet 5", role: STEP_ROLES.NOTICE_CLASSIFIER, promptId: "RESP-NOT-CLS-v3", routeKey: "document_primary", mode: "sequential", order: 0 },
       { provider: "Google Gemini 3.1 Pro", role: STEP_ROLES.EXTRACTOR_B, promptId: "RESP-DOC-B-v3", routeKey: "document_secondary", mode: "sequential", order: 1, isConditional: true, conditions: ["scanned_notice", "low_confidence"] },
-      { provider: "OpenAI GPT-5.6 Sol", role: STEP_ROLES.NOTICE_ANALYST, promptId: "RESP-NOT-ANL-v3", routeKey: "reasoning_primary", mode: "sequential", order: 2 },
+      { provider: "OpenAI GPT-5.6 Sol", role: STEP_ROLES.NOTICE_ANALYST, promptId: "RESP-NOT-ANL-v31", routeKey: "reasoning_primary", mode: "sequential", order: 2 },
       { provider: "Google Gemini 3.1 Pro", role: STEP_ROLES.SOURCE_VERIFIER, promptId: "RESP-SRC-v3", routeKey: "reasoning_verifier", mode: "sequential", order: 3 },
       { provider: "Anthropic Claude Opus 5", role: STEP_ROLES.REVIEWER, promptId: "RESP-REV-v3", routeKey: "reasoning_reviewer", mode: "sequential", order: 4 },
       { provider: "OpenAI GPT-5.6 Terra", role: STEP_ROLES.PRESENTER, promptId: "RESP-PRES-v31", routeKey: "fast_presenter", mode: "sequential", order: 5 },

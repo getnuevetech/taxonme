@@ -176,7 +176,12 @@ export async function uploadNoticeAction(_prev: ActionState, formData: FormData)
         deadline,
         explanation,
         nextStepsJson: JSON.stringify(nextSteps),
-        status: result.fallback || result.certainty === "NEEDS_VERIFICATION" ? "verification_required" : "explained",
+        status:
+          result.fallback ||
+          result.certainty === "NEEDS_VERIFICATION" ||
+          !noticeType
+            ? "verification_required"
+            : "explained",
       },
     });
     if (deadline && user) {

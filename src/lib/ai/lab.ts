@@ -26,7 +26,7 @@ export const LAB_FUNCTIONS: LabFunction[] = [
   { key: "document_extraction", name: "Document analysis - extraction", promptId: "RESP-DOC-A-v3", stageKey: STAGE_KEYS.DOCUMENT, usesKnowledge: false, description: "Extract uploaded documents into the standardized schema." },
   { key: "situation_analysis", name: "Situation analysis (IRS-grounded)", promptId: "RESP-ANL-v3", stageKey: STAGE_KEYS.SITUATION, usesKnowledge: true, description: "Structured issue analysis grounded in the IRS knowledge base." },
   { key: "presentation", name: "Customer presentation", promptId: "RESP-PRES-v31", stageKey: STAGE_KEYS.PRESENTER, usesKnowledge: false, description: "Convert approved analysis into structured UI JSON." },
-  { key: "notice_explanation", name: "Notice explanation", promptId: "RESP-NOT-ANL-v3", stageKey: STAGE_KEYS.NOTICE, usesKnowledge: true, description: "Explain an IRS notice with notice-specific grounding." },
+  { key: "notice_explanation", name: "Notice explanation", promptId: "RESP-NOT-ANL-v31", stageKey: STAGE_KEYS.NOTICE, usesKnowledge: true, description: "Explain an IRS notice with notice-specific grounding." },
   { key: "letter_draft", name: "Response letter drafting", promptId: "RESP-LTR-DRAFT-v3", stageKey: STAGE_KEYS.LETTER, usesKnowledge: false, description: "Draft a professional response letter to the IRS." },
   { key: "qa_chat", name: "Tax Q&A assistant", promptId: "RESP-AST-v3", stageKey: STAGE_KEYS.QA, usesKnowledge: true, description: "Conversational plain-English tax help, grounded in the knowledge base." },
   { key: "closing", name: "Closing remarks", promptId: "RESP-CLOSE-SUM-v3", stageKey: STAGE_KEYS.CLOSING, usesKnowledge: false, description: "Write a case closure record and customer summary." },

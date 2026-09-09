@@ -13,7 +13,7 @@
 
 ## Non-goals
 
-- Notice-explainer prompt/UI full rewrite
+- Notice-explainer prompt/UI full rewrite _(→ Package Q)_
 - Experience L3/L4 corpus seeding
 - Vector/embedding search rewrite
 - New knowledge seed content beyond gate behavior
