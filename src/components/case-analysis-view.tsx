@@ -16,6 +16,7 @@ import {
   filterPathStepsForDepth,
   isThinCustomerPresentation,
   shouldShowAnalysisOutline,
+  shouldShowExplanations,
   shouldShowHowWeReached,
   shouldShowPathForwardSection,
 } from "@/lib/presentation-depth";
@@ -151,6 +152,7 @@ export async function CaseAnalysisView({ caseId, viewer }: { caseId: string; vie
   };
   const thinPresentation = isThinCustomerPresentation(presentationDepth);
   const showAnalysisOutline = shouldShowAnalysisOutline(presentationDepth);
+  const showExplanations = shouldShowExplanations(presentationDepth);
   const showHowWeReached = shouldShowHowWeReached(presentationDepth);
   const seenStepPurpose = new Set<string>();
   const displayedPathSteps = filterPathStepsForDepth(
@@ -547,7 +549,7 @@ export async function CaseAnalysisView({ caseId, viewer }: { caseId: string; vie
                   </div>
                   {issue.irsBasis && <p className="mt-1 text-xs text-slate-400">IRS basis: {issue.irsBasis}</p>}
 
-                  {explanations.length > 0 && (
+                  {showExplanations && explanations.length > 0 && (
                     <div className="mt-4">
                       <p className="mb-2 text-xs font-bold uppercase tracking-wide text-slate-400">Most likely explanations</p>
                       <ol className="space-y-2">
