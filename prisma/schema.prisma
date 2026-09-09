@@ -183,6 +183,10 @@ model KnowledgeSource {
   tags       String   @default("") // comma separated
   taxYear    Int?
   isActive   Boolean  @default(true)
+  /** Package U: JSON float[] embedding for hybrid retrieval (empty = keyword-only). */
+  embeddingJson  String    @default("")
+  embeddingModel String    @default("")
+  embeddedAt     DateTime?
   updatedAt  DateTime @updatedAt
 }
 

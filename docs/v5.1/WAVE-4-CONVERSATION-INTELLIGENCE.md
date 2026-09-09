@@ -46,6 +46,7 @@ _(none for −1.8 — see Package J)_
 - **Package R** — Admin ConversationIntelligence re-enrich: `PACKAGE-R-ADMIN-INTELLIGENCE-REENRICH.md`
 - **Package S** — Experience L3/L4 Production corpus: `PACKAGE-S-EXPERIENCE-CORPUS.md`
 - **Package T** — Historical Case intelligence backfill: `PACKAGE-T-CASE-INTELLIGENCE-BACKFILL.md`
+- **Package U** — Gated hybrid authority retrieval: `PACKAGE-U-GATED-HYBRID-AUTHORITY.md`
 
 
 ## Check

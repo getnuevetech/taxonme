@@ -838,6 +838,8 @@ export async function saveKnowledgeAction(_prev: ActionState, formData: FormData
   if (!data.title) return { error: "Title is required." };
   if (id) {
     await db.knowledgeSource.update({ where: { id }, data });
+    const { embedKnowledgeSourceById } = await import("@/lib/ai/embeddings");
+    await embedKnowledgeSourceById(id);
     const activeCases = await db.case.findMany({
       where: { status: { in: ["analyzed", "needs_info", "consultant_recommended"] } },
       select: { id: true },
@@ -850,7 +852,11 @@ export async function saveKnowledgeAction(_prev: ActionState, formData: FormData
       materialKey: id,
       metadata: { knowledgeSourceId: id },
     })));
-  } else await db.knowledgeSource.create({ data });
+  } else {
+    const created = await db.knowledgeSource.create({ data });
+    const { embedKnowledgeSourceById } = await import("@/lib/ai/embeddings");
+    await embedKnowledgeSourceById(created.id);
+  }
   revalidatePath("/admin/knowledge");
   return { ok: true };
 }

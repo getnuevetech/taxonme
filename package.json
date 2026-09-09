@@ -64,7 +64,9 @@
     "test:package-r": "tsx scripts/phase-package-r-check.ts",
     "test:package-s": "tsx scripts/phase-package-s-check.ts",
     "test:package-t": "tsx scripts/phase-package-t-check.ts",
+    "test:package-u": "tsx scripts/phase-package-u-check.ts",
     "backfill:case-intel": "tsx scripts/case-intelligence-backfill.ts",
+    "backfill:knowledge-embed": "tsx scripts/knowledge-embed-backfill.ts",
     "db:push": "prisma db push",
     "db:seed": "prisma db seed",
     "db:migrate": "prisma migrate deploy"

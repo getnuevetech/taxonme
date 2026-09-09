@@ -15,7 +15,7 @@
 
 - Mass historical Case intel backfill job _(→ Package T)_
 - Experience L3/L4 corpus depth _(→ Package S)_
-- Vector / embedding authority search
+- Vector / embedding authority search _(→ Package U)_
 - Form 433 / full financial-statement depth
 - Replacing AI ops Diagnostics
 
