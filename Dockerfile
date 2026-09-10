@@ -23,9 +23,10 @@ ENV UV_THREADPOOL_SIZE=2
 # 2GB VPS builds after "Compiled successfully" / "Running TypeScript ...".
 # Typecheck stays in CI (`npm run typecheck`).
 ENV DOCKER_BUILD=1
-# Cap the heap below a typical 2GB VPS free RAM so Node fails soft instead of
-# letting the host OOM-killer SIGKILL the build mid-pass.
-ENV NODE_OPTIONS="--max-old-space-size=1536"
+# Cap parent heap. Next page-data workers strip --max-old-space-size, so also set
+# --max-heap-size (still honored by workers on Next 16.3.x). On ≤2GB hosts you
+# still need swap — see scripts/docker-build.sh / DEPLOYMENT.md.
+ENV NODE_OPTIONS="--max-old-space-size=1536 --max-heap-size=1536"
 RUN npx prisma generate
 RUN npm run build
 

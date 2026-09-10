@@ -21,21 +21,30 @@ That's it. The app container waits for the database, applies migrations, seeds d
 
 ### Docker build runs out of memory (`signal: killed` / `SIGKILL`)
 
-`npm run build` inside Docker is memory-heavy. Two common failure points:
+`npm run build` inside Docker is memory-heavy. Common failure points:
 
 1. Mid-webpack (`Creating an optimized production build ...`) — host OOM.
-2. After `✓ Compiled successfully` during `Running TypeScript ...` — Next's
-   post-compile typecheck peaks another large heap; Docker sets `DOCKER_BUILD=1`
+2. After `✓ Compiled successfully` during **`Collecting page data`** — Next
+   page-data workers load the route graph; on ≤2GB hosts the kernel OOM-killer
+   sends `SIGKILL` (often after several minutes). This is the usual failure
+   when the log shows compile success then a sudden kill.
+3. After compile during `Running TypeScript ...` — Docker sets `DOCKER_BUILD=1`
    so that pass is skipped (CI still runs `npm run typecheck`).
 
-If Compose still dies with `signal: killed` / `SIGKILL`, free RAM or add swap:
+**Fix:** free RAM and add swap, then use the safe build script:
 
 ```bash
-# See free memory (need ~1.5–2 GB available during build)
+# See free memory (need ~1.5–2 GB available, or swap)
 free -h
-# Optional: stop the running stack so Postgres is not competing for RAM
+
+# Recommended on ≤2GB VPS — stops the stack, enables 2G swap if missing, rebuilds
+bash scripts/docker-build.sh --up
+```
+
+Manual equivalent:
+
+```bash
 docker compose --env-file .env.deploy stop
-# Temporary 2G swap if the VPS is tight
 sudo fallocate -l 2G /swapfile && sudo chmod 600 /swapfile
 sudo mkswap /swapfile && sudo swapon /swapfile
 docker compose --env-file .env.deploy build --no-cache app
@@ -43,7 +52,10 @@ docker compose --env-file .env.deploy up -d
 # optional: sudo swapoff /swapfile && sudo rm /swapfile
 ```
 
-This is a host resource limit, not an application code error.
+This is a **host resource limit**, not an application code error. The image
+already caps workers (`cpus: 1`, webpack parallelism 1, `DOCKER_BUILD=1`) and
+sets `NODE_OPTIONS=--max-old-space-size=1536 --max-heap-size=1536`; without
+swap a 2GB VPS can still SIGKILL during page-data collection.
 
 ## Option B — Bare metal (no Docker)
 
