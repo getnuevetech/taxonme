@@ -764,6 +764,21 @@ async function seedKnowledge() {
       tags: "notice, balance due, urgent, levy warning, collection",
       content: "A CP504 is an urgent collection notice that the IRS may levy if the balance is not addressed. It usually lists the amount due and a short response window. Calendar any printed deadline, keep the notice, and confirm the account position on an Account Transcript. A later LT11 / Letter 1058 is the final levy notice with Collection Due Process hearing rights — do not confuse the two. Establish what the IRS shows before choosing a response path.",
     },
+    // Package AF — mid-collection identify-only (fills CP14→…→LT11 ladder gap). No resolution playbooks.
+    {
+      title: "CP501 — Reminder of unpaid tax",
+      sourceType: "notice_guide",
+      reference: "CP501",
+      tags: "notice, balance due, reminder, collection, mid-collection",
+      content: "A CP501 is typically an early reminder that a balance remains unpaid after a first balance-due notice such as a CP14. It usually restates tax, penalties, and interest and asks for a response. Confirm the printed amount, tax period, and any respond-by language on the notice. Compare those figures to an Account Transcript. Later reminders in the same series often include CP503 and CP504; LT11 / Letter 1058 is a separate final levy notice. This guide identifies the notice — it does not choose a payment or relief path.",
+    },
+    {
+      title: "Collection notice ladder — identify the stage",
+      sourceType: "rule",
+      reference: "Collection notice ladder",
+      tags: "notice, identify, collection, cp14, cp501, cp503, cp504, lt11, evidence",
+      content: "Balance-due collection mail often follows a recognizable ladder: CP14 (first balance due) → CP501 (early reminder) → CP503 (further reminder) → CP504 (urgent / levy warning) → LT11 / Letter 1058 (final intent to levy with Collection Due Process hearing rights). Read the CP/LT code on your copy first, then the tax period, printed amount, and any respond-by date. An Account Transcript confirms assessments and activity for the same periods. Knowing which stage you are in is an identify step — do not treat the stage alone as selecting a specific resolution path.",
+    },
     {
       title: "Wage and Income transcript — when and why",
       sourceType: "rule",
@@ -776,7 +791,7 @@ async function seedKnowledge() {
       sourceType: "rule",
       reference: "Notice identity",
       tags: "notice, identify, cp, lt, deadline, evidence",
-      content: "Most IRS notices print a CP or LT code near the top, a tax period, amounts, and often a respond-by date. Read the code first (for example CP14, CP503, CP504, CP2000, LT11), then the period and printed figures. Keep the notice and calendar any deadline shown. An Account Transcript independently confirms assessments, payments, and recent activity for the same periods. Until the notice code, period, and IRS account position are established, do not treat any guide as selecting a specific resolution path.",
+      content: "Most IRS notices print a CP or LT code near the top, a tax period, amounts, and often a respond-by date. Read the code first (for example CP14, CP501, CP503, CP504, CP2000, LT11), then the period and printed figures. Keep the notice and calendar any deadline shown. An Account Transcript independently confirms assessments, payments, and recent activity for the same periods. Until the notice code, period, and IRS account position are established, do not treat any guide as selecting a specific resolution path.",
     },
     {
       title: "IRS account transcript transaction codes",
