@@ -14,7 +14,7 @@ function evidenceFirstBranches(): AnswerBranch[] {
       id: "use_existing_notice",
       condition: "If you already have an IRS notice or letter",
       explanation:
-        "Upload or identify the notice code (for example CP14, CP503, LT11). The notice’s printed amount and deadline usually set the next move.",
+        "Upload or identify the notice code (for example CP14, CP503, LT11, Letter 3172). The notice’s printed amount and deadline usually set the next move.",
     },
   ];
 }

@@ -85,6 +85,26 @@ export function composeAssistantView(
         type: "paragraph",
         text: "Confirm the printed tax period, proposed amounts, and any respond-by date. Compare those figures to a Wage & Income transcript and your return, and confirm account activity on an Account Transcript before sizing a response. If unresolved, the IRS may later issue a Statutory Notice of Deficiency (CP3219A).",
       });
+    } else if (/\bletter\s*3172\b/i.test(rawMessage)) {
+      // Package AM — identify + evidence (mirror AL seed); lien ≠ levy / Form 12153.
+      sections.push({
+        type: "paragraph",
+        text: "Letter 3172 notifies that the IRS has filed a Notice of Federal Tax Lien (NFTL) and typically states hearing rights tied to that lien filing. It is a lien-notice identity — not a final levy notice (LT11 / Letter 1058) and not Form 12153.",
+      });
+      sections.push({
+        type: "paragraph",
+        text: "Calendar any printed deadline on the letter you hold, keep it with any NFTL paperwork, and confirm the balance on an Account Transcript before sizing a response.",
+      });
+    } else if (/\bnftl\b|notice of federal tax lien|federal tax lien/i.test(rawMessage)) {
+      // Package AM — NFTL identify (mirror AL seed).
+      sections.push({
+        type: "paragraph",
+        text: "A Notice of Federal Tax Lien (NFTL) is a public filing recording the IRS claim against property for unpaid tax. Letter 3172 is the common taxpayer letter that an NFTL was filed. An NFTL is not the same as an LT11 levy notice and not Form 12153.",
+      });
+      sections.push({
+        type: "paragraph",
+        text: "Confirm tax periods and account position on an Account Transcript; calendar any deadline on the Letter 3172 or lien notice you actually received.",
+      });
     } else if (/\bcp\s?-?503\b/i.test(rawMessage)) {
       sections.push({
         type: "paragraph",
@@ -113,13 +133,18 @@ export function composeAssistantView(
   } else if (target === "interpret_situation_offer_next_step") {
     const evidenceFirst = intel.strategy.branches.some((b) => b.id === "establish_account_position");
     const noticeExam = /\bcp\s?-?2000\b|\bcp\s?-?3219a\b/i.test(rawMessage);
+    const lienNotice = /\bletter\s*3172\b|\bnftl\b|notice of federal tax lien|federal tax lien/i.test(
+      rawMessage,
+    );
     sections.push({
       type: "paragraph",
       text: evidenceFirst
         ? "Thanks for sharing that background. With the amount still unknown, the useful next step is establishing what the IRS currently shows on your account — then any next option can be sized to those facts."
         : noticeExam
           ? "Thanks for sharing that. Start by identifying the notice code, tax period, proposed amounts, and any respond-by or petition deadline — then confirm those figures against transcripts before sizing a response."
-          : "Thanks for sharing that background. I can help outline payment or relief pathways, explain a notice, or — if something is already before the IRS or a state tax agency — help you track that agency matter.",
+          : lienNotice
+            ? "Thanks for sharing that. Start by confirming it is a lien notice (Letter 3172 / NFTL) rather than a levy notice (LT11), calendar any printed deadline, and confirm the Account Transcript — then any next option can be sized to those facts."
+            : "Thanks for sharing that background. I can help outline payment or relief pathways, explain a notice, or — if something is already before the IRS or a state tax agency — help you track that agency matter.",
     });
   } else if (!(intel.strategy.branch_before_clarify && intel.strategy.branches.length)) {
     sections.push({

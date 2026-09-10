@@ -34,7 +34,7 @@
 - Reopening Package Y LT11 / CP14 / SFR seed prose or gate regex
 - Reopening Package AI Form 12153 / CDP / LT11-vs-12153 seed prose
 - FAQ / Form 9465 tip / intake chips (AA–AE)
-- AG/AJ composer / starter chrome
+- AG/AJ composer / starter chrome _(→ Package AM for Letter 3172 / NFTL)_
 - NFTL withdrawal / discharge / subordination strategy menu; Form 12153 filing wizard; Appeals hearing prep
 - Mass FAQ / Y reopen
 - Weakening `RESOLUTION_PLAYBOOK_RE`

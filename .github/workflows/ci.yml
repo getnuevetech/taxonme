@@ -93,3 +93,4 @@ jobs:
       - run: npm run test:package-aj
       - run: npm run test:package-ak
       - run: npm run test:package-al
+      - run: npm run test:package-am
