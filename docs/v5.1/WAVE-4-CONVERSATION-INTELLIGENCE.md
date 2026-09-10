@@ -61,6 +61,7 @@ _(none for −1.8 — see Package J)_
 - **Package AG** — Pipeline A evidence-first chrome: `PACKAGE-AG-PIPELINE-A-EVIDENCE-CHROME-HONESTY.md`
 - **Package AH** — Identify-only examination KB (CP2000 / CP3219A): `PACKAGE-AH-IDENTIFY-EXAM-KB.md`
 - **Package AI** — Identify-only Form 12153 / CDP KB: `PACKAGE-AI-IDENTIFY-CDP-12153-KB.md`
+- **Package AJ** — Pipeline A notice/exam chrome: `PACKAGE-AJ-PIPELINE-A-NOTICE-EXAM-CHROME-HONESTY.md`
 
 
 ## Check

@@ -17,7 +17,7 @@
 - Form 12153 / CDP form depth _(→ Package AI)_
 - Form 433 / financial-statement interview
 - Mass FAQ / Y gate rewrite
-- AG composer / starter chrome (including composer CP2000 prose)
+- AG composer / starter chrome (including composer CP2000 prose) _(→ Package AJ)_
 - Weakening `RESOLUTION_PLAYBOOK_RE`
 
 ## Check
