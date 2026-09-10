@@ -713,6 +713,35 @@ async function seedKnowledge() {
       tags: "levy, urgent, collection, due process, appeal",
       content: "LT11 (Letter 1058) is a final notice of intent to levy and notice of Collection Due Process (CDP) hearing rights. The taxpayer generally has 30 days from the notice date to request a CDP hearing (Form 12153) or otherwise respond before levy of wages, bank accounts, or other property may proceed. Calendar the printed deadline and keep the notice. Confirm the balance and recent activity on an Account Transcript. Professional review is often warranted at this stage because levy timing is short.",
     },
+    // Package Z — identify-only expansion (thin→evidence). No resolution playbooks.
+    {
+      title: "CP503 — Reminder of balance due",
+      sourceType: "notice_guide",
+      reference: "CP503",
+      tags: "notice, balance due, reminder, collection",
+      content: "A CP503 is typically a reminder that a balance remains unpaid after an earlier balance-due notice. It restates tax, penalties, and interest and urges a response. Confirm the printed amount, tax period, and any respond-by language on the notice. Compare those figures to an Account Transcript before deciding what to do next. This guide identifies the notice — it does not choose a payment or relief path.",
+    },
+    {
+      title: "CP504 — Urgent notice / intent to levy warning",
+      sourceType: "notice_guide",
+      reference: "CP504",
+      tags: "notice, balance due, urgent, levy warning, collection",
+      content: "A CP504 is an urgent collection notice that the IRS may levy if the balance is not addressed. It usually lists the amount due and a short response window. Calendar any printed deadline, keep the notice, and confirm the account position on an Account Transcript. A later LT11 / Letter 1058 is the final levy notice with Collection Due Process hearing rights — do not confuse the two. Establish what the IRS shows before choosing a response path.",
+    },
+    {
+      title: "Wage and Income transcript — when and why",
+      sourceType: "rule",
+      reference: "Wage & Income transcript",
+      tags: "transcript, wage and income, w-2, 1099, unfiled, evidence",
+      content: "A Wage & Income transcript lists information returns the IRS received from payers (W-2s, 1099s, and similar) for a tax year. Use it to reconstruct income for unfiled years, to check whether a CP2000 proposed amount matches payer reports, or to see what the IRS already has on file. It does not replace an Account Transcript for balances, assessments, or payments. Request it through your IRS individual online account or Form 4506-T. Identify the tax year first, then pull Wage & Income alongside the Account Transcript when amount or filing status is still unknown.",
+    },
+    {
+      title: "Identifying an IRS notice",
+      sourceType: "rule",
+      reference: "Notice identity",
+      tags: "notice, identify, cp, lt, deadline, evidence",
+      content: "Most IRS notices print a CP or LT code near the top, a tax period, amounts, and often a respond-by date. Read the code first (for example CP14, CP503, CP504, CP2000, LT11), then the period and printed figures. Keep the notice and calendar any deadline shown. An Account Transcript independently confirms assessments, payments, and recent activity for the same periods. Until the notice code, period, and IRS account position are established, do not treat any guide as selecting a specific resolution path.",
+    },
     {
       title: "IRS account transcript transaction codes",
       sourceType: "rule",

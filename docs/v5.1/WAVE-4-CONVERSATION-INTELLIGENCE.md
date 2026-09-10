@@ -51,6 +51,7 @@ _(none for −1.8 — see Package J)_
 - **Package W** — Situation / QaThread empty-intel backfill: `PACKAGE-W-SITUATION-QA-INTEL-BACKFILL.md`
 - **Package X** — Force overwrite ConversationIntelligence re-enrich: `PACKAGE-X-FORCE-INTEL-REENRICH.md`
 - **Package Y** — Authority seed honesty: `PACKAGE-Y-AUTHORITY-SEED-HONESTY.md`
+- **Package Z** — Identify-only KB expansion + embed: `PACKAGE-Z-IDENTIFY-KB-EMBED.md`
 
 
 ## Check
