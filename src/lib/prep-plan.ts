@@ -40,7 +40,7 @@ const INSTALLMENT: PrepPlanContent = {
   ],
   filings: [
     { form: "9465", role: "Installment Agreement Request", notes: "Primary request for a monthly payment plan" },
-    { form: "433-F / 433-A", role: "Financial statement (if requested)", notes: "May be required for larger balances or non-streamlined paths" },
+    { form: "433-F / 433-A", role: "Financial statement (if requested)", notes: "May be required for larger balances or non-streamlined paths; the in-app Form 433-F wizard is an abbreviated draft, not the full package" },
   ],
   evidenceNeeds: [
     "IRS Account Transcript for each tax year with a balance",
@@ -78,7 +78,7 @@ const CNC: PrepPlanContent = {
     "Levy notices with short deadlines may need parallel urgency steps",
   ],
   filings: [
-    { form: "433-F / 433-A", role: "Collection Information Statement", notes: "Shows income, expenses, and assets" },
+    { form: "433-F / 433-A", role: "Collection Information Statement", notes: "Official CIS when the IRS requests it; the in-app Form 433-F wizard is an abbreviated draft only" },
     { form: "CNC request", role: "Hardship / CNC request", notes: "Usually submitted with the financial statement to Collections" },
   ],
   evidenceNeeds: [
@@ -89,7 +89,7 @@ const CNC: PrepPlanContent = {
   ],
   sequence: [
     "Confirm you cannot sustain an installment payment after expenses",
-    "Assemble Form 433 package with supporting docs",
+    "Assemble the official Form 433 package the IRS requests (with supporting docs) — do not treat the abbreviated in-app draft as the full package",
     "Professional review strongly recommended for levy urgency",
     "Submit to Collections; track the matter as a Case once pending with the IRS",
   ],

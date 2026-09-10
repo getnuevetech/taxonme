@@ -64,18 +64,19 @@ export default async function FormsPage() {
         <div className="grid gap-4 sm:grid-cols-2">
           {templates.map((t) => {
             const steps = JSON.parse(t.stepsJson || "[]") as unknown[];
+            const is433F = t.formNumber === "433-F";
             return (
               <Card key={t.id} className="transition hover:border-indigo-300">
                 <CardBody>
                   <div className="flex items-center justify-between">
                     <p className="text-lg font-bold text-slate-900">Form {t.formNumber}</p>
-                    <Badge>{steps.length} quick steps</Badge>
+                    <Badge>{is433F ? "Abbreviated draft" : `${steps.length} quick steps`}</Badge>
                   </div>
                   <p className="font-medium text-slate-700">{t.title}</p>
                   <p className="mt-1 text-sm text-slate-500">{t.description}</p>
                   <form action={startFormAction.bind(null, t.id)} className="mt-4">
                     <button className="w-full rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700">
-                      Start — it&apos;s like a quiz →
+                      {is433F ? "Start abbreviated draft →" : "Start — it's like a quiz →"}
                     </button>
                   </form>
                 </CardBody>

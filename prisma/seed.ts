@@ -1442,14 +1442,15 @@ Compare against the official IRS Form SS-4 before submitting.`,
     {
       formNumber: "433-F",
       title: "Collection Information Statement",
-      description: "The financial snapshot the IRS asks for when arranging payment on tax debt. 4 quick steps.",
+      description:
+        "Abbreviated draft of Form 433-F (Collection Information Statement). Basics only — not a full IRS financial interview. Compare the official form before filing.",
       category: "individual",
       sortOrder: 8,
       stepsJson: JSON.stringify([
         {
           id: "personal",
           title: "About you",
-          help: "The IRS uses this to understand your household.",
+          help: "Basic identity for this draft worksheet — the official Form 433-F asks for more household detail.",
           fields: [
             { key: "name", label: "Full name", type: "text", required: true },
             { key: "ssn", label: "SSN", type: "text", required: true },
@@ -1470,7 +1471,7 @@ Compare against the official IRS Form SS-4 before submitting.`,
         {
           id: "expenses",
           title: "Monthly living expenses",
-          help: "Honest numbers help you get an affordable arrangement.",
+          help: "Enter your best current figures. This abbreviated draft does not decide installment vs hardship eligibility.",
           fields: [
             { key: "rent", label: "Rent / mortgage", type: "money", required: true },
             { key: "utilities", label: "Utilities (power, water, phone, internet)", type: "money" },
@@ -1483,7 +1484,7 @@ Compare against the official IRS Form SS-4 before submitting.`,
         {
           id: "assets",
           title: "What you have",
-          help: "Rounded numbers are fine.",
+          help: "Rough totals for this draft only — the official form may require account-level detail and supporting docs.",
           fields: [
             { key: "bank_balance", label: "Total in bank accounts", type: "money", required: true },
             { key: "vehicles_value", label: "Vehicles — rough total value", type: "money" },
@@ -1491,7 +1492,7 @@ Compare against the official IRS Form SS-4 before submitting.`,
           ],
         },
       ]),
-      outputTemplate: `FORM 433-F — COLLECTION INFORMATION STATEMENT
+      outputTemplate: `FORM 433-F — COLLECTION INFORMATION STATEMENT (ABBREVIATED DRAFT)
 =============================================
 
 SECTION 1 — PERSONAL
@@ -1519,7 +1520,9 @@ SECTION 4 — ACCOUNTS / ASSETS
 SIGNATURE
   Sign: ______________________________   Date: ____________
 
-Used when requesting payment plans or hardship status on tax debt.
+This is an abbreviated draft worksheet — not a complete Form 433-F / Collection Information Statement.
+The IRS may require additional sections and supporting documents.
+This wizard prepares a draft for review — it is not an IRS determination or approval.
 Compare against the official IRS Form 433-F before submitting.`,
     },
   ];
@@ -1535,6 +1538,23 @@ Compare against the official IRS Form 433-F before submitting.`,
       t.formNumber === "9465" &&
       (/\$\s?50,?000|divided by 72|minimum they'll usually accept/i.test(exists.stepsJson) ||
         /\$\s?50,?000|set this up faster/i.test(exists.outputTemplate))
+    ) {
+      await db.irsFormTemplate.update({
+        where: { id: exists.id },
+        data: {
+          stepsJson: t.stepsJson,
+          outputTemplate: t.outputTemplate,
+          description: t.description,
+        },
+      });
+    }
+    // Package AK: refresh Form 433-F labeling when stale “full CIS / quick steps” copy remains.
+    if (
+      t.formNumber === "433-F" &&
+      (/financial snapshot|4 quick steps|affordable arrangement|Used when requesting payment plans/i.test(
+        `${exists.description}\n${exists.stepsJson}\n${exists.outputTemplate}`,
+      ) ||
+        !/abbreviated draft/i.test(exists.description))
     ) {
       await db.irsFormTemplate.update({
         where: { id: exists.id },
