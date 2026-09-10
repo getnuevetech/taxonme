@@ -46,7 +46,7 @@ export default async function HomePage() {
     { title: "Ask anything, anytime", body: "A tax assistant that answers in plain English, without judgment. No question is too basic." },
     { title: "Response letters, drafted for you", body: "Generate a professional reply to the IRS and edit it before you send it yourself." },
     { title: "Never miss a deadline", body: "Every date we find goes into your reminders, so nothing sneaks up on you." },
-    { title: "IRS forms that feel easy", body: "Fill famous IRS forms step-by-step like a quiz, then regenerate the completed standard form." },
+    { title: "IRS forms that feel easy", body: "Fill common IRS forms step-by-step. Most wizards produce a draft of the standard form; Form 433-F stays an abbreviated draft — not a full financial interview." },
     { title: "Real professionals on standby", body: "If your case needs a licensed CPA or Enrolled Agent, we match you with one — only with your approval." },
   ];
 
@@ -152,7 +152,7 @@ export default async function HomePage() {
           <div className="mx-auto grid max-w-6xl gap-10 px-4 py-16 text-center sm:grid-cols-3">
             <div>
               <p className="font-serif text-6xl font-bold italic text-indigo-600">9+</p>
-              <p className="mt-2 text-sm text-slate-600">IRS forms turned into friendly quizzes</p>
+              <p className="mt-2 text-sm text-slate-600">Guided drafts of common IRS forms (433-F abbreviated)</p>
             </div>
             <div>
               <p className="font-serif text-6xl font-bold italic text-indigo-600">5</p>

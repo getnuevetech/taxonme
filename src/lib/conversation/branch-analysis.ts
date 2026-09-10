@@ -31,7 +31,7 @@ function resolutionPathwayBranches(): AnswerBranch[] {
       id: "currently_not_collectible",
       condition: "If you cannot pay anything right now",
       explanation:
-        "You may qualify to be placed in Currently Not Collectible status after proving financial hardship — collections pause while interest may still accrue.",
+        "You may qualify for Currently Not Collectible status when ability-to-pay shows you cannot cover allowable living expenses and still pay the IRS — collections may pause while interest can still accrue. A full Form 433 / CIS is only when the IRS requests that depth — not the first step.",
     },
     {
       id: "offer_in_compromise",
