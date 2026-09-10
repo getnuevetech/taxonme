@@ -98,7 +98,7 @@ export function deepenedBalanceDueFinding(opts: {
       {
         heading: "Your next move",
         detail: installmentOk
-          ? "Review the confirmed balance and composition, then prepare a payment plan request (Form 9465) if you need time to pay — completing the wizard is not IRS approval."
+          ? "Review the confirmed balance and composition, then prepare a Form 9465 request if you need time to pay — the wizard is a draft, not IRS approval."
           : "Review the transcript codes and confirm whether collection activity is underway.",
       },
     ],

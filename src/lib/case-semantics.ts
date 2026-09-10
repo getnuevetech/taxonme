@@ -110,6 +110,14 @@ function actionSubject(text: string): string {
 
 export function normalizeActionPurpose(value: string): string {
   const text = value.toLowerCase();
+  // Package AD: Form 9465 prep and "confirm resolution" must stay distinct from
+  // generic resolution-assessment steps (e.g. penalty-relief evaluation).
+  if (/\bcomplete_form_9465\b|form\s*9465|payment plan request/i.test(text)) {
+    return "PREPARE_FORM_9465_REQUEST";
+  }
+  if (/confirm the resolution with the irs/i.test(text)) {
+    return "CONFIRM_IRS_RESOLUTION";
+  }
   const subject = actionSubject(text);
   if (!subject) {
     return value.toUpperCase().replace(/[^A-Z0-9]+/g, "_").replace(/^_+|_+$/g, "") || "UNCLASSIFIED_ACTION";
