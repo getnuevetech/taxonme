@@ -99,7 +99,7 @@ export async function buildFormPrefill(userId: string, steps: WizardStep[]): Pro
     (refundIssue?.differenceCents ? refundIssue.differenceCents / 100 : null) ??
     (expectedRefund !== null && receivedRefund !== null ? Math.round((expectedRefund - receivedRefund) * 100) / 100 : null);
 
-  // IRS generally accepts balance ÷ 72 as the minimum streamlined monthly payment.
+  // IRS may accept balance ÷ 72 as an illustrative streamlined monthly starting point once balance is known — not a universal minimum.
   const suggestedMonthly = balanceDue ? Math.ceil(balanceDue / 72) : null;
   const nextDeadline = kase?.deadlines[0] ?? null;
 
@@ -172,7 +172,7 @@ export async function buildFormPrefill(userId: string, steps: WizardStep[]): Pro
     add("Expected refund", expectedRefund === null ? "" : usd(expectedRefund));
     add("Refund received", receivedRefund === null ? "" : usd(receivedRefund));
     add("Refund difference", refundDifference === null ? "" : usd(refundDifference));
-    add("Suggested monthly payment (balance ÷ 72)", suggestedMonthly === null ? "" : usd(suggestedMonthly));
+    add("Suggested monthly (illustrative ÷72 when balance known)", suggestedMonthly === null ? "" : usd(suggestedMonthly));
     add("Next deadline", nextDeadline ? `${nextDeadline.title} — ${nextDeadline.dueDate.toLocaleDateString("en-US")}` : "");
     add("Your goal", kase.goal?.slice(0, 120));
   }

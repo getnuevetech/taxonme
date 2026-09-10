@@ -15,7 +15,7 @@
 
 - Mass corpus dump / Experience Search rewrite
 - Form 433 / financial-statement interview
-- FAQ ContentPage / Form 9465 wizard tip / guide STEP_TIPS
+- FAQ ContentPage / Form 9465 wizard tip / guide STEP_TIPS _(→ Package AA)_
 - Weakening V/O/Q presenters; replacing U hybrid scoring / pgvector
 - Force intel re-enrich (Package X)
 - Rewriting Y playbook gates

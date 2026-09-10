@@ -81,3 +81,4 @@ jobs:
       - run: npm run test:package-x
       - run: npm run test:package-y
       - run: npm run test:package-z
+      - run: npm run test:package-aa

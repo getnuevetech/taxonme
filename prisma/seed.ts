@@ -590,7 +590,7 @@ Q: How does the analysis work?
 We extract the facts from your answers and documents, verify amounts against IRS reference material, and turn everything into issues and a step-by-step plan. When something can't be verified, we say so — we never guess.
 
 Q: How do payment plans with the IRS work?
-If you owe $50,000 or less you can usually set up a monthly installment agreement online. Your balance divided by 72 is roughly the minimum monthly payment the IRS accepts. Our Form 9465 wizard prepares the paper request.
+Confirm what you owe on an Account Transcript (or the printed amount on your notice) before choosing a monthly amount. Some balances may qualify for an online installment agreement; others need a paper request. Eligibility and monthly minimums depend on your account facts and current IRS rules — we do not treat any single dollar figure as universal. Our Form 9465 wizard helps you prepare a request for review; it is not an IRS approval.
 
 Q: How do I cancel my subscription?
 Plan & billing → Cancel subscription. You keep access until the end of the paid period.
@@ -674,6 +674,15 @@ If your case needs a licensed professional, we can connect you with a vetted CPA
     },
   ];
   for (const p of pages) {
+    // Package AA: refresh FAQ body on re-seed so honesty copy sticks (other pages stay create-if-missing).
+    if (p.slug === "faq") {
+      await db.contentPage.upsert({
+        where: { slug: p.slug },
+        update: { title: p.title, kind: p.kind, body: p.body, isPublished: true },
+        create: { ...p, isPublished: true },
+      });
+      continue;
+    }
     await db.contentPage.upsert({
       where: { slug: p.slug },
       update: {},
@@ -916,12 +925,12 @@ Compare against the official IRS Form W-4 before submitting.`,
         {
           id: "plan",
           title: "Your monthly plan",
-          help: "Pick an amount you can really afford — the IRS charges less penalty while a plan is active. Your total divided by 72 is the minimum they'll usually accept.",
+          help: "Pick an amount you can really afford after confirming the balance on your notice or Account Transcript. The IRS may reduce the failure-to-pay penalty rate while an agreement is in effect. Proposed monthly amounts depend on your account facts — there is no single universal minimum in this wizard.",
           fields: [
             { key: "down_payment", label: "Can you pay anything today?", type: "money", hint: "Even a small amount reduces interest." },
             { key: "monthly_payment", label: "Monthly payment you're proposing", type: "money", required: true },
             { key: "payment_day", label: "Day of the month to pay (1–28)", type: "number", required: true },
-            { key: "direct_debit", label: "Pay automatically from your bank account?", type: "boolean", hint: "Direct debit has the lowest setup fee and you can't forget a payment." },
+            { key: "direct_debit", label: "Pay automatically from your bank account?", type: "boolean", hint: "Direct debit often has the lowest setup fee and you can't forget a payment." },
           ],
         },
       ]),
@@ -948,8 +957,9 @@ PROPOSED AGREEMENT
 SIGNATURE
   Sign: ______________________________   Date: ____________
 
-Tip: If you owe $50,000 or less you can usually set this up faster
-in your IRS online account without mailing this form.
+Tip: Confirm the balance on your Account Transcript or notice before proposing a monthly amount.
+Some accounts can request an installment agreement in the IRS online account; others use this paper form.
+This wizard prepares a draft request — it is not an IRS approval.
 Compare against the official IRS Form 9465 before submitting.`,
     },
     {
@@ -1433,7 +1443,25 @@ Compare against the official IRS Form 433-F before submitting.`,
 
   for (const t of [...templates, ...moreTemplates]) {
     const exists = await db.irsFormTemplate.findFirst({ where: { formNumber: t.formNumber } });
-    if (!exists) await db.irsFormTemplate.create({ data: { ...t, isPublished: true } });
+    if (!exists) {
+      await db.irsFormTemplate.create({ data: { ...t, isPublished: true } });
+      continue;
+    }
+    // Package AA: refresh Form 9465 wizard tip/help when stale playbook copy is still present.
+    if (
+      t.formNumber === "9465" &&
+      (/\$\s?50,?000|divided by 72|minimum they'll usually accept/i.test(exists.stepsJson) ||
+        /\$\s?50,?000|set this up faster/i.test(exists.outputTemplate))
+    ) {
+      await db.irsFormTemplate.update({
+        where: { id: exists.id },
+        data: {
+          stepsJson: t.stepsJson,
+          outputTemplate: t.outputTemplate,
+          description: t.description,
+        },
+      });
+    }
   }
 
   // Official IRS PDFs: downloads infuse the customer's answers into the real

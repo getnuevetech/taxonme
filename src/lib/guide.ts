@@ -34,7 +34,7 @@ const STEP_TIPS: Record<string, string> = {
   DRAFT_LETTER:
     "Use Response letters → New letter. Describe what you want to say in plain English; we draft a professional letter you can edit and print. Mail it before your deadline (certified mail with return receipt is safest).",
   COMPLETE_FORM_9465:
-    "Open IRS forms → Form 9465 and answer the quiz-style questions. Tip: your total balance divided by 72 is the minimum monthly payment the IRS usually accepts, and direct debit has the lowest setup fee.",
+    "Open IRS forms → Form 9465 and answer the quiz-style questions after you confirm the balance on your notice or Account Transcript. Propose a monthly amount you can afford; eligibility and any online shortcuts depend on your account facts. Direct debit often has the lowest setup fee. This wizard prepares a draft request — it is not an IRS approval.",
 };
 
 type Snapshot = {
