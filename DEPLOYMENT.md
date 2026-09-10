@@ -53,9 +53,10 @@ docker compose --env-file .env.deploy up -d
 ```
 
 This is a **host resource limit**, not an application code error. The image
-already caps workers (`cpus: 1`, webpack parallelism 1, `DOCKER_BUILD=1`) and
-sets `NODE_OPTIONS=--max-old-space-size=1536 --max-heap-size=1536`; without
-swap a 2GB VPS can still SIGKILL during page-data collection.
+already caps workers (`cpus: 1`, webpack parallelism 1, `DOCKER_BUILD=1`,
+`staticGenerationMaxConcurrency: 1`) and sets
+`NODE_OPTIONS=--max-old-space-size=1536`; without swap a 2GB VPS can still
+SIGKILL during page-data collection.
 
 ## Option B — Bare metal (no Docker)
 
