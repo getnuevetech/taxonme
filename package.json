@@ -81,6 +81,7 @@
     "test:package-ai": "tsx scripts/phase-package-ai-check.ts",
     "test:package-aj": "tsx scripts/phase-package-aj-check.ts",
     "test:package-ak": "tsx scripts/phase-package-ak-check.ts",
+    "test:package-al": "tsx scripts/phase-package-al-check.ts",
     "backfill:case-intel": "tsx scripts/case-intelligence-backfill.ts",
     "backfill:situation-qa-intel": "tsx scripts/situation-qa-intelligence-backfill.ts",
     "backfill:force-intel-reenrich": "tsx scripts/intelligence-force-reenrich.ts",

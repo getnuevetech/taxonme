@@ -123,6 +123,7 @@ Work packages that enforce this guide (do not treat as “make the app dumber”
 | **AI** | Identify-only Form 12153 / CDP KB — notice vs form split; not a filing wizard |
 | **AJ** | Pipeline A notice/exam chrome — CP2000 evidence prose; no pathway labels on notice branches |
 | **AK** | Form 433-F labeling honesty — abbreviated draft chrome; not a full CIS interview |
+| **AL** | Identify-only Letter 3172 / NFTL KB — lien vs levy vs Form 12153; no resolution playbooks |
 
 Every package must preserve **Pipeline A** (arbitrary IRS/tax questions) and **Pipeline B** (matter engine) as general reasoners — never collapse the product into a single-scenario wizard.
 
