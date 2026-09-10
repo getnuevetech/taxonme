@@ -17,7 +17,7 @@
 - Form 433 / financial-statement interview
 - Form 9465 PDF/prefill / FAQ payment-plan tips (AA/AB)
 - Intake goal-chip rewrite _(→ later package)_
-- Amount-known fallback “streamlined” CTA honesty _(→ later package)_
+- Amount-known fallback “streamlined” CTA honesty _(→ Package AD)_
 - Full marketing redesign; Experience Search; authority KB
 
 ## Check

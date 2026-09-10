@@ -178,7 +178,7 @@ export async function CaseAnalysisView({ caseId, viewer }: { caseId: string; vie
       case "DRAFT_LETTER":
         return { label: "Draft my letter", href: "/app/letters/new" };
       case "COMPLETE_FORM_9465":
-        return { label: "Open the payment plan form", href: "/app/forms" };
+        return { label: "Prepare Form 9465 request", href: "/app/forms" };
       case "ADD_DEADLINE":
         return { label: "Add the deadline", href: "/app/deadlines" };
       default:
@@ -769,7 +769,7 @@ export async function CaseAnalysisView({ caseId, viewer }: { caseId: string; vie
                           {(step.actionKey.toUpperCase() === "REVIEW_ANALYSIS" || step.actionKey.toUpperCase() === "RERUN_ANALYSIS") ? null : step.actionKey.toUpperCase() === "COMPLETE_FORM_9465" && form9465 ? (
                             <form action={startFormAction.bind(null, form9465.id)}>
                               <button className="rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-indigo-700">
-                                Start the payment plan form →
+                                Prepare Form 9465 request →
                               </button>
                             </form>
                           ) : step.actionKey.toUpperCase() === "UPLOAD_DOCUMENTS" ? (

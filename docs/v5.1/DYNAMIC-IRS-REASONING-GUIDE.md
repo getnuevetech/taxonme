@@ -115,6 +115,7 @@ Work packages that enforce this guide (do not treat as “make the app dumber”
 | **AA** | FAQ / Form 9465 tip honesty — no ungated `$50k` / ÷72 playbook claims in FAQ, wizard, STEP_TIPS |
 | **AB** | Form 9465 PDF / prefill honesty — no auto-injected ÷72 monthly into PDF map or wizard values |
 | **AC** | Lifecycle / FAQ authorship honesty — Situation-first; no Case-first “full plan” overclaim |
+| **AD** | Amount-known path honesty — no streamlined/9465 push from bare dollar amount alone |
 
 Every package must preserve **Pipeline A** (arbitrary IRS/tax questions) and **Pipeline B** (matter engine) as general reasoners — never collapse the product into a single-scenario wizard.
 

@@ -409,11 +409,11 @@ export async function fallbackAnalyze(
       analysis_outline: [
         { heading: "Your situation", detail: `${balanceDue.fromDocument ? "Your uploaded records show" : "You reported"} ${usd(balanceDue.amount)} owed to the IRS${primaryYear ? ` for ${yearText}` : ""}.` },
         { heading: "Tax rules", detail: shouldRetrieveInstallmentThresholds({ hasDocs, hasTranscript, hasAmount: true, hasTaxYear: Boolean(primaryYear) })
-          ? `Rule: an IRS balance is made of tax + penalties + interest, and each part is treated differently. Why it matters to your case: installment agreements under IRC §6159 have amount-based options (including common streamlined thresholds), and some penalties may be eligible for relief depending on period and history — confirm composition before choosing a path.`
+          ? `Rule: an IRS balance is made of tax + penalties + interest, and each part is treated differently. Why it matters to your case: installment agreements under IRC §6159 have amount-based eligibility once the balance composition is confirmed — not a single universal plan. Confirm tax vs penalties vs interest before choosing a path.`
           : `Rule: an IRS balance is made of tax + penalties + interest, and each part is treated differently. Confirm the amount and composition before sizing any resolution option.`, source: "IRC §6159 · Form 9465 instructions · IRM 20.1.1 (penalty relief)" },
         { heading: "Your evidence", detail: evidenceLine() },
         { heading: "Our conclusion", detail: `The balance is ${balanceDue.fromDocument ? "supported by your records" : "reported but not yet documented"}. Once the Account Transcript and any IRS notice confirm the amount and its composition, TaxOnMe can evaluate the legitimate resolution paths for your circumstances.` },
-        { heading: "Your next move", detail: hasTranscript ? `Your transcript is on file — confirm the tax/penalty/interest split from its codes, then use the Form 9465 wizard to prepare a payment plan request if needed.` : `Add your ${yearText} Account Transcript and the IRS notice showing the balance — together they confirm the exact amount so the resolution can be sized correctly.` },
+        { heading: "Your next move", detail: hasTranscript ? `Your transcript is on file — confirm the tax/penalty/interest split from its codes. If you need time to pay, you may prepare a Form 9465 request afterward; the wizard is a draft, not IRS approval.` : `Add your ${yearText} Account Transcript and the IRS notice showing the balance — together they confirm the exact amount and composition before any payment-plan request.` },
       ],
     });
     }
@@ -601,7 +601,10 @@ export async function fallbackAnalyze(
       action_key: "DRAFT_LETTER",
     });
   }
-  if (eligibility.installment && (/(payment plan|installment|can'?t pay|afford)/.test(lower) || balanceDue)) {
+  // Package AD: open Form 9465 path when amount is eligible AND (transcript establishes it OR user asked for installment) —
+  // not from a bare user-reported balance alone.
+  const wantsInstallment = /(payment plan|installment|can'?t pay|afford|9465)/.test(lower);
+  if (eligibility.installment && (wantsInstallment || hasTranscript)) {
     pathSteps.push({
       title: "Prepare a payment plan request (Form 9465)",
       description:
@@ -610,8 +613,16 @@ export async function fallbackAnalyze(
     });
   }
   pathSteps = filterResolutionPathSteps(pathSteps, eligibility);
-  // Package E: only ask to "confirm resolution" after something resolvable exists.
-  if (eligibility.installment || eligibility.penaltyRelief || noticeCodes.length > 0 || evidenceSnapshot.hasAmount) {
+  // Package AD: "confirm resolution" only after a real response/payment-prep step exists — not amount alone.
+  if (
+    pathSteps.some(
+      (s) =>
+        s.action_key === "COMPLETE_FORM_9465" ||
+        s.action_key === "DRAFT_LETTER" ||
+        /penalty relief/i.test(s.title),
+    ) ||
+    noticeCodes.length > 0
+  ) {
     pathSteps.push({
       title: "Confirm the resolution with the IRS",
       description:
