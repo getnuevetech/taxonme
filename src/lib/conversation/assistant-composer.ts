@@ -9,6 +9,13 @@ export type AssistantViewSection =
 const DISCLAIMER =
   "This is general tax information based on public IRS frameworks, not legal, tax, or accounting advice. A CPA, EA, or tax attorney should review high-stakes decisions.";
 
+/** Package AG — evidence-first branch ids (not resolution pathways). */
+function isEvidenceFirstBranch(branch: AnswerBranch): boolean {
+  return (
+    branch.id === "establish_account_position" || branch.id === "use_existing_notice"
+  );
+}
+
 /**
  * Structured assistant view for Pipeline A UI.
  * Domain-specific templates stay thin; layout owns presentation.
@@ -97,7 +104,7 @@ export function composeAssistantView(
     sections.push({
       type: "paragraph",
       text: evidenceFirst
-        ? "Thanks for sharing that background. With the amount still unknown, the useful next step is establishing what the IRS currently shows — then pathways like payment plans or hardship status can be sized to your facts."
+        ? "Thanks for sharing that background. With the amount still unknown, the useful next step is establishing what the IRS currently shows on your account — then any next option can be sized to those facts."
         : "Thanks for sharing that background. I can help outline payment or relief pathways, explain a notice, or — if something is already before the IRS or a state tax agency — help you track that agency matter.",
     });
   } else if (!(intel.strategy.branch_before_clarify && intel.strategy.branches.length)) {
@@ -108,8 +115,11 @@ export function composeAssistantView(
   }
 
   if (intel.strategy.branch_before_clarify && intel.strategy.branches.length) {
-    const intro =
-      target === "identify_available_pathways" || intel.strategy.branches.length >= 2
+    // Package AG: evidence-only branches are not "pathways" chrome.
+    const evidenceOnly = intel.strategy.branches.every(isEvidenceFirstBranch);
+    const intro = evidenceOnly
+      ? "What usually helps next"
+      : target === "identify_available_pathways" || intel.strategy.branches.length >= 2
         ? "Pathways that usually matter"
         : "What can apply";
     sections.push({ type: "branches", intro, branches: intel.strategy.branches });
@@ -121,9 +131,14 @@ export function composeAssistantView(
   ) {
     if (intel.strategy.ask_now[0]) {
       const ask = intel.strategy.ask_now[0];
+      const evidenceOnly =
+        intel.strategy.branches.length > 0 &&
+        intel.strategy.branches.every(isEvidenceFirstBranch);
       sections.push({
         type: "ask",
-        question: `To determine which pathway applies to you: ${ask.question}`,
+        question: evidenceOnly
+          ? ask.question
+          : `To determine which pathway applies to you: ${ask.question}`,
         reason: ask.reason,
       });
     }
