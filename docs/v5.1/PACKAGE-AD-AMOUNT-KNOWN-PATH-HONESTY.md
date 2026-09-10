@@ -15,7 +15,7 @@
 ## Non-goals
 
 - Form 433 / financial-statement interview
-- Intake goal-chip rewrite _(→ later package)_
+- Intake goal-chip rewrite _(→ Package AE)_
 - FAQ / how-it-works / welcome email (Package AC)
 - ÷72 PDF/prefill (Package AB); FAQ payment tips (Package AA)
 - Changing `shouldRetrieveInstallmentThresholds` / authority KB gating
