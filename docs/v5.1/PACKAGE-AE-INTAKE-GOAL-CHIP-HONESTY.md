@@ -13,7 +13,7 @@
 ## Non-goals
 
 - Form 433 / financial-statement interview
-- Changing Pipeline A `STARTER_PROMPTS` (Package J)
+- Changing Pipeline A `STARTER_PROMPTS` (→ Package AG)
 - Amount-known fallback / 9465 path (Package AD)
 - FAQ / lifecycle marketing (Package AC)
 - Blocking free-text goals that mention installment or penalties

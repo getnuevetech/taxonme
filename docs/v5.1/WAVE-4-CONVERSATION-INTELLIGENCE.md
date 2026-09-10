@@ -58,6 +58,7 @@ _(none for −1.8 — see Package J)_
 - **Package AD** — Amount-known path honesty: `PACKAGE-AD-AMOUNT-KNOWN-PATH-HONESTY.md`
 - **Package AE** — Intake goal-chip honesty: `PACKAGE-AE-INTAKE-GOAL-CHIP-HONESTY.md`
 - **Package AF** — Identify-only mid-collection KB (CP501): `PACKAGE-AF-IDENTIFY-CP501-KB.md`
+- **Package AG** — Pipeline A evidence-first chrome: `PACKAGE-AG-PIPELINE-A-EVIDENCE-CHROME-HONESTY.md`
 
 
 ## Check
