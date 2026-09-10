@@ -6,7 +6,7 @@ import { PageHeader } from "@/components/ui";
 import { QaChat } from "@/components/qa-chat";
 import { qaSuggestionsForUser } from "@/lib/qa-suggestions";
 import {
-  decisionFocusLabel,
+  decisionFocusLabelFromIntel,
   parseStoredIntelligence,
 } from "@/lib/conversation";
 import { STARTER_PROMPTS } from "@/lib/conversation/starter-prompts";
@@ -25,9 +25,7 @@ export default async function QaThreadPage({ params }: { params: Promise<{ id: s
   ]);
   const planKey = plan?.key ?? "free";
   const intel = parseStoredIntelligence(thread.intelligenceJson);
-  const focusLabel = intel
-    ? decisionFocusLabel(intel.question_contract.decision_target)
-    : undefined;
+  const focusLabel = intel ? decisionFocusLabelFromIntel(intel) : undefined;
   const interpretedQuestion = intel?.question_contract.interpreted_question || undefined;
   const promoteNarrative = encodeURIComponent(
     (intel?.question_contract.explicit_question || thread.title || "").slice(0, 500),

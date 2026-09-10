@@ -16,6 +16,16 @@ function isEvidenceFirstBranch(branch: AnswerBranch): boolean {
   );
 }
 
+/** Package AJ — notice/exam branch ids (not resolution pathways). */
+function isNoticeExamBranch(branch: AnswerBranch): boolean {
+  return branch.id === "respond_by_deadline" || branch.id === "verify_irs_figures";
+}
+
+function nonPathwayChrome(branches: AnswerBranch[]): boolean {
+  if (!branches.length) return false;
+  return branches.every((b) => isEvidenceFirstBranch(b) || isNoticeExamBranch(b));
+}
+
 /**
  * Structured assistant view for Pipeline A UI.
  * Domain-specific templates stay thin; layout owns presentation.
@@ -66,13 +76,14 @@ export function composeAssistantView(
     });
   } else if (target === "explain_document_or_notice") {
     if (/\bcp\s?-?2000\b/i.test(rawMessage)) {
+      // Package AJ — identify + evidence (mirror AH seed); no bare agree/disagree menu.
       sections.push({
         type: "paragraph",
-        text: "A CP2000 is an underreporter notice. The IRS compared third-party information (W-2/1099s, etc.) to your return and proposes changes — it is not a bill by itself until you agree or the IRS assesses.",
+        text: "A CP2000 is an underreporter notice: the IRS compared third-party payer information (W-2s, 1099s, and similar) to your return and proposes changes. It is a proposed adjustment, not a bill by itself and not a field audit.",
       });
       sections.push({
         type: "paragraph",
-        text: "Deadlines on the notice matter. You can agree, partially agree, or disagree with documentation. Ignoring it often leads to assessment and collection contact.",
+        text: "Confirm the printed tax period, proposed amounts, and any respond-by date. Compare those figures to a Wage & Income transcript and your return, and confirm account activity on an Account Transcript before sizing a response. If unresolved, the IRS may later issue a Statutory Notice of Deficiency (CP3219A).",
       });
     } else if (/\bcp\s?-?503\b/i.test(rawMessage)) {
       sections.push({
@@ -101,11 +112,14 @@ export function composeAssistantView(
     });
   } else if (target === "interpret_situation_offer_next_step") {
     const evidenceFirst = intel.strategy.branches.some((b) => b.id === "establish_account_position");
+    const noticeExam = /\bcp\s?-?2000\b|\bcp\s?-?3219a\b/i.test(rawMessage);
     sections.push({
       type: "paragraph",
       text: evidenceFirst
         ? "Thanks for sharing that background. With the amount still unknown, the useful next step is establishing what the IRS currently shows on your account — then any next option can be sized to those facts."
-        : "Thanks for sharing that background. I can help outline payment or relief pathways, explain a notice, or — if something is already before the IRS or a state tax agency — help you track that agency matter.",
+        : noticeExam
+          ? "Thanks for sharing that. Start by identifying the notice code, tax period, proposed amounts, and any respond-by or petition deadline — then confirm those figures against transcripts before sizing a response."
+          : "Thanks for sharing that background. I can help outline payment or relief pathways, explain a notice, or — if something is already before the IRS or a state tax agency — help you track that agency matter.",
     });
   } else if (!(intel.strategy.branch_before_clarify && intel.strategy.branches.length)) {
     sections.push({
@@ -115,9 +129,9 @@ export function composeAssistantView(
   }
 
   if (intel.strategy.branch_before_clarify && intel.strategy.branches.length) {
-    // Package AG: evidence-only branches are not "pathways" chrome.
-    const evidenceOnly = intel.strategy.branches.every(isEvidenceFirstBranch);
-    const intro = evidenceOnly
+    // Package AG/AJ: evidence-only and notice/exam branches are not "pathways" chrome.
+    const skipPathwayChrome = nonPathwayChrome(intel.strategy.branches);
+    const intro = skipPathwayChrome
       ? "What usually helps next"
       : target === "identify_available_pathways" || intel.strategy.branches.length >= 2
         ? "Pathways that usually matter"
@@ -131,12 +145,10 @@ export function composeAssistantView(
   ) {
     if (intel.strategy.ask_now[0]) {
       const ask = intel.strategy.ask_now[0];
-      const evidenceOnly =
-        intel.strategy.branches.length > 0 &&
-        intel.strategy.branches.every(isEvidenceFirstBranch);
+      const skipPathwayChrome = nonPathwayChrome(intel.strategy.branches);
       sections.push({
         type: "ask",
-        question: evidenceOnly
+        question: skipPathwayChrome
           ? ask.question
           : `To determine which pathway applies to you: ${ask.question}`,
         reason: ask.reason,
@@ -164,13 +176,24 @@ export function composeAssistantReply(intel: ConversationIntelligence, rawMessag
     .join("\n\n");
 }
 
+export type DecisionFocusOpts = {
+  /** Package AJ — evidence-first or notice/exam branches (not resolution pathways). */
+  nonPathwayChrome?: boolean;
+};
+
 /** Short customer-facing label for the active decision target. */
-export function decisionFocusLabel(decisionTarget: string): string {
+export function decisionFocusLabel(
+  decisionTarget: string,
+  opts?: DecisionFocusOpts,
+): string {
   switch (decisionTarget) {
     case "petition_eligibility_overview":
       return "Who can help file or respond";
     case "identify_available_pathways":
-      return "Which tax pathways may be available";
+      // Package AJ: thin evidence / notice-exam must not read as a pathway menu.
+      return opts?.nonPathwayChrome
+        ? "What to confirm about your account"
+        : "Which tax pathways may be available";
     case "explain_document_or_notice":
       return "What this notice or document means";
     case "document_checklist":
@@ -188,4 +211,11 @@ export function decisionFocusLabel(decisionTarget: string): string {
     default:
       return "Understanding your request";
   }
+}
+
+/** Focus label from stored/live ConversationIntelligence (Package AJ). */
+export function decisionFocusLabelFromIntel(intel: ConversationIntelligence): string {
+  return decisionFocusLabel(intel.question_contract.decision_target, {
+    nonPathwayChrome: nonPathwayChrome(intel.strategy.branches),
+  });
 }

@@ -121,6 +121,7 @@ Work packages that enforce this guide (do not treat as “make the app dumber”
 | **AG** | Pipeline A evidence-first chrome — composer/starters; no pathway labels on thin evidence branches |
 | **AH** | Identify-only examination KB — harden CP2000 + CP3219A + underreporter ladder; no resolution playbooks |
 | **AI** | Identify-only Form 12153 / CDP KB — notice vs form split; not a filing wizard |
+| **AJ** | Pipeline A notice/exam chrome — CP2000 evidence prose; no pathway labels on notice branches |
 
 Every package must preserve **Pipeline A** (arbitrary IRS/tax questions) and **Pipeline B** (matter engine) as general reasoners — never collapse the product into a single-scenario wizard.
 
