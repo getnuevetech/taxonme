@@ -85,3 +85,4 @@ jobs:
       - run: npm run test:package-ab
       - run: npm run test:package-ac
       - run: npm run test:package-ad
+      - run: npm run test:package-ae

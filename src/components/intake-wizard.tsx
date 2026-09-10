@@ -3,6 +3,7 @@
 import { useState, useActionState } from "react";
 import { useFormStatus } from "react-dom";
 import { startIntakeAction } from "@/actions/case";
+import { INTAKE_GOAL_CHIPS } from "@/lib/intake-goal-chips";
 
 const STEPS = [
   { title: "What happened?", subtitle: "Tell us your tax story in your own words. No jargon needed." },
@@ -83,7 +84,7 @@ export function IntakeWizard() {
             className="w-full rounded-xl border border-slate-300 p-4 text-base focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-100"
           />
           <div className="mt-3 flex flex-wrap gap-2">
-            {["Catch up on unfiled returns", "Understand an IRS letter", "Set up a payment plan", "Reduce penalties", "Fix an old tax year"].map((g) => (
+            {INTAKE_GOAL_CHIPS.map((g) => (
               <button
                 key={g}
                 type="button"
