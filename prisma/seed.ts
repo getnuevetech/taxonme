@@ -1505,7 +1505,7 @@ Compare against the official IRS Form 433-F before submitting.`,
       { field: `${P1}.f1_24[0]`, source: "amount_owed", transform: "money" },
       { field: `${P1}.f1_25[0]`, source: "down_payment", transform: "money" },
       { field: `${P1}.f1_26[0]`, expr: "amount_owed - down_payment" },
-      { field: `${P1}.f1_27[0]`, expr: "(amount_owed - down_payment) / 72" },
+      // Package AB: do not auto-fill a ÷72 “minimum” into the PDF — only the customer's proposed monthly_payment.
       { field: `${P1}.f1_28[0]`, source: "monthly_payment", transform: "money" },
       { field: `${P1}.f1_30[0]`, source: "payment_day" },
     ],
@@ -1650,6 +1650,21 @@ Compare against the official IRS Form 433-F before submitting.`,
     await db.irsFormTemplate.updateMany({
       where: { formNumber, pdfMapJson: "[]" },
       data: { pdfMapJson: JSON.stringify(map) },
+    });
+  }
+
+  // Package AB: refresh Form 9465 PDF map when it still auto-fills ÷72 into an AcroForm field.
+  const form9465WithStalePdfMap = await db.irsFormTemplate.findFirst({
+    where: { formNumber: "9465" },
+    select: { id: true, pdfMapJson: true },
+  });
+  if (
+    form9465WithStalePdfMap &&
+    /\/\s*72/.test(form9465WithStalePdfMap.pdfMapJson || "")
+  ) {
+    await db.irsFormTemplate.update({
+      where: { id: form9465WithStalePdfMap.id },
+      data: { pdfMapJson: JSON.stringify(formPdfMaps["9465"]) },
     });
   }
 }

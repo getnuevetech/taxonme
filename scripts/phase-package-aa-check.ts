@@ -52,8 +52,10 @@ async function main() {
   assert.match(stepTip, /not an IRS approval/i);
 
   const prefill = readFileSync(join(root, "src/lib/form-prefill.ts"), "utf8");
-  assert.match(prefill, /illustrative/);
+  // Package AB: no ÷72 auto-inject into monthly_payment; keep AA's ban on old "Suggested monthly payment (balance ÷ 72)" label.
   assert.doesNotMatch(prefill, /Suggested monthly payment \(balance ÷ 72\)/);
+  assert.doesNotMatch(prefill, /monthly_payment:\s*suggestedMonthly/);
+  assert.match(prefill, /do not invent monthly_payment|do not auto-fill from a ÷72/i);
 
   // Live refresh: apply FAQ + 9465 honesty via seed helpers against DB.
   const { db } = await import("../src/lib/db");

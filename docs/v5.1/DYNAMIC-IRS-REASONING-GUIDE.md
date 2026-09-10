@@ -113,6 +113,7 @@ Work packages that enforce this guide (do not treat as “make the app dumber”
 | **Y** | Authority seed honesty — identify-only CP14/LT11/SFR; thin debt blocks resolution playbooks |
 | **Z** | Identify-only KB expansion — CP503/CP504/wage-income/notice identity + embed backfill path |
 | **AA** | FAQ / Form 9465 tip honesty — no ungated `$50k` / ÷72 playbook claims in FAQ, wizard, STEP_TIPS |
+| **AB** | Form 9465 PDF / prefill honesty — no auto-injected ÷72 monthly into PDF map or wizard values |
 
 Every package must preserve **Pipeline A** (arbitrary IRS/tax questions) and **Pipeline B** (matter engine) as general reasoners — never collapse the product into a single-scenario wizard.
 

@@ -17,7 +17,7 @@ export type PdfMapEntry = {
   source?: string; // wizard answer key
   join?: string[]; // multiple answer keys joined with ", "
   const?: string; // fixed value
-  expr?: string; // arithmetic over answer keys, e.g. "(amount_owed - down_payment) / 72"
+  expr?: string; // arithmetic over answer keys, e.g. "amount_owed - down_payment"
   transform?:
     | "first_words"
     | "last_word"
