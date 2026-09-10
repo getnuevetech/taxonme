@@ -19,12 +19,19 @@ function assertAssistant(message: string, goal = "Understand my options", docs =
   return intel;
 }
 
-// 1) Can't pay — pathways + ≤1 ask; no Case engine
+// 1) Can't pay — evidence-first chrome (H/AG); ≤1 ask; no Case engine
 {
   const msg = "I got an IRS letter and can't pay. What can I do?";
   const intel = assertAssistant(msg);
   const reply = composeAssistantReply(intel, msg);
-  assert.match(reply, /installment|pathways|Currently Not Collectible|Offer in Compromise/i);
+  assert.match(reply, /What usually helps next/i);
+  assert.doesNotMatch(reply, /Pathways that usually matter/i);
+  assert.doesNotMatch(reply, /Currently Not Collectible|Offer in Compromise/i);
+  assert.ok(
+    intel.strategy.branches.every(
+      (b) => b.id === "establish_account_position" || b.id === "use_existing_notice",
+    ),
+  );
   assert.ok(askableNow(intel.need_to_know).length <= 1);
   assert.equal(intel.question_contract.requires_case_development, false);
   assert.equal(intel.route.invokes_case_engine, false);
@@ -39,6 +46,7 @@ function assertAssistant(message: string, goal = "Understand my options", docs =
   assert.equal(intel.strategy.branch_before_clarify, true);
   assert.ok(intel.strategy.branches.length >= 2);
   const reply = composeAssistantReply(intel, msg);
+  assert.match(reply, /Pathways that usually matter/i);
   assert.match(reply, /installment|Currently Not Collectible|Offer in Compromise|penalty/i);
   assert.ok(intel.strategy.ask_now.every((q) => q.changes_branch && q.tier === "critical_now"));
 }
