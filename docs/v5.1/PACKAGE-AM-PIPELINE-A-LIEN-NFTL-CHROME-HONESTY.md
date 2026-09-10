@@ -14,12 +14,12 @@
 
 ## Non-goals
 
-- Form 433 / CIS full interview _(still deferred)_
+- Form 433 / CIS full interview _(still deferred; depth labeling → Package AN)_
 - Mass FAQ / Y playbook gate reopen
 - Reopening AL NFTL seeds or AI CDP/12153 bodies
 - NFTL withdrawal / discharge strategy; Form 12153 filing wizard
-- Fallback agree/disagree Case path _(→ later)_
-- CP501/CP504 composer leftovers _(→ later)_
+- Fallback agree/disagree Case path _(→ Package AO)_
+- CP501/CP504 composer leftovers _(→ Package AP)_
 
 ## Check
 

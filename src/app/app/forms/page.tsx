@@ -21,7 +21,7 @@ export default async function FormsPage() {
     <div>
       <PageHeader
         title="IRS forms, minus the headache"
-        subtitle="Answer simple questions one at a time — like a quiz — and we assemble the real form for you."
+        subtitle="Answer simple questions one at a time. Wizards build a draft you compare to the official IRS form — Form 433-F is an abbreviated draft only, not a full Collection Information Statement."
       />
 
       {submissions.length > 0 && (
