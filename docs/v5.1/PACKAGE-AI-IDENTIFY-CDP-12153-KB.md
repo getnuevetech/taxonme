@@ -107,7 +107,7 @@ const PLAYBOOK_RE =
   /installment\s+agreement|form\s*9465|payment\s+plan|offer\s+in\s+compromise|\bOIC\b|currently[\s-]?not[\s-]?collectible|\bCNC\b|\$\s?50,?000|\$\s?100,?000|Form\s*433/i;
 
 const WIZARD_RE =
-  /how to (complete|fill|file|mail)|line[- ]by[- ]line|mail (the )?form to|checkbox|step \d|hearing strateg|petition the (U\.?S\.? )?Tax Court/i;
+  /how to (complete|fill|file|mail)|line[- ]by[- ]line|mail (the )?form to|checkbox|step \d|hearing strateg/i;
 
 const AI_TITLES = [
   "Form 12153 — Request for Collection Due Process hearing",
