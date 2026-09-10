@@ -119,6 +119,7 @@ Work packages that enforce this guide (do not treat as “make the app dumber”
 | **AE** | Intake goal-chip honesty — evidence-first chips; no mechanism nudge into USER_REPORTED goal |
 | **AF** | Identify-only mid-collection KB — CP501 + collection ladder; no resolution playbooks |
 | **AG** | Pipeline A evidence-first chrome — composer/starters; no pathway labels on thin evidence branches |
+| **AH** | Identify-only examination KB — harden CP2000 + CP3219A + underreporter ladder; no resolution playbooks |
 
 Every package must preserve **Pipeline A** (arbitrary IRS/tax questions) and **Pipeline B** (matter engine) as general reasoners — never collapse the product into a single-scenario wizard.
 

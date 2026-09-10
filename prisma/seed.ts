@@ -725,8 +725,9 @@ async function seedKnowledge() {
       title: "CP2000 — Underreported income notice",
       sourceType: "notice_guide",
       reference: "CP2000",
-      tags: "notice, underreported, income, proposed amount",
-      content: "A CP2000 notice is sent when income or payment information the IRS has on file (from employers, banks, and other payers) doesn't match the amounts reported on the tax return. It is a PROPOSED change, not a bill or an audit. The taxpayer can agree, partially agree, or disagree with documentation. A response is normally due within 30 days of the notice date (60 days if outside the U.S.). If the taxpayer does not respond, the IRS issues a Statutory Notice of Deficiency (CP3219A). Common causes: missing 1099 income, corrected W-2s, brokerage cost-basis differences.",
+      tags: "notice, underreported, income, proposed amount, examination, evidence",
+      // Package AH — examination identify-only (harden). No resolution playbooks.
+      content: "A CP2000 is an underreporter notice: the IRS compared third-party payer information (W-2s, 1099s, and similar) to the return and proposes changes. It is a proposed adjustment, not a bill by itself and not a field audit. Confirm the printed tax period, proposed amounts, and any respond-by date on your copy. Compare the proposed figures to a Wage & Income transcript and confirm account activity on an Account Transcript before sizing a response. Common mismatches include missing Form 1099 income, corrected W-2s, and brokerage cost-basis differences. If the matter is not resolved, the IRS may later issue a Statutory Notice of Deficiency (CP3219A). This guide identifies the notice — it does not choose a payment or relief path.",
     },
     {
       title: "CP14 — Balance due notice",
@@ -779,6 +780,21 @@ async function seedKnowledge() {
       tags: "notice, identify, collection, cp14, cp501, cp503, cp504, lt11, evidence",
       content: "Balance-due collection mail often follows a recognizable ladder: CP14 (first balance due) → CP501 (early reminder) → CP503 (further reminder) → CP504 (urgent / levy warning) → LT11 / Letter 1058 (final intent to levy with Collection Due Process hearing rights). Read the CP/LT code on your copy first, then the tax period, printed amount, and any respond-by date. An Account Transcript confirms assessments and activity for the same periods. Knowing which stage you are in is an identify step — do not treat the stage alone as selecting a specific resolution path.",
     },
+    // Package AH — examination identify-only (CP2000 harden + CP3219A + underreporter ladder).
+    {
+      title: "CP3219A — Statutory Notice of Deficiency",
+      sourceType: "notice_guide",
+      reference: "CP3219A",
+      tags: "notice, deficiency, statutory, tax court, underreporter, examination, evidence",
+      content: "A CP3219A is a Statutory Notice of Deficiency (often called a 90-day letter). It states a proposed deficiency and generally opens a limited window to petition the U.S. Tax Court — calendar the printed deadline and keep the notice. It is not the same as an LT11 final levy notice or Collection Due Process hearing rights. Confirm the tax period and proposed figures against any earlier underreporter notice and an Account Transcript. This guide identifies the notice — it does not choose a payment, settlement, or petition-filing path.",
+    },
+    {
+      title: "Underreporter notice ladder — identify the stage",
+      sourceType: "rule",
+      reference: "Underreporter notice ladder",
+      tags: "notice, identify, underreporter, cp2000, cp3219a, examination, evidence",
+      content: "Underreporter mail often follows: CP2000 (proposed underreporter changes) → CP3219A (Statutory Notice of Deficiency with a Tax Court petition window). Read the CP code first, then the tax period, proposed amounts, and any respond-by or petition deadline. Wage & Income and Account Transcripts help verify what the IRS used. Knowing the stage is an identify step — do not treat the stage alone as selecting a resolution path, and do not confuse this track with the balance-due collection ladder ending in LT11.",
+    },
     {
       title: "Wage and Income transcript — when and why",
       sourceType: "rule",
@@ -791,7 +807,7 @@ async function seedKnowledge() {
       sourceType: "rule",
       reference: "Notice identity",
       tags: "notice, identify, cp, lt, deadline, evidence",
-      content: "Most IRS notices print a CP or LT code near the top, a tax period, amounts, and often a respond-by date. Read the code first (for example CP14, CP501, CP503, CP504, CP2000, LT11), then the period and printed figures. Keep the notice and calendar any deadline shown. An Account Transcript independently confirms assessments, payments, and recent activity for the same periods. Until the notice code, period, and IRS account position are established, do not treat any guide as selecting a specific resolution path.",
+      content: "Most IRS notices print a CP or LT code near the top, a tax period, amounts, and often a respond-by date. Read the code first (for example CP14, CP501, CP503, CP504, CP2000, CP3219A, LT11), then the period and printed figures. Keep the notice and calendar any deadline shown. An Account Transcript independently confirms assessments, payments, and recent activity for the same periods. Until the notice code, period, and IRS account position are established, do not treat any guide as selecting a specific resolution path.",
     },
     {
       title: "IRS account transcript transaction codes",

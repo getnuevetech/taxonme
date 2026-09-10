@@ -59,6 +59,7 @@ _(none for −1.8 — see Package J)_
 - **Package AE** — Intake goal-chip honesty: `PACKAGE-AE-INTAKE-GOAL-CHIP-HONESTY.md`
 - **Package AF** — Identify-only mid-collection KB (CP501): `PACKAGE-AF-IDENTIFY-CP501-KB.md`
 - **Package AG** — Pipeline A evidence-first chrome: `PACKAGE-AG-PIPELINE-A-EVIDENCE-CHROME-HONESTY.md`
+- **Package AH** — Identify-only examination KB (CP2000 / CP3219A): `PACKAGE-AH-IDENTIFY-EXAM-KB.md`
 
 
 ## Check
