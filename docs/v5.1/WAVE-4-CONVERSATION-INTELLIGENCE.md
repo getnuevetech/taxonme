@@ -53,6 +53,7 @@ _(none for −1.8 — see Package J)_
 - **Package Y** — Authority seed honesty: `PACKAGE-Y-AUTHORITY-SEED-HONESTY.md`
 - **Package Z** — Identify-only KB expansion + embed: `PACKAGE-Z-IDENTIFY-KB-EMBED.md`
 - **Package AA** — FAQ / Form 9465 tip honesty: `PACKAGE-AA-FAQ-9465-TIP-HONESTY.md`
+- **Package AB** — Form 9465 PDF / prefill ÷72 honesty: `PACKAGE-AB-9465-PREFILL-HONESTY.md`
 
 
 ## Check

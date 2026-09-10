@@ -99,8 +99,7 @@ export async function buildFormPrefill(userId: string, steps: WizardStep[]): Pro
     (refundIssue?.differenceCents ? refundIssue.differenceCents / 100 : null) ??
     (expectedRefund !== null && receivedRefund !== null ? Math.round((expectedRefund - receivedRefund) * 100) / 100 : null);
 
-  // IRS may accept balance ÷ 72 as an illustrative streamlined monthly starting point once balance is known — not a universal minimum.
-  const suggestedMonthly = balanceDue ? Math.ceil(balanceDue / 72) : null;
+  // Package AB: do not invent monthly_payment from balance÷72 — the customer proposes an amount.
   const nextDeadline = kase?.deadlines[0] ?? null;
 
   // ---- Candidate values by field-key convention ----
@@ -129,7 +128,6 @@ export async function buildFormPrefill(userId: string, steps: WizardStep[]): Pro
     amount_due: moneyStr(balanceDue),
     balance_due: moneyStr(balanceDue),
     total_owed: moneyStr(balanceDue),
-    monthly_payment: suggestedMonthly === null ? "" : String(suggestedMonthly),
     expected_refund: moneyStr(expectedRefund),
     received_refund: moneyStr(receivedRefund),
     refund_difference: moneyStr(refundDifference),
@@ -172,7 +170,12 @@ export async function buildFormPrefill(userId: string, steps: WizardStep[]): Pro
     add("Expected refund", expectedRefund === null ? "" : usd(expectedRefund));
     add("Refund received", receivedRefund === null ? "" : usd(receivedRefund));
     add("Refund difference", refundDifference === null ? "" : usd(refundDifference));
-    add("Suggested monthly (illustrative ÷72 when balance known)", suggestedMonthly === null ? "" : usd(suggestedMonthly));
+    add(
+      "Proposed monthly payment",
+      balanceDue === null
+        ? ""
+        : "Enter an amount you can afford after confirming the balance — we do not auto-fill from a ÷72 formula",
+    );
     add("Next deadline", nextDeadline ? `${nextDeadline.title} — ${nextDeadline.dueDate.toLocaleDateString("en-US")}` : "");
     add("Your goal", kase.goal?.slice(0, 120));
   }

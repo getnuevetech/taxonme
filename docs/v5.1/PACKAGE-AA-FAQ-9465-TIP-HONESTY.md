@@ -17,7 +17,7 @@
 - Authority KB / Y playbook gates / hybrid retrieval / identify corpus
 - Mass FAQ rewrite; Experience Search
 - Weakening P/U/V/O/Q presenters
-- Broad form-prefill redesign
+- Broad form-prefill redesign _(→ Package AB for ÷72 PDF/prefill injection)_
 
 ## Check
 
