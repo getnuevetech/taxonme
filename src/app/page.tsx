@@ -70,7 +70,7 @@ export default async function HomePage() {
               </h1>
               <p className="mt-6 max-w-md text-base leading-relaxed text-slate-600">
                 {s["home.hero_subtitle"] ??
-                  `${appName} turns confusing IRS notices, refunds, and tax debt into a simple step-by-step plan. Start free — no account needed.`}
+                  `${appName} explains IRS notices, refunds, and tax questions in plain English — depth grows with your evidence. Start free — no account needed.`}
               </p>
               <div className="mt-8 flex flex-wrap gap-3">
                 <ButtonLink href="/start" className="rounded-full px-7 py-3.5 text-base shadow-lg shadow-indigo-600/25">

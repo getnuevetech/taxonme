@@ -57,11 +57,21 @@ async function main() {
   assert.doesNotMatch(prefill, /monthly_payment:\s*suggestedMonthly/);
   assert.match(prefill, /do not invent monthly_payment|do not auto-fill from a ÷72/i);
 
-  // Live refresh: apply FAQ + 9465 honesty via seed helpers against DB.
+  // Live refresh: patch payment-plan FAQ honesty without wiping other FAQ answers.
   const { db } = await import("../src/lib/db");
   try {
-    const faqBody = `Q: How do payment plans with the IRS work?
+    const paymentAnswer = `Q: How do payment plans with the IRS work?
 Confirm what you owe on an Account Transcript (or the printed amount on your notice) before choosing a monthly amount. Some balances may qualify for an online installment agreement; others need a paper request. Eligibility and monthly minimums depend on your account facts and current IRS rules — we do not treat any single dollar figure as universal. Our Form 9465 wizard helps you prepare a request for review; it is not an IRS approval.`;
+    const existingFaq = await db.contentPage.findUnique({ where: { slug: "faq" } });
+    let faqBody = existingFaq?.body ?? paymentAnswer;
+    if (/Q: How do payment plans with the IRS work\?/.test(faqBody)) {
+      faqBody = faqBody.replace(
+        /Q: How do payment plans with the IRS work\?[\s\S]*?(?=Q: How do I cancel|Q: Something in the app|$)/,
+        `${paymentAnswer}\n\n`,
+      );
+    } else {
+      faqBody = `${faqBody.trim()}\n\n${paymentAnswer}`;
+    }
     await db.contentPage.upsert({
       where: { slug: "faq" },
       update: { body: faqBody, title: "Frequently asked questions", isPublished: true },

@@ -17,7 +17,7 @@ async function seedSettings() {
     ["app.url", "http://localhost:3000", "general", "App URL", "Public base URL, used for OAuth callbacks and payment redirects."],
     ["app.disclaimer", "TaxOnMe is a tax assistant that helps you understand your tax situation and IRS documents in plain English. We are not the IRS, a CPA firm, or a law firm, and we do not provide legal, accounting, or financial advice. For high-stakes decisions, consult a licensed professional.", "branding", "Footer disclaimer", "Compliance disclaimer shown in the site footer."],
     ["home.hero_title", "IRS letters and tax problems, explained like you're human", "branding", "Homepage hero title", ""],
-    ["home.hero_subtitle", "TaxOnMe turns confusing IRS notices, refunds, and tax debt into a simple step-by-step plan. Start free — no account needed.", "branding", "Homepage hero subtitle", ""],
+    ["home.hero_subtitle", "TaxOnMe explains IRS notices, refunds, and tax questions in plain English — depth grows with your evidence. Start free — no account needed.", "branding", "Homepage hero subtitle", ""],
     ["home.cta_primary", "Explain my tax situation", "branding", "Primary call to action", ""],
     ["home.cta_secondary", "Ask a quick question", "branding", "Secondary call to action", ""],
     ["home.hero_images", '["/hero/hero-1.png", "/hero/hero-2.png", "/hero/hero-3.png"]', "branding", "Hero images (JSON array)", "Rotating homepage hero images. JSON array of image URLs or paths — add, remove, or reorder freely."],
@@ -66,6 +66,17 @@ async function seedSettings() {
       create: { key, value, group, label, description, type: key.includes("secret") ? "secret" : "text" },
     });
   }
+  // Package AC: refresh hero subtitle when it still promises a universal "step-by-step plan".
+  await db.setting.updateMany({
+    where: {
+      key: "home.hero_subtitle",
+      value: { contains: "simple step-by-step plan" },
+    },
+    data: {
+      value:
+        "TaxOnMe explains IRS notices, refunds, and tax questions in plain English — depth grows with your evidence. Start free — no account needed.",
+    },
+  });
 }
 
 async function seedAdmin() {
@@ -587,7 +598,7 @@ Q: What happens to documents I upload?
 They're stored in your private vault. Only you can see them — and a consultant only after you explicitly approve the connection. You can delete files or your whole account anytime.
 
 Q: How does the analysis work?
-We extract the facts from your answers and documents, verify amounts against IRS reference material, and turn everything into issues and a step-by-step plan. When something can't be verified, we say so — we never guess.
+We start from what you told us and any documents you add. Depth grows with evidence: first we clarify your Situation, then we verify amounts against IRS reference material when documents support it. Unsupported modules stay empty — we never invent a full resolution plan from thin intake alone.
 
 Q: How do payment plans with the IRS work?
 Confirm what you owe on an Account Transcript (or the printed amount on your notice) before choosing a monthly amount. Some balances may qualify for an online installment agreement; others need a paper request. Eligibility and monthly minimums depend on your account facts and current IRS rules — we do not treat any single dollar figure as universal. Our Form 9465 wizard helps you prepare a request for review; it is not an IRS approval.
@@ -604,15 +615,15 @@ Open a tech support ticket under Support tickets (or ask the guide chatbot to cr
       slug: "how-it-works",
       title: "How it works",
       kind: "page",
-      body: `TaxOnMe helps you understand and resolve tax situations in plain English.
+      body: `TaxOnMe helps you understand tax questions in plain English.
 
-1. Tell us what happened — in your own words.
-2. Tell us your goal — what a great outcome looks like.
-3. Add documents — IRS notices, W-2s, 1099s, returns, transcripts.
+1. Ask or describe what happened — in your own words (Question → Situation).
+2. Tell us your goal — what a good outcome looks like.
+3. Add evidence when you have it — IRS notices, transcripts, W-2s, 1099s, returns.
 
-Our analysis engine breaks your situation into clear issues, verifies amounts against your documents, and builds a step-by-step path forward. When numbers can't be verified, we say so — we never guess.
+We map options in a Situation workspace. Depth grows as facts and documents arrive. A Case (agency matter) is for when something is already before the IRS or another tax agency — not the default first click. When numbers can't be verified, we say so — we never guess.
 
-If your case needs a licensed professional, we can connect you with a vetted CPA or Enrolled Agent — only with your approval.`,
+If you need a licensed professional, we can connect you with a vetted CPA or Enrolled Agent — only with your approval.`,
     },
     {
       slug: "terms-of-service",
@@ -674,11 +685,27 @@ If your case needs a licensed professional, we can connect you with a vetted CPA
     },
   ];
   for (const p of pages) {
-    // Package AA: refresh FAQ body on re-seed so honesty copy sticks (other pages stay create-if-missing).
+    // Package AA: refresh FAQ body on re-seed so honesty copy sticks.
+    // Package AC: also refresh how-it-works when lifecycle authorship is stale.
     if (p.slug === "faq") {
       await db.contentPage.upsert({
         where: { slug: p.slug },
         update: { title: p.title, kind: p.kind, body: p.body, isPublished: true },
+        create: { ...p, isPublished: true },
+      });
+      continue;
+    }
+    if (p.slug === "how-it-works") {
+      const existing = await db.contentPage.findUnique({ where: { slug: p.slug } });
+      const stale =
+        !existing ||
+        /builds a step-by-step path|turn everything into issues and a step-by-step plan/i.test(existing.body) ||
+        !/Situation/i.test(existing.body);
+      await db.contentPage.upsert({
+        where: { slug: p.slug },
+        update: stale
+          ? { title: p.title, kind: p.kind, body: p.body, isPublished: true }
+          : {},
         create: { ...p, isPublished: true },
       });
       continue;
@@ -1711,9 +1738,9 @@ async function seedMessageTemplates() {
       bodyHtml: wrap("Welcome aboard 🎉".replace("🎉", ""), `<p>Hi {{firstName}},</p>
 <p>Your {{appName}} account is ready. Here's how to get the most out of it:</p>
 <ul>
-  <li><strong>Start a case</strong> — tell us what happened and we'll build your step-by-step plan.</li>
-  <li><strong>Upload your documents</strong> — notices, W-2s, 1099s, transcripts. Everything stays private.</li>
-  <li><strong>Ask the guide</strong> — the assistant in the corner of your dashboard knows your next step.</li>
+  <li><strong>Start from your Situation</strong> — describe what happened and we map options; open a Case only when something is before the IRS or another agency.</li>
+  <li><strong>Upload documents when you have them</strong> — notices, W-2s, 1099s, transcripts. Everything stays private.</li>
+  <li><strong>Ask the guide</strong> — the assistant knows your next honest step from evidence, not a canned playbook.</li>
 </ul>
 <p><a href="{{appUrl}}{{link}}" style="background:#4f46e5;color:#fff;padding:10px 18px;border-radius:8px;text-decoration:none;display:inline-block;">Open my dashboard</a></p>`),
     },
@@ -1789,6 +1816,22 @@ async function seedMessageTemplates() {
   ];
 
   for (const t of templates) {
+    // Package AC: refresh welcome email when it still pushes Case-first "step-by-step plan".
+    if (t.key === "account_created") {
+      const existing = await db.messageTemplate.findUnique({ where: { key: t.key } });
+      const stale =
+        !existing ||
+        /Start a case/i.test(existing.bodyHtml) ||
+        /step-by-step plan/i.test(existing.bodyHtml);
+      await db.messageTemplate.upsert({
+        where: { key: t.key },
+        update: stale
+          ? { name: t.name, kind: t.kind, offsetDays: t.offsetDays ?? null, subject: t.subject, bodyHtml: t.bodyHtml }
+          : {},
+        create: { key: t.key, name: t.name, kind: t.kind, offsetDays: t.offsetDays ?? null, subject: t.subject, bodyHtml: t.bodyHtml },
+      });
+      continue;
+    }
     await db.messageTemplate.upsert({
       where: { key: t.key },
       update: {},

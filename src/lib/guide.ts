@@ -300,11 +300,15 @@ export async function guideRespond(
   const tip = snapshot.currentStep
     ? STEP_TIPS[snapshot.currentStep.actionKey.toUpperCase()] ??
       `Your current step is "${snapshot.currentStep.title}" — open your case and it will tell you exactly what completes it.`
-    : "Start by creating a case — describe what happened and your goal, and we'll build your step-by-step plan.";
+    : "Start from a Situation — describe what happened and your goal. We'll map options and deepen as evidence arrives; a Case is for when something is before the IRS or another agency.";
   return {
     message: `Here's what I can tell you right now: ${tip}\n\nIf that doesn't answer your question, the FAQ covers the most common ones, or I can connect you with our customer service team.`,
     actions: snapshot.currentStep
       ? [{ type: "link", label: "Open my case", href: `/app/cases/${snapshot.currentStep.caseId}` }, ...baseActions()]
-      : [{ type: "link", label: "Start a case", href: "/app/cases/new" }, ...baseActions()],
+      : [
+          { type: "link", label: "Continue with my situation", href: "/app/situations" },
+          { type: "link", label: "Track this government case", href: "/app/cases/new" },
+          ...baseActions(),
+        ],
   };
 }

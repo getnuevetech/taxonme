@@ -15,7 +15,7 @@
 
 - Form 433 / financial-statement interview
 - Authority KB / Y playbook gates / hybrid retrieval / identify corpus
-- Mass FAQ rewrite; Experience Search
+- Mass FAQ rewrite; Experience Search _(→ Package AC for analysis / how-it-works authorship)_
 - Weakening P/U/V/O/Q presenters
 - Broad form-prefill redesign _(→ Package AB for ÷72 PDF/prefill injection)_
 
