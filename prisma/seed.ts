@@ -820,6 +820,31 @@ async function seedKnowledge() {
       content:
         "An LT11 / Letter 1058 is a final notice of intent to levy that notifies of Collection Due Process (CDP) hearing rights and usually prints a respond-by date. Form 12153 is a separate request form used to ask for a CDP hearing (or an equivalent hearing when rules allow). Holding an LT11 is not the same as having requested a hearing with Form 12153; seeing Form 12153 language is not the same as holding the levy notice that started the deadline. Read the notice code and deadline on any LT11 first, identify whether Form 12153 is the form in question, and confirm the Account Transcript. This guide separates notice identity from form identity — it does not complete the form or select a collection resolution.",
     },
+    // Package AL — Letter 3172 / NFTL identify-only. No resolution playbooks; not a filing wizard.
+    {
+      title: "Letter 3172 — Notice of Federal Tax Lien Filing",
+      sourceType: "notice_guide",
+      reference: "Letter 3172",
+      tags: "letter 3172, nftl, federal tax lien, lien notice, identify, evidence, deadline",
+      content:
+        "Letter 3172 notifies that the IRS has filed a Notice of Federal Tax Lien (NFTL) and typically states Collection Due Process hearing rights related to that lien filing. It is a lien-notice identity, not a final levy notice (LT11 / Letter 1058) and not Form 12153. Calendar any printed deadline on the Letter 3172 you actually received, keep the letter with any NFTL paperwork, and confirm the balance and recent activity on an Account Transcript. This guide identifies the letter — it does not walk through requesting a hearing, releasing a lien, or choosing a payment path.",
+    },
+    {
+      title: "Notice of Federal Tax Lien (NFTL) — identify",
+      sourceType: "rule",
+      reference: "NFTL",
+      tags: "nftl, notice of federal tax lien, lien, letter 3172, identify, evidence",
+      content:
+        "A Notice of Federal Tax Lien (NFTL) is a public filing that records the IRS claim against a taxpayer's property for unpaid tax. Letter 3172 is the common taxpayer letter that the NFTL was filed and that hearing rights may apply. An NFTL is not the same as an LT11 / Letter 1058 final intent-to-levy notice, and it is not Form 12153. Confirm tax periods and account position on an Account Transcript; calendar any deadline printed on the Letter 3172 or other lien notice you hold. This guide identifies the NFTL — it does not select a lien release, withdrawal, discharge, or balance-resolution path.",
+    },
+    {
+      title: "Letter 3172 / NFTL vs LT11 / Form 12153 — identify which you have",
+      sourceType: "rule",
+      reference: "Letter 3172 vs LT11 vs Form 12153",
+      tags: "letter 3172, nftl, lt11, form 12153, cdp, identify, notice vs form, evidence",
+      content:
+        "Letter 3172 and the Notice of Federal Tax Lien (NFTL) concern lien filing and related hearing-notice identity. An LT11 / Letter 1058 is a final notice of intent to levy that offers Collection Due Process (CDP) rights tied to levy action. Form 12153 is a separate request form used to ask for a CDP hearing (or an equivalent hearing when rules allow) after a qualifying levy or lien notice. Holding Letter 3172 or an NFTL is not the same as holding an LT11, and none of those is the same as having requested a hearing with Form 12153. Read the letter or notice code and any printed deadline first, then confirm the Account Transcript. This guide separates lien, levy, and form identities — it does not complete Form 12153 or select a collection resolution.",
+    },
     {
       title: "Wage and Income transcript — when and why",
       sourceType: "rule",
@@ -832,7 +857,7 @@ async function seedKnowledge() {
       sourceType: "rule",
       reference: "Notice identity",
       tags: "notice, identify, cp, lt, deadline, evidence",
-      content: "Most IRS notices print a CP or LT code near the top, a tax period, amounts, and often a respond-by date. Read the code first (for example CP14, CP501, CP503, CP504, CP2000, CP3219A, LT11), then the period and printed figures. Keep the notice and calendar any deadline shown. An Account Transcript independently confirms assessments, payments, and recent activity for the same periods. Until the notice code, period, and IRS account position are established, do not treat any guide as selecting a specific resolution path.",
+      content: "Most IRS notices print a CP or LT code near the top, a tax period, amounts, and often a respond-by date. Read the code first (for example CP14, CP501, CP503, CP504, CP2000, CP3219A, LT11, Letter 3172), then the period and printed figures. Keep the notice and calendar any deadline shown. An Account Transcript independently confirms assessments, payments, and recent activity for the same periods. Until the notice code, period, and IRS account position are established, do not treat any guide as selecting a specific resolution path.",
     },
     {
       title: "IRS account transcript transaction codes",

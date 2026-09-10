@@ -36,7 +36,7 @@ const LADDER_CONTENT =
   "Underreporter mail often follows: CP2000 (proposed underreporter changes) → CP3219A (Statutory Notice of Deficiency with a Tax Court petition window). Read the CP code first, then the tax period, proposed amounts, and any respond-by or petition deadline. Wage & Income and Account Transcripts help verify what the IRS used. Knowing the stage is an identify step — do not treat the stage alone as selecting a resolution path, and do not confuse this track with the balance-due collection ladder ending in LT11.";
 
 const IDENTIFY_CONTENT =
-  "Most IRS notices print a CP or LT code near the top, a tax period, amounts, and often a respond-by date. Read the code first (for example CP14, CP501, CP503, CP504, CP2000, CP3219A, LT11), then the period and printed figures. Keep the notice and calendar any deadline shown. An Account Transcript independently confirms assessments, payments, and recent activity for the same periods. Until the notice code, period, and IRS account position are established, do not treat any guide as selecting a specific resolution path.";
+  "Most IRS notices print a CP or LT code near the top, a tax period, amounts, and often a respond-by date. Read the code first (for example CP14, CP501, CP503, CP504, CP2000, CP3219A, LT11, Letter 3172), then the period and printed figures. Keep the notice and calendar any deadline shown. An Account Transcript independently confirms assessments, payments, and recent activity for the same periods. Until the notice code, period, and IRS account position are established, do not treat any guide as selecting a specific resolution path.";
 
 async function main() {
   const root = process.cwd();
