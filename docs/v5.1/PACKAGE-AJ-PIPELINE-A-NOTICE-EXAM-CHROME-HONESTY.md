@@ -14,11 +14,11 @@
 
 ## Non-goals
 
-- Form 433 / CIS full interview
+- Form 433 / CIS full interview _(→ Package AK for labeling only)_
 - Mass FAQ / Y playbook gate reopen
 - Reopening AH/AI identify seed bodies
 - Changing `canSurfaceResolutionPathways` / branch-analysis eligibility
-- NFTL / Letter 3172 identify KB _(→ later)_
+- NFTL / Letter 3172 identify KB _(→ Package AL)_
 
 ## Check
 

@@ -5,15 +5,16 @@ import { useFormStatus } from "react-dom";
 import { saveFormStepAction, type WizardStep } from "@/actions/forms";
 import { inputClass } from "./ui";
 
-function Submit({ isLast }: { isLast: boolean }) {
+function Submit({ isLast, abbreviatedDraft }: { isLast: boolean; abbreviatedDraft?: boolean }) {
   const { pending } = useFormStatus();
+  const finishLabel = abbreviatedDraft ? "Finish abbreviated draft ✓" : "Finish & build my form ✓";
   return (
     <button
       type="submit"
       disabled={pending}
       className="w-full rounded-xl bg-indigo-600 px-6 py-3 text-base font-semibold text-white shadow-md transition hover:bg-indigo-700 disabled:opacity-50"
     >
-      {pending ? "Saving…" : isLast ? "Finish & build my form ✓" : "Next →"}
+      {pending ? "Saving…" : isLast ? finishLabel : "Next →"}
     </button>
   );
 }
@@ -25,6 +26,7 @@ export function FormStep({
   savedData,
   prefilledKeys = [],
   isLast,
+  abbreviatedDraft = false,
 }: {
   submissionId: string;
   stepIndex: number;
@@ -32,6 +34,7 @@ export function FormStep({
   savedData: Record<string, string>;
   prefilledKeys?: string[];
   isLast: boolean;
+  abbreviatedDraft?: boolean;
 }) {
   const [state, formAction] = useActionState(saveFormStepAction, null);
   const prefilled = new Set(prefilledKeys);
@@ -95,7 +98,7 @@ export function FormStep({
         })}
       </div>
       <div className="mt-8">
-        <Submit isLast={isLast} />
+        <Submit isLast={isLast} abbreviatedDraft={abbreviatedDraft} />
       </div>
     </form>
   );

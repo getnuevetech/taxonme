@@ -26,6 +26,7 @@ export default async function FillFormPage({
 
   const steps: WizardStep[] = JSON.parse(submission.template.stepsJson || "[]");
   const data: Record<string, string> = JSON.parse(submission.dataJson || "{}");
+  const is433F = submission.template.formNumber === "433-F";
 
   if (done || submission.status === "completed") {
     const { getBoolSetting } = await import("@/lib/settings");
@@ -42,9 +43,13 @@ export default async function FillFormPage({
         <PageHeader
           title={`Form ${submission.template.formNumber} — complete`}
           subtitle={
-            hasOfficialPdf
-              ? "Your answers are infused into the official IRS PDF — download it, review it, sign it, and file it."
-              : "Here's your regenerated form, assembled from your answers. Review it, print it, and use it with your filing."
+            is433F && hasOfficialPdf
+              ? "Some answers are mapped into the official IRS PDF where fields exist — download, review every blank line, and compare against the full Form 433-F before signing or filing."
+              : hasOfficialPdf
+                ? "Your answers are infused into the official IRS PDF — download it, review it, sign it, and file it."
+                : is433F
+                  ? "Here's an abbreviated draft worksheet from your answers — not a complete Form 433-F. Compare against the official form before filing."
+                  : "Here's your regenerated form, assembled from your answers. Review it, print it, and use it with your filing."
           }
           actions={
             canDownload ? (
@@ -65,7 +70,9 @@ export default async function FillFormPage({
           }
         />
         <div className="mb-4 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
-          Level complete — every question answered. Nicely done.
+          {is433F
+            ? "Draft steps complete. Review official Form 433-F — many IRS lines are not in this abbreviated wizard."
+            : "Level complete — every question answered. Nicely done."}
         </div>
         {!canDownload && (
           <div className="mb-4 rounded-xl border border-indigo-200 bg-indigo-50 px-4 py-3 text-sm text-indigo-800">
@@ -141,6 +148,7 @@ export default async function FillFormPage({
           savedData={display}
           prefilledKeys={prefilledKeys}
           isLast={stepIndex === steps.length - 1}
+          abbreviatedDraft={is433F}
         />
         {stepIndex > 0 && (
           <div className="mt-4 text-center">
