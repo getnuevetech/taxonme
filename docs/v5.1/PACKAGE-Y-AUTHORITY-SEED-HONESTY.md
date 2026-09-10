@@ -13,7 +13,7 @@
 
 ## Non-goals
 
-- Mass identify-only corpus expansion / Experience Search rewrite
+- Mass identify-only corpus expansion / Experience Search rewrite _(→ Package Z for small identify-only expansion)_
 - Form 433 / financial-statement interview
 - FAQ ContentPage / Form 9465 wizard tip / guide STEP_TIPS
 - Weakening V/O/Q presenters; replacing U hybrid scoring

@@ -111,6 +111,7 @@ Work packages that enforce this guide (do not treat as “make the app dumber”
 | **W** | Situation / QaThread empty-intel backfill — empty `intelligenceJson` via Package R; intake persist |
 | **X** | Force overwrite ConversationIntelligence re-enrich — parseable snapshots via Package R |
 | **Y** | Authority seed honesty — identify-only CP14/LT11/SFR; thin debt blocks resolution playbooks |
+| **Z** | Identify-only KB expansion — CP503/CP504/wage-income/notice identity + embed backfill path |
 
 Every package must preserve **Pipeline A** (arbitrary IRS/tax questions) and **Pipeline B** (matter engine) as general reasoners — never collapse the product into a single-scenario wizard.
 

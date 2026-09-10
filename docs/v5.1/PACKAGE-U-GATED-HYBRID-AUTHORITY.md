@@ -18,7 +18,7 @@
 - Experience Search vector rewrite
 - LLM re-ranker / chunking overhaul / full RAG rewrite
 - pgvector / external vector DB
-- Broad new KB seed corpus _(→ after Package Y seed honesty)_
+- Broad new KB seed corpus _(→ Package Z identify-only expansion)_
 - Force re-enrich of non-empty Case intel _(→ Package X)_
 
 ## Check
