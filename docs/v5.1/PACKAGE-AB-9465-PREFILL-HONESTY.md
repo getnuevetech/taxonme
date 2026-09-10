@@ -18,6 +18,7 @@
 - Authority KB / Y–Z gates / hybrid retrieval
 - Mass form-prefill redesign for every IRS form
 - Inventing ability-to-pay analysis
+- Lifecycle / FAQ “analysis work” authorship _(→ Package AC)_
 
 ## Check
 

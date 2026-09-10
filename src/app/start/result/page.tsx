@@ -119,7 +119,7 @@ export default async function GuestResultPage({
           <h1 className="mt-3 text-3xl font-extrabold text-slate-900">
             We found {c.issues.length} {c.issues.length === 1 ? "thing" : "things"} worth looking at
           </h1>
-          <p className="mt-2 text-slate-600">Here&apos;s your first result. Create a free account to unlock the full breakdown and your step-by-step plan.</p>
+          <p className="mt-2 text-slate-600">Here&apos;s your first result. Create a free account to save your Situation and unlock the full breakdown as evidence grows.</p>
         </div>
 
         {first && (

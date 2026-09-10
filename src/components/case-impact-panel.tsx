@@ -41,13 +41,13 @@ export async function CaseImpactPanel({
   if (cases.length === 0) {
     return (
       <div className="rounded-2xl border border-slate-200 bg-white px-5 py-5">
-        <h2 className="text-base font-semibold text-slate-900">How this update affects your case</h2>
+        <h2 className="text-base font-semibold text-slate-900">How this update affects your situation</h2>
         <p className="mt-2 text-sm text-slate-600">
-          You don&apos;t have an open case yet. Start one and we can score this update against your situation.
+          You don&apos;t have an open agency Case yet. Start from My situations to relate this update to your tax question, or open a Case when something is already before the IRS.
         </p>
         <div className="mt-4">
-          <ButtonLink href="/app/cases/new" variant="secondary" className="rounded-full">
-            Start a case →
+          <ButtonLink href="/app/situations" variant="secondary" className="rounded-full">
+            My situations →
           </ButtonLink>
         </div>
       </div>

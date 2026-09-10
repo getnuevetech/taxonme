@@ -54,6 +54,7 @@ _(none for −1.8 — see Package J)_
 - **Package Z** — Identify-only KB expansion + embed: `PACKAGE-Z-IDENTIFY-KB-EMBED.md`
 - **Package AA** — FAQ / Form 9465 tip honesty: `PACKAGE-AA-FAQ-9465-TIP-HONESTY.md`
 - **Package AB** — Form 9465 PDF / prefill ÷72 honesty: `PACKAGE-AB-9465-PREFILL-HONESTY.md`
+- **Package AC** — Lifecycle / FAQ authorship honesty: `PACKAGE-AC-LIFECYCLE-AUTHORSHIP-HONESTY.md`
 
 
 ## Check
