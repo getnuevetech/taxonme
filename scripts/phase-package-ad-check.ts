@@ -83,6 +83,24 @@ async function main() {
   assert.match(view, /Prepare Form 9465 request/);
   assert.doesNotMatch(view, /Open the payment plan form|Start the payment plan form/);
 
+  const { normalizeActionPurpose } = await import("../src/lib/case-semantics");
+  assert.equal(
+    normalizeActionPurpose("COMPLETE_FORM_9465 Prepare a payment plan request (Form 9465)"),
+    "PREPARE_FORM_9465_REQUEST",
+  );
+  assert.equal(
+    normalizeActionPurpose("DRAFT_LETTER Evaluate penalty relief options"),
+    "ASSESS_RESOLUTION_OPTIONS",
+  );
+  assert.notEqual(
+    normalizeActionPurpose("COMPLETE_FORM_9465 Prepare a payment plan request (Form 9465)"),
+    normalizeActionPurpose("DRAFT_LETTER Evaluate penalty relief options"),
+  );
+  assert.equal(
+    normalizeActionPurpose("Confirm the resolution with the IRS"),
+    "CONFIRM_IRS_RESOLUTION",
+  );
+
   const fallbackSrc = readFileSync(join(root, "src/lib/ai/fallback.ts"), "utf8");
   assert.match(fallbackSrc, /Package AD/);
   assert.doesNotMatch(fallbackSrc, /common streamlined thresholds/);
