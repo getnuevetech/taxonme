@@ -57,6 +57,7 @@ _(none for −1.8 — see Package J)_
 - **Package AC** — Lifecycle / FAQ authorship honesty: `PACKAGE-AC-LIFECYCLE-AUTHORSHIP-HONESTY.md`
 - **Package AD** — Amount-known path honesty: `PACKAGE-AD-AMOUNT-KNOWN-PATH-HONESTY.md`
 - **Package AE** — Intake goal-chip honesty: `PACKAGE-AE-INTAKE-GOAL-CHIP-HONESTY.md`
+- **Package AF** — Identify-only mid-collection KB (CP501): `PACKAGE-AF-IDENTIFY-CP501-KB.md`
 
 
 ## Check

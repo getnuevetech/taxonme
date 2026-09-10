@@ -117,6 +117,7 @@ Work packages that enforce this guide (do not treat as “make the app dumber”
 | **AC** | Lifecycle / FAQ authorship honesty — Situation-first; no Case-first “full plan” overclaim |
 | **AD** | Amount-known path honesty — no streamlined/9465 push from bare dollar amount alone |
 | **AE** | Intake goal-chip honesty — evidence-first chips; no mechanism nudge into USER_REPORTED goal |
+| **AF** | Identify-only mid-collection KB — CP501 + collection ladder; no resolution playbooks |
 
 Every package must preserve **Pipeline A** (arbitrary IRS/tax questions) and **Pipeline B** (matter engine) as general reasoners — never collapse the product into a single-scenario wizard.
 
