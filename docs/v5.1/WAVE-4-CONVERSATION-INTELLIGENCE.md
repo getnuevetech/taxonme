@@ -60,6 +60,7 @@ _(none for −1.8 — see Package J)_
 - **Package AF** — Identify-only mid-collection KB (CP501): `PACKAGE-AF-IDENTIFY-CP501-KB.md`
 - **Package AG** — Pipeline A evidence-first chrome: `PACKAGE-AG-PIPELINE-A-EVIDENCE-CHROME-HONESTY.md`
 - **Package AH** — Identify-only examination KB (CP2000 / CP3219A): `PACKAGE-AH-IDENTIFY-EXAM-KB.md`
+- **Package AI** — Identify-only Form 12153 / CDP KB: `PACKAGE-AI-IDENTIFY-CDP-12153-KB.md`
 
 
 ## Check

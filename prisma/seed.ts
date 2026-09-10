@@ -795,6 +795,31 @@ async function seedKnowledge() {
       tags: "notice, identify, underreporter, cp2000, cp3219a, examination, evidence",
       content: "Underreporter mail often follows: CP2000 (proposed underreporter changes) → CP3219A (Statutory Notice of Deficiency with a Tax Court petition window). Read the CP code first, then the tax period, proposed amounts, and any respond-by or petition deadline. Wage & Income and Account Transcripts help verify what the IRS used. Knowing the stage is an identify step — do not treat the stage alone as selecting a resolution path, and do not confuse this track with the balance-due collection ladder ending in LT11.",
     },
+    // Package AI — CDP / Form 12153 identify-only. No resolution playbooks; not a filing wizard.
+    {
+      title: "Form 12153 — Request for Collection Due Process hearing",
+      sourceType: "rule",
+      reference: "Form 12153",
+      tags: "form 12153, cdp, collection due process, hearing request, identify, evidence",
+      content:
+        "Form 12153 is the IRS form used to request a Collection Due Process (CDP) hearing — or, when rules allow after the CDP window, an equivalent hearing. It is a hearing-request form identity, not a payment arrangement, settlement, or financial statement. CDP rights are typically offered on a final levy notice such as LT11 / Letter 1058 (or certain lien notices); that notice grants the rights and prints the respond-by window, while Form 12153 is the named request form. Calendar any deadline on the levy or lien notice you actually received, keep that notice with the form identity, and confirm the balance and recent activity on an Account Transcript. This guide identifies the form and the right — it does not walk through completing or filing Form 12153, and it does not choose a resolution path.",
+    },
+    {
+      title: "Collection Due Process (CDP) hearing rights — identify",
+      sourceType: "rule",
+      reference: "CDP hearing rights",
+      tags: "cdp, collection due process, hearing rights, lt11, deadline, identify, evidence",
+      content:
+        "Collection Due Process (CDP) hearing rights let a taxpayer ask IRS Appeals for an independent review of certain collection actions after a qualifying notice — most often a final notice of intent to levy (LT11 / Letter 1058) or a notice of federal tax lien. The printed deadline on that notice is the first evidence to calendar; the CDP request window is generally short (often about 30 days from the notice date). Form 12153 is the named request form for a CDP or equivalent hearing; it is not the levy notice itself. Confirm the notice code, notice date, tax periods, and account position on an Account Transcript before treating any guide as selecting arguments or a balance resolution. This guide identifies CDP rights — it is not a hearing-preparation or form-filing wizard.",
+    },
+    {
+      title: "LT11 notice vs Form 12153 — identify which you have",
+      sourceType: "rule",
+      reference: "LT11 vs Form 12153",
+      tags: "lt11, letter 1058, form 12153, cdp, identify, notice vs form, evidence",
+      content:
+        "An LT11 / Letter 1058 is a final notice of intent to levy that notifies of Collection Due Process (CDP) hearing rights and usually prints a respond-by date. Form 12153 is a separate request form used to ask for a CDP hearing (or an equivalent hearing when rules allow). Holding an LT11 is not the same as having requested a hearing with Form 12153; seeing Form 12153 language is not the same as holding the levy notice that started the deadline. Read the notice code and deadline on any LT11 first, identify whether Form 12153 is the form in question, and confirm the Account Transcript. This guide separates notice identity from form identity — it does not complete the form or select a collection resolution.",
+    },
     {
       title: "Wage and Income transcript — when and why",
       sourceType: "rule",

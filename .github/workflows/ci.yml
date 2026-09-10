@@ -89,3 +89,4 @@ jobs:
       - run: npm run test:package-af
       - run: npm run test:package-ag
       - run: npm run test:package-ah
+      - run: npm run test:package-ai
