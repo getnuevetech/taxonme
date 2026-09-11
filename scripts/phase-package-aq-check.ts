@@ -29,10 +29,10 @@ const AQ_TITLES = [
 ] as const;
 
 const CP90 =
-  "A CP90 is typically an Automated Collection System (ACS) final notice of intent to levy that notifies of Collection Due Process (CDP) hearing rights. It is a final levy-notice identity in the same rights family as LT11 / Letter 1058, not a mid-ladder reminder and not a CP504 urgent warning alone. Calendar any printed deadline on the CP90 you hold, keep the notice, and confirm the balance and recent activity on an Account Transcript. Form 12153 is the named CDP hearing-request form — holding a CP90 is not the same as having filed Form 12153. This guide identifies the notice — it does not walk through completing Form 12153 or choosing a payment path.";
+  "A CP90 is typically an Automated Collection System (ACS) final notice of intent to levy that notifies of Collection Due Process (CDP) hearing rights. It is a final levy-notice identity in the same rights family as LT11 / Letter 1058, not a mid-ladder reminder and not a CP504 urgent warning alone. Calendar any printed deadline on the CP90 you hold, keep the notice, and confirm the balance and recent activity on an Account Transcript. Holding a CP90 is not the same as having already requested a CDP hearing. This guide identifies the notice — it does not walk through requesting a hearing or choosing a payment path.";
 
 const VS_SPLIT =
-  "A CP90 is an ACS final notice of intent to levy that offers Collection Due Process (CDP) hearing rights. An LT11 / Letter 1058 is the field-collection final levy notice in the same CDP-rights family — different letter codes, same need to calendar the printed deadline. A CP504 is an earlier urgent collection / levy-warning notice on the balance-due ladder; it is not by itself the CDP final levy notice. Read the CP/LT code and any respond-by date on the copy you hold, then confirm the Account Transcript. This guide separates CP90, LT11, and CP504 identities — it does not complete Form 12153 or select a collection resolution.";
+  "A CP90 is an ACS final notice of intent to levy that offers Collection Due Process (CDP) hearing rights. An LT11 / Letter 1058 is the field-collection final levy notice in the same CDP-rights family — different letter codes, same need to calendar the printed deadline. A CP504 is an earlier urgent collection / levy-warning notice on the balance-due ladder; it is not by itself the CDP final levy notice. Read the CP/LT code and any respond-by date on the copy you hold, then confirm the Account Transcript. This guide separates CP90, LT11, and CP504 identities — it does not request a CDP hearing or select a collection resolution.";
 
 const IDENTIFY =
   "Most IRS notices print a CP or LT code near the top, a tax period, amounts, and often a respond-by date. Read the code first (for example CP14, CP501, CP503, CP504, CP90, CP2000, CP3219A, LT11, Letter 3172), then the period and printed figures. Keep the notice and calendar any deadline shown. An Account Transcript independently confirms assessments, payments, and recent activity for the same periods. Until the notice code, period, and IRS account position are established, do not treat any guide as selecting a specific resolution path.";
@@ -51,6 +51,7 @@ async function main() {
     assert.ok(block.length > 40, `missing content for ${title}`);
     assert.doesNotMatch(block, PLAYBOOK_RE);
     assert.doesNotMatch(block, WIZARD_RE);
+    assert.doesNotMatch(block, /Form\s*12153/i);
     assert.match(block, /Account Transcript|Calendar|identify|Confirm|CP90/i);
   }
 
