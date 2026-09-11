@@ -105,10 +105,30 @@ export function composeAssistantView(
         type: "paragraph",
         text: "Confirm tax periods and account position on an Account Transcript; calendar any deadline on the Letter 3172 or lien notice you actually received.",
       });
+    } else if (/\bcp\s?-?501\b/i.test(rawMessage)) {
+      // Package AP — identify + evidence (mirror AF seed); early reminder ≠ LT11.
+      sections.push({
+        type: "paragraph",
+        text: "A CP501 is typically an early reminder that a balance remains unpaid after a first balance-due notice such as a CP14. It usually restates tax, penalties, and interest and asks for a response — it is not the final levy notice by itself.",
+      });
+      sections.push({
+        type: "paragraph",
+        text: "Confirm the printed amount, tax period, and any respond-by language. Compare those figures to an Account Transcript. Later reminders in the same series often include CP503 and CP504; LT11 / Letter 1058 is a separate final levy notice.",
+      });
     } else if (/\bcp\s?-?503\b/i.test(rawMessage)) {
       sections.push({
         type: "paragraph",
         text: "An IRS CP503 is a collection reminder notice. It generally means the IRS believes you still owe a balance and is continuing collection contact — it is not the final levy notice by itself.",
+      });
+    } else if (/\bcp\s?-?504\b/i.test(rawMessage)) {
+      // Package AP — identify + evidence (mirror Z seed); urgent levy warning ≠ LT11 CDP.
+      sections.push({
+        type: "paragraph",
+        text: "A CP504 is an urgent collection notice that the IRS may levy if the balance is not addressed. It usually lists the amount due and a short response window — it is not the same as an LT11 / Letter 1058 final levy notice with Collection Due Process hearing rights.",
+      });
+      sections.push({
+        type: "paragraph",
+        text: "Calendar any printed deadline, keep the notice, and confirm the account position on an Account Transcript before sizing a response.",
       });
     } else if (/\b(lt\s?-?11|final\s+notice|intent\s+to\s+levy)\b/i.test(rawMessage)) {
       sections.push({
@@ -133,6 +153,7 @@ export function composeAssistantView(
   } else if (target === "interpret_situation_offer_next_step") {
     const evidenceFirst = intel.strategy.branches.some((b) => b.id === "establish_account_position");
     const noticeExam = /\bcp\s?-?2000\b|\bcp\s?-?3219a\b/i.test(rawMessage);
+    const collectionLadder = /\bcp\s?-?501\b|\bcp\s?-?504\b/i.test(rawMessage);
     const lienNotice = /\bletter\s*3172\b|\bnftl\b|notice of federal tax lien|federal tax lien/i.test(
       rawMessage,
     );
@@ -142,9 +163,11 @@ export function composeAssistantView(
         ? "Thanks for sharing that background. With the amount still unknown, the useful next step is establishing what the IRS currently shows on your account — then any next option can be sized to those facts."
         : noticeExam
           ? "Thanks for sharing that. Start by identifying the notice code, tax period, proposed amounts, and any respond-by or petition deadline — then confirm those figures against transcripts before sizing a response."
-          : lienNotice
-            ? "Thanks for sharing that. Start by confirming it is a lien notice (Letter 3172 / NFTL) rather than a levy notice (LT11), calendar any printed deadline, and confirm the Account Transcript — then any next option can be sized to those facts."
-            : "Thanks for sharing that background. I can help outline payment or relief pathways, explain a notice, or — if something is already before the IRS or a state tax agency — help you track that agency matter.",
+          : collectionLadder
+            ? "Thanks for sharing that. Start by confirming the CP501 or CP504 code, tax period, printed amount, and any respond-by date — then compare those figures to an Account Transcript before sizing a response. A CP504 levy warning is not the same as an LT11 final levy notice."
+            : lienNotice
+              ? "Thanks for sharing that. Start by confirming it is a lien notice (Letter 3172 / NFTL) rather than a levy notice (LT11), calendar any printed deadline, and confirm the Account Transcript — then any next option can be sized to those facts."
+              : "Thanks for sharing that background. I can help outline payment or relief pathways, explain a notice, or — if something is already before the IRS or a state tax agency — help you track that agency matter.",
     });
   } else if (!(intel.strategy.branch_before_clarify && intel.strategy.branches.length)) {
     sections.push({
