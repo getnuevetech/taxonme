@@ -97,3 +97,4 @@ jobs:
       - run: npm run test:package-an
       - run: npm run test:package-ao
       - run: npm run test:package-ap
+      - run: npm run test:package-aq
