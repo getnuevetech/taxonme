@@ -23,7 +23,7 @@ async function main() {
     cp90,
   );
   assert.match(cp90Reply, /CP90|ACS|Automated Collection/i);
-  assert.match(cp90Reply, /Account Transcript|LT11|Letter 1058|CDP|Form 12153/i);
+  assert.match(cp90Reply, /Account Transcript|LT11|Letter 1058|CDP/i);
   assert.doesNotMatch(cp90Reply, PLAYBOOK_RE);
   assert.doesNotMatch(cp90Reply, GENERIC_SHELL_RE);
   assert.doesNotMatch(cp90Reply, /Pathways that usually matter/i);

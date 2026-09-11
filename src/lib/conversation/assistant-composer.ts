@@ -131,14 +131,14 @@ export function composeAssistantView(
         text: "Calendar any printed deadline, keep the notice, and confirm the account position on an Account Transcript before sizing a response.",
       });
     } else if (/\bcp\s?-?90\b/i.test(rawMessage)) {
-      // Package AR — identify + evidence (mirror AQ seed); ACS final levy ≠ CP504; ≠ Form 12153.
+      // Package AR — identify + evidence (mirror AQ seed); ACS final levy ≠ CP504.
       sections.push({
         type: "paragraph",
         text: "A CP90 is typically an Automated Collection System (ACS) final notice of intent to levy that notifies of Collection Due Process (CDP) hearing rights. It is in the same rights family as LT11 / Letter 1058 — different letter codes — and it is not a CP504 urgent warning alone.",
       });
       sections.push({
         type: "paragraph",
-        text: "Calendar any printed deadline on the CP90 you hold, keep the notice, and confirm the balance on an Account Transcript. Form 12153 is the named CDP hearing-request form — holding a CP90 is not the same as having filed Form 12153.",
+        text: "Calendar any printed deadline on the CP90 you hold, keep the notice, and confirm the balance on an Account Transcript. Holding a CP90 is not the same as having already requested a CDP hearing.",
       });
     } else if (/\b(lt\s?-?11|final\s+notice|intent\s+to\s+levy)\b/i.test(rawMessage)) {
       sections.push({
