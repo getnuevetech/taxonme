@@ -18,7 +18,8 @@
 - Mass FAQ / Y playbook gate reopen
 - Reopening AF/Z KB seeds or AM lien chrome
 - Changing `canSurfaceResolutionPathways`
-- Next identify-KB hole _(→ Package AQ)_
+- Next identify-KB hole _(→ Package AQ — CP90)_
+- Pipeline A composer CP90 chrome _(→ Package AR)_
 
 ## Check
 

@@ -68,6 +68,7 @@ _(none for −1.8 — see Package J)_
 - **Package AN** — Ability-to-pay vs 433 depth labeling: `PACKAGE-AN-ATP-433-DEPTH-LABELING-HONESTY.md`
 - **Package AO** — Fallback/Case notice agree–disagree honesty: `PACKAGE-AO-FALLBACK-NOTICE-AGREE-DISAGREE-HONESTY.md`
 - **Package AP** — CP501/CP504 composer honesty: `PACKAGE-AP-CP501-CP504-COMPOSER-HONESTY.md`
+- **Package AQ** — Identify-only CP90 / ACS final-levy KB: `PACKAGE-AQ-IDENTIFY-CP90-KB.md`
 
 
 ## Check

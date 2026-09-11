@@ -845,6 +845,23 @@ async function seedKnowledge() {
       content:
         "Letter 3172 and the Notice of Federal Tax Lien (NFTL) concern lien filing and related hearing-notice identity. An LT11 / Letter 1058 is a final notice of intent to levy that offers Collection Due Process (CDP) rights tied to levy action. Form 12153 is a separate request form used to ask for a CDP hearing (or an equivalent hearing when rules allow) after a qualifying levy or lien notice. Holding Letter 3172 or an NFTL is not the same as holding an LT11, and none of those is the same as having requested a hearing with Form 12153. Read the letter or notice code and any printed deadline first, then confirm the Account Transcript. This guide separates lien, levy, and form identities — it does not complete Form 12153 or select a collection resolution.",
     },
+    // Package AQ — CP90 / ACS final-levy identify-only. No resolution playbooks; do not reopen Y LT11.
+    {
+      title: "CP90 — Final notice of intent to levy (ACS)",
+      sourceType: "notice_guide",
+      reference: "CP90",
+      tags: "notice, cp90, levy, acs, collection due process, final notice, identify, evidence",
+      content:
+        "A CP90 is typically an Automated Collection System (ACS) final notice of intent to levy that notifies of Collection Due Process (CDP) hearing rights. It is a final levy-notice identity in the same rights family as LT11 / Letter 1058, not a mid-ladder reminder and not a CP504 urgent warning alone. Calendar any printed deadline on the CP90 you hold, keep the notice, and confirm the balance and recent activity on an Account Transcript. Form 12153 is the named CDP hearing-request form — holding a CP90 is not the same as having filed Form 12153. This guide identifies the notice — it does not walk through completing Form 12153 or choosing a payment path.",
+    },
+    {
+      title: "CP90 vs LT11 / Letter 1058 vs CP504 — identify which you have",
+      sourceType: "rule",
+      reference: "CP90 vs LT11 vs CP504",
+      tags: "cp90, lt11, letter 1058, cp504, levy, cdp, identify, notice identity, evidence",
+      content:
+        "A CP90 is an ACS final notice of intent to levy that offers Collection Due Process (CDP) hearing rights. An LT11 / Letter 1058 is the field-collection final levy notice in the same CDP-rights family — different letter codes, same need to calendar the printed deadline. A CP504 is an earlier urgent collection / levy-warning notice on the balance-due ladder; it is not by itself the CDP final levy notice. Read the CP/LT code and any respond-by date on the copy you hold, then confirm the Account Transcript. This guide separates CP90, LT11, and CP504 identities — it does not complete Form 12153 or select a collection resolution.",
+    },
     {
       title: "Wage and Income transcript — when and why",
       sourceType: "rule",
@@ -857,7 +874,7 @@ async function seedKnowledge() {
       sourceType: "rule",
       reference: "Notice identity",
       tags: "notice, identify, cp, lt, deadline, evidence",
-      content: "Most IRS notices print a CP or LT code near the top, a tax period, amounts, and often a respond-by date. Read the code first (for example CP14, CP501, CP503, CP504, CP2000, CP3219A, LT11, Letter 3172), then the period and printed figures. Keep the notice and calendar any deadline shown. An Account Transcript independently confirms assessments, payments, and recent activity for the same periods. Until the notice code, period, and IRS account position are established, do not treat any guide as selecting a specific resolution path.",
+      content: "Most IRS notices print a CP or LT code near the top, a tax period, amounts, and often a respond-by date. Read the code first (for example CP14, CP501, CP503, CP504, CP90, CP2000, CP3219A, LT11, Letter 3172), then the period and printed figures. Keep the notice and calendar any deadline shown. An Account Transcript independently confirms assessments, payments, and recent activity for the same periods. Until the notice code, period, and IRS account position are established, do not treat any guide as selecting a specific resolution path.",
     },
     {
       title: "IRS account transcript transaction codes",
