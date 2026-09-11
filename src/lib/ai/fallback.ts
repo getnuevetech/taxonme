@@ -452,19 +452,20 @@ export async function fallbackAnalyze(
         : `Notice ${code} defines what the IRS wants and by when. ${hasNoticeDoc ? "The notice is on file; its printed deadline and amount govern the response." : "Uploading the notice pins down the deadline and amount that govern the response."}`,
       still_unclear: [
         hasNoticeDoc ? "The response deadline printed on your copy (top right) — confirm and add it to your deadlines" : "The exact deadline printed on your copy of the notice",
-        "Whether you agree, partially agree, or disagree with what the notice states",
+        // Package AO: identify + evidence before sizing a written response (no bare agree/disagree menu).
+        "Whether the notice's printed amounts match your return and Account Transcript before sizing a written response",
       ],
       confidence: kb ? "medium" : "low",
       priority: urgent ? "urgent" : "high",
       state: urgent ? "urgent" : "action_needed",
-      next_action: "DRAFT_LETTER",
+      next_action: hasNoticeDoc ? "DRAFT_LETTER" : evidenceGuidance(primaryYear).action,
       alternative_action: hasNoticeDoc ? "" : "Photograph and upload the notice — its number, amount, and deadline are printed on it.",
       irs_basis: kb ? kb.reference : "",
       analysis_outline: [
         { heading: "Your situation", detail: `You referenced IRS notice ${code}${primaryYear ? ` for ${yearText}` : ""}. Notice types define exactly what the IRS wants and by when — identifying the code already tells us most of the story.` },
         { heading: "Tax rules", detail: kb ? `Rule: ${kb.content.slice(0, 450)} Why it matters to your case: the notice's printed deadline and stated amount govern your response options.` : `This notice code isn't in our reference library yet — the notice document itself will establish its type, amount, and deadline.`, source: kb ? kb.reference : "" },
         { heading: "Your evidence", detail: hasNoticeDoc ? "The notice itself is on file — good. Its printed deadline and amount govern the response." : "The notice document isn't uploaded yet. A phone photo is enough — the notice number, amount, and deadline are printed on it." },
-        { heading: "Our conclusion", detail: `${urgent ? "This is a FINAL collection notice — the response window (usually 30 days) protects your appeal rights, so treat the deadline as hard." : "You can agree, partially agree, or disagree."} Disagreement must be in writing before the deadline, with supporting documents attached.` },
+        { heading: "Our conclusion", detail: `${urgent ? "This is a FINAL collection notice — the response window (usually 30 days) protects your appeal rights, so treat the deadline as hard." : "Identify the notice code, printed amount, and respond-by date; compare those figures to your Account Transcript (and return or Wage & Income when relevant) before sizing a written response."} Any written response must be sent before the printed deadline, with supporting documents attached.` },
         { heading: "Your next move", detail: hasNoticeDoc ? "Draft your response letter now, attach your supporting documents, and mail before the printed deadline (certified mail recommended)." : "Photograph and upload the notice, confirm the deadline into your reminders, then draft the response letter." },
       ],
     });
@@ -584,11 +585,12 @@ export async function fallbackAnalyze(
     hasTranscript,
     unfiledDominant: unfiledIntent,
   });
-  if (noticeCodes.length > 0) {
+  if (noticeCodes.length > 0 && haveKinds.has("notice")) {
+    // Package AO: draft-letter path only when the notice document is on file.
     pathSteps.push({
       title: "Draft your response letter",
       description:
-        "If you disagree with a notice, the IRS expects a written response with supporting documents. Drafting a letter is not the same as IRS acceptance.",
+        "A written response with supporting documents may be required before the printed deadline. Confirm the notice figures against your Account Transcript first. Drafting a letter is not the same as IRS acceptance.",
       action_key: "DRAFT_LETTER",
     });
   }
@@ -613,15 +615,15 @@ export async function fallbackAnalyze(
     });
   }
   pathSteps = filterResolutionPathSteps(pathSteps, eligibility);
-  // Package AD: "confirm resolution" only after a real response/payment-prep step exists — not amount alone.
+  // Package AD/AO: "confirm resolution" only after a real response/payment-prep step exists —
+  // not from a bare notice code mention without the notice on file.
   if (
     pathSteps.some(
       (s) =>
         s.action_key === "COMPLETE_FORM_9465" ||
         s.action_key === "DRAFT_LETTER" ||
         /penalty relief/i.test(s.title),
-    ) ||
-    noticeCodes.length > 0
+    )
   ) {
     pathSteps.push({
       title: "Confirm the resolution with the IRS",

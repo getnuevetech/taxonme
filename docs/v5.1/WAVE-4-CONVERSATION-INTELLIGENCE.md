@@ -66,6 +66,7 @@ _(none for −1.8 — see Package J)_
 - **Package AL** — Identify-only Letter 3172 / NFTL KB: `PACKAGE-AL-IDENTIFY-NFTL-3172-KB.md`
 - **Package AM** — Pipeline A lien/NFTL chrome: `PACKAGE-AM-PIPELINE-A-LIEN-NFTL-CHROME-HONESTY.md`
 - **Package AN** — Ability-to-pay vs 433 depth labeling: `PACKAGE-AN-ATP-433-DEPTH-LABELING-HONESTY.md`
+- **Package AO** — Fallback/Case notice agree–disagree honesty: `PACKAGE-AO-FALLBACK-NOTICE-AGREE-DISAGREE-HONESTY.md`
 
 
 ## Check
