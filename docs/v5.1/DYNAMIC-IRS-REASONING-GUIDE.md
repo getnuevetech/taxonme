@@ -127,6 +127,7 @@ Work packages that enforce this guide (do not treat as “make the app dumber”
 | **AM** | Pipeline A lien/NFTL chrome — Letter 3172 identify prose; no pathway openers on lien notices |
 | **AN** | Ability-to-pay vs 433 depth labeling — forms/home/CNC chrome; not a full CIS interview |
 | **AO** | Fallback/Case notice agree–disagree honesty — evidence framing; draft letter gated on notice upload |
+| **AP** | CP501/CP504 composer honesty — identify + evidence prose; no generic notice shell |
 
 Every package must preserve **Pipeline A** (arbitrary IRS/tax questions) and **Pipeline B** (matter engine) as general reasoners — never collapse the product into a single-scenario wizard.
 
