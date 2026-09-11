@@ -130,6 +130,16 @@ export function composeAssistantView(
         type: "paragraph",
         text: "Calendar any printed deadline, keep the notice, and confirm the account position on an Account Transcript before sizing a response.",
       });
+    } else if (/\bcp\s?-?90\b/i.test(rawMessage)) {
+      // Package AR — identify + evidence (mirror AQ seed); ACS final levy ≠ CP504; ≠ Form 12153.
+      sections.push({
+        type: "paragraph",
+        text: "A CP90 is typically an Automated Collection System (ACS) final notice of intent to levy that notifies of Collection Due Process (CDP) hearing rights. It is in the same rights family as LT11 / Letter 1058 — different letter codes — and it is not a CP504 urgent warning alone.",
+      });
+      sections.push({
+        type: "paragraph",
+        text: "Calendar any printed deadline on the CP90 you hold, keep the notice, and confirm the balance on an Account Transcript. Form 12153 is the named CDP hearing-request form — holding a CP90 is not the same as having filed Form 12153.",
+      });
     } else if (/\b(lt\s?-?11|final\s+notice|intent\s+to\s+levy)\b/i.test(rawMessage)) {
       sections.push({
         type: "paragraph",
@@ -154,6 +164,7 @@ export function composeAssistantView(
     const evidenceFirst = intel.strategy.branches.some((b) => b.id === "establish_account_position");
     const noticeExam = /\bcp\s?-?2000\b|\bcp\s?-?3219a\b/i.test(rawMessage);
     const collectionLadder = /\bcp\s?-?501\b|\bcp\s?-?504\b/i.test(rawMessage);
+    const finalLevyAcs = /\bcp\s?-?90\b/i.test(rawMessage);
     const lienNotice = /\bletter\s*3172\b|\bnftl\b|notice of federal tax lien|federal tax lien/i.test(
       rawMessage,
     );
@@ -165,9 +176,11 @@ export function composeAssistantView(
           ? "Thanks for sharing that. Start by identifying the notice code, tax period, proposed amounts, and any respond-by or petition deadline — then confirm those figures against transcripts before sizing a response."
           : collectionLadder
             ? "Thanks for sharing that. Start by confirming the CP501 or CP504 code, tax period, printed amount, and any respond-by date — then compare those figures to an Account Transcript before sizing a response. A CP504 levy warning is not the same as an LT11 final levy notice."
-            : lienNotice
-              ? "Thanks for sharing that. Start by confirming it is a lien notice (Letter 3172 / NFTL) rather than a levy notice (LT11), calendar any printed deadline, and confirm the Account Transcript — then any next option can be sized to those facts."
-              : "Thanks for sharing that background. I can help outline payment or relief pathways, explain a notice, or — if something is already before the IRS or a state tax agency — help you track that agency matter.",
+            : finalLevyAcs
+              ? "Thanks for sharing that. Start by confirming it is a CP90 ACS final levy notice (CDP rights family with LT11 / Letter 1058, not a CP504 warning alone), calendar any printed deadline, and confirm the Account Transcript — then any next option can be sized to those facts."
+              : lienNotice
+                ? "Thanks for sharing that. Start by confirming it is a lien notice (Letter 3172 / NFTL) rather than a levy notice (LT11), calendar any printed deadline, and confirm the Account Transcript — then any next option can be sized to those facts."
+                : "Thanks for sharing that background. I can help outline payment or relief pathways, explain a notice, or — if something is already before the IRS or a state tax agency — help you track that agency matter.",
     });
   } else if (!(intel.strategy.branch_before_clarify && intel.strategy.branches.length)) {
     sections.push({
