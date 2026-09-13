@@ -140,6 +140,26 @@ export function composeAssistantView(
         type: "paragraph",
         text: "Calendar any printed deadline on the CP90 you hold, keep the notice, and confirm the balance on an Account Transcript. Holding a CP90 is not the same as having already requested a CDP hearing.",
       });
+    } else if (/\bcp\s?-?515\b/i.test(rawMessage)) {
+      // Package AT — identify + evidence (mirror AS seed); unfiled notice ≠ SFR; ≠ balance-due ladder.
+      sections.push({
+        type: "paragraph",
+        text: "A CP515 is typically an IRS notice that a required tax return appears unfiled for a listed tax period. It asks you to file the return or explain why no return is due — it is not a balance-due collection ladder notice (such as CP14 or CP504) and not by itself a Substitute for Return (SFR) assessment.",
+      });
+      sections.push({
+        type: "paragraph",
+        text: "Confirm the printed tax period and any respond-by language. Pull an Account Transcript and, when income is unclear, a Wage & Income transcript for the same period before sizing a response.",
+      });
+    } else if (/\bcp\s?-?518\b/i.test(rawMessage)) {
+      // Package AT — identify + evidence (mirror AS seed); further unfiled notice ≠ LT11/CP90; ≠ SFR.
+      sections.push({
+        type: "paragraph",
+        text: "A CP518 is typically a further IRS notice that a required tax return still appears unfiled after earlier contact such as a CP515. It remains an unfiled-return notice identity — not a final levy notice (LT11 / CP90) and not the same as an SFR assessment under IRC 6020(b).",
+      });
+      sections.push({
+        type: "paragraph",
+        text: "Calendar any printed deadline, keep the notice, and confirm filing and assessment activity on an Account Transcript for that period before sizing a response.",
+      });
     } else if (/\b(lt\s?-?11|final\s+notice|intent\s+to\s+levy)\b/i.test(rawMessage)) {
       sections.push({
         type: "paragraph",
@@ -165,6 +185,7 @@ export function composeAssistantView(
     const noticeExam = /\bcp\s?-?2000\b|\bcp\s?-?3219a\b/i.test(rawMessage);
     const collectionLadder = /\bcp\s?-?501\b|\bcp\s?-?504\b/i.test(rawMessage);
     const finalLevyAcs = /\bcp\s?-?90\b/i.test(rawMessage);
+    const unfiledReturn = /\bcp\s?-?515\b|\bcp\s?-?518\b/i.test(rawMessage);
     const lienNotice = /\bletter\s*3172\b|\bnftl\b|notice of federal tax lien|federal tax lien/i.test(
       rawMessage,
     );
@@ -178,9 +199,11 @@ export function composeAssistantView(
             ? "Thanks for sharing that. Start by confirming the CP501 or CP504 code, tax period, printed amount, and any respond-by date — then compare those figures to an Account Transcript before sizing a response. A CP504 levy warning is not the same as an LT11 final levy notice."
             : finalLevyAcs
               ? "Thanks for sharing that. Start by confirming it is a CP90 ACS final levy notice (CDP rights family with LT11 / Letter 1058, not a CP504 warning alone), calendar any printed deadline, and confirm the Account Transcript — then any next option can be sized to those facts."
-              : lienNotice
-                ? "Thanks for sharing that. Start by confirming it is a lien notice (Letter 3172 / NFTL) rather than a levy notice (LT11), calendar any printed deadline, and confirm the Account Transcript — then any next option can be sized to those facts."
-                : "Thanks for sharing that background. I can help outline payment or relief pathways, explain a notice, or — if something is already before the IRS or a state tax agency — help you track that agency matter.",
+              : unfiledReturn
+                ? "Thanks for sharing that. Start by confirming the CP515 or CP518 unfiled-return notice, the tax period, and any respond-by date — then check the Account Transcript for filing or SFR assessment activity before sizing a response. A CP515/CP518 is not the same as an SFR assessment by itself."
+                : lienNotice
+                  ? "Thanks for sharing that. Start by confirming it is a lien notice (Letter 3172 / NFTL) rather than a levy notice (LT11), calendar any printed deadline, and confirm the Account Transcript — then any next option can be sized to those facts."
+                  : "Thanks for sharing that background. I can help outline payment or relief pathways, explain a notice, or — if something is already before the IRS or a state tax agency — help you track that agency matter.",
     });
   } else if (!(intel.strategy.branch_before_clarify && intel.strategy.branches.length)) {
     sections.push({
