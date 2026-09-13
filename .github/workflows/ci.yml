@@ -99,3 +99,4 @@ jobs:
       - run: npm run test:package-ap
       - run: npm run test:package-aq
       - run: npm run test:package-ar
+      - run: npm run test:package-as

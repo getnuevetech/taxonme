@@ -862,6 +862,31 @@ async function seedKnowledge() {
       content:
         "A CP90 is an ACS final notice of intent to levy that offers Collection Due Process (CDP) hearing rights. An LT11 / Letter 1058 is the field-collection final levy notice in the same CDP-rights family — different letter codes, same need to calendar the printed deadline. A CP504 is an earlier urgent collection / levy-warning notice on the balance-due ladder; it is not by itself the CDP final levy notice. Read the CP/LT code and any respond-by date on the copy you hold, then confirm the Account Transcript. This guide separates CP90, LT11, and CP504 identities — it does not request a CDP hearing or select a collection resolution.",
     },
+    // Package AS — CP515 / CP518 unfiled-return identify-only. No resolution playbooks; do not reopen Y SFR.
+    {
+      title: "CP515 — Request for tax return (unfiled)",
+      sourceType: "notice_guide",
+      reference: "CP515",
+      tags: "notice, cp515, unfiled, tax return, delinquency, identify, evidence",
+      content:
+        "A CP515 is typically an IRS notice that a required tax return appears unfiled for a listed tax period. It asks you to file the return or explain why no return is due. It is an unfiled-return notice identity — not a balance-due collection ladder notice (such as CP14 or CP504) and not by itself a Substitute for Return (SFR) assessment. Confirm the printed tax period and any respond-by language on the notice. Pull an Account Transcript and, when income is unclear, a Wage & Income transcript for the same period. This guide identifies the notice — it does not choose a filing, payment, or relief path.",
+    },
+    {
+      title: "CP518 — Further unfiled-return notice",
+      sourceType: "notice_guide",
+      reference: "CP518",
+      tags: "notice, cp518, unfiled, tax return, delinquency, identify, evidence",
+      content:
+        "A CP518 is typically a further IRS notice that a required tax return still appears unfiled after earlier contact such as a CP515. It restates the tax period and urges a response. It remains an unfiled-return notice identity — not a final levy notice (LT11 / CP90) and not the same as an SFR assessment under IRC 6020(b). Calendar any printed deadline, keep the notice, and confirm filing and assessment activity on an Account Transcript for that period. This guide identifies the notice — it does not choose a filing, payment, or relief path.",
+    },
+    {
+      title: "CP515 / CP518 vs Substitute for Return (SFR) — identify which you have",
+      sourceType: "rule",
+      reference: "CP515 vs CP518 vs SFR",
+      tags: "cp515, cp518, sfr, substitute for return, unfiled, identify, notice identity, evidence",
+      content:
+        "CP515 and CP518 are unfiled-return notices: the IRS believes a required return is missing for a tax period and asks for the return or an explanation. A Substitute for Return (SFR) under IRC 6020(b) is a different identity — an IRS-prepared return that can create an assessment when the taxpayer did not file. Holding a CP515 or CP518 is not the same as having an SFR assessment on the Account Transcript. Read the CP code and tax period on the notice you hold, then confirm whether an SFR or original return posting appears on the Account Transcript. This guide separates unfiled-return notice identity from SFR assessment identity — it does not select a filing or collection resolution.",
+    },
     {
       title: "Wage and Income transcript — when and why",
       sourceType: "rule",
@@ -874,7 +899,7 @@ async function seedKnowledge() {
       sourceType: "rule",
       reference: "Notice identity",
       tags: "notice, identify, cp, lt, deadline, evidence",
-      content: "Most IRS notices print a CP or LT code near the top, a tax period, amounts, and often a respond-by date. Read the code first (for example CP14, CP501, CP503, CP504, CP90, CP2000, CP3219A, LT11, Letter 3172), then the period and printed figures. Keep the notice and calendar any deadline shown. An Account Transcript independently confirms assessments, payments, and recent activity for the same periods. Until the notice code, period, and IRS account position are established, do not treat any guide as selecting a specific resolution path.",
+      content: "Most IRS notices print a CP or LT code near the top, a tax period, amounts, and often a respond-by date. Read the code first (for example CP14, CP501, CP503, CP504, CP90, CP515, CP518, CP2000, CP3219A, LT11, Letter 3172), then the period and printed figures. Keep the notice and calendar any deadline shown. An Account Transcript independently confirms assessments, payments, and recent activity for the same periods. Until the notice code, period, and IRS account position are established, do not treat any guide as selecting a specific resolution path.",
     },
     {
       title: "IRS account transcript transaction codes",
