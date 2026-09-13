@@ -71,6 +71,7 @@ _(none for −1.8 — see Package J)_
 - **Package AQ** — Identify-only CP90 / ACS final-levy KB: `PACKAGE-AQ-IDENTIFY-CP90-KB.md`
 - **Package AR** — CP90 composer honesty: `PACKAGE-AR-CP90-COMPOSER-HONESTY.md`
 - **Package AS** — Identify-only CP515/CP518 unfiled-return KB: `PACKAGE-AS-IDENTIFY-CP515-KB.md`
+- **Package AT** — CP515/CP518 composer honesty: `PACKAGE-AT-CP515-COMPOSER-HONESTY.md`
 
 
 ## Check

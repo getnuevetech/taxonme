@@ -30,6 +30,7 @@
 - Reopening Y SFR / AF ladder / AQ CP90 seed prose
 - FAQ / Form 9465 / intake chips
 - Pipeline A composer CP515/CP518 chrome _(→ Package AT)_
+- Next identify-KB hole after AT _(→ Package AU)_
 - Mass FAQ / Y playbook gate reopen
 - Changing `canSurfaceResolutionPathways` or `RESOLUTION_PLAYBOOK_RE`
 

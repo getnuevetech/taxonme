@@ -131,6 +131,7 @@ Work packages that enforce this guide (do not treat as “make the app dumber”
 | **AQ** | Identify-only CP90 / ACS final-levy KB — CP90 vs LT11 vs CP504; no resolution playbooks |
 | **AR** | CP90 composer honesty — ACS final-levy identify prose; no generic notice shell |
 | **AS** | Identify-only CP515/CP518 unfiled-return KB — vs SFR; no resolution playbooks |
+| **AT** | CP515/CP518 composer honesty — unfiled-return identify prose; no generic notice shell |
 
 Every package must preserve **Pipeline A** (arbitrary IRS/tax questions) and **Pipeline B** (matter engine) as general reasoners — never collapse the product into a single-scenario wizard.
 
