@@ -887,6 +887,23 @@ async function seedKnowledge() {
       content:
         "CP515 and CP518 are unfiled-return notices: the IRS believes a required return is missing for a tax period and asks for the return or an explanation. A Substitute for Return (SFR) under IRC 6020(b) is a different identity — an IRS-prepared return that can create an assessment when the taxpayer did not file. Holding a CP515 or CP518 is not the same as having an SFR assessment on the Account Transcript. Read the CP code and tax period on the notice you hold, then confirm whether an SFR or original return posting appears on the Account Transcript. This guide separates unfiled-return notice identity from SFR assessment identity — it does not select a filing or collection resolution.",
     },
+    // Package AU — CP2501 underreporter soft-notice identify-only. No resolution playbooks; do not reopen AH.
+    {
+      title: "CP2501 — Underreporter soft notice",
+      sourceType: "notice_guide",
+      reference: "CP2501",
+      tags: "notice, cp2501, underreporter, examination, soft notice, identify, evidence",
+      content:
+        "A CP2501 is typically an earlier underreporter contact: the IRS compared third-party payer information to the return and asks you to review a possible mismatch before a formal CP2000 proposed-adjustment notice. It is a soft underreporter-notice identity — not a bill by itself, not a field audit, and not a Statutory Notice of Deficiency (CP3219A). Confirm the printed tax period, proposed figures if any, and any respond-by language. Compare those figures to a Wage & Income transcript and confirm account activity on an Account Transcript. This guide identifies the notice — it does not choose a payment or relief path.",
+    },
+    {
+      title: "CP2501 vs CP2000 vs CP3219A — identify which you have",
+      sourceType: "rule",
+      reference: "CP2501 vs CP2000 vs CP3219A",
+      tags: "cp2501, cp2000, cp3219a, underreporter, examination, identify, notice identity, evidence",
+      content:
+        "A CP2501 is typically an earlier soft underreporter notice asking you to review a possible payer-information mismatch. A CP2000 is a proposed underreporter adjustment notice with proposed changes — still not a bill by itself. A CP3219A is a Statutory Notice of Deficiency that generally opens a limited Tax Court petition window — calendar any printed petition deadline. Read the CP code and tax period on the copy you hold, then confirm figures on Wage & Income and Account Transcripts. This guide separates CP2501, CP2000, and CP3219A identities — it does not select a response or collection resolution.",
+    },
     {
       title: "Wage and Income transcript — when and why",
       sourceType: "rule",
@@ -899,7 +916,7 @@ async function seedKnowledge() {
       sourceType: "rule",
       reference: "Notice identity",
       tags: "notice, identify, cp, lt, deadline, evidence",
-      content: "Most IRS notices print a CP or LT code near the top, a tax period, amounts, and often a respond-by date. Read the code first (for example CP14, CP501, CP503, CP504, CP90, CP515, CP518, CP2000, CP3219A, LT11, Letter 3172), then the period and printed figures. Keep the notice and calendar any deadline shown. An Account Transcript independently confirms assessments, payments, and recent activity for the same periods. Until the notice code, period, and IRS account position are established, do not treat any guide as selecting a specific resolution path.",
+      content: "Most IRS notices print a CP or LT code near the top, a tax period, amounts, and often a respond-by date. Read the code first (for example CP14, CP501, CP503, CP504, CP90, CP515, CP518, CP2501, CP2000, CP3219A, LT11, Letter 3172), then the period and printed figures. Keep the notice and calendar any deadline shown. An Account Transcript independently confirms assessments, payments, and recent activity for the same periods. Until the notice code, period, and IRS account position are established, do not treat any guide as selecting a specific resolution path.",
     },
     {
       title: "IRS account transcript transaction codes",
