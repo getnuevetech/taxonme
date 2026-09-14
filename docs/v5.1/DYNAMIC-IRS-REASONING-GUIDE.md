@@ -133,6 +133,7 @@ Work packages that enforce this guide (do not treat as “make the app dumber”
 | **AS** | Identify-only CP515/CP518 unfiled-return KB — vs SFR; no resolution playbooks |
 | **AT** | CP515/CP518 composer honesty — unfiled-return identify prose; no generic notice shell |
 | **AU** | Identify-only CP2501 underreporter soft-notice KB — vs CP2000/CP3219A; no resolution playbooks |
+| **AV** | CP2501 composer honesty — soft underreporter identify prose; no generic notice shell |
 
 Every package must preserve **Pipeline A** (arbitrary IRS/tax questions) and **Pipeline B** (matter engine) as general reasoners — never collapse the product into a single-scenario wizard.
 

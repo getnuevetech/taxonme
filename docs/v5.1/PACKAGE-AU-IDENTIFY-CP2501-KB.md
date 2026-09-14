@@ -31,6 +31,7 @@
 - Reopening AH CP2000 / CP3219A / underreporter ladder seed prose
 - FAQ / Form 9465 / intake chips
 - Pipeline A composer CP2501 chrome _(→ Package AV)_
+- Next identify-KB hole after AV _(→ Package AW)_
 - Mass FAQ / Y playbook gate reopen
 - Changing `canSurfaceResolutionPathways` or `RESOLUTION_PLAYBOOK_RE`
 
