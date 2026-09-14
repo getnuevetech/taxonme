@@ -740,8 +740,10 @@ async function seedKnowledge() {
       title: "CP49 — Refund applied to other taxes",
       sourceType: "notice_guide",
       reference: "CP49",
-      tags: "refund, offset, applied, prior year",
-      content: "A CP49 notice tells the taxpayer that all or part of an expected refund was applied (offset) to another federal tax debt from a different tax year. The notice shows which year the refund was applied to and any remaining refund. If the taxpayer disagrees with the underlying debt, they should review the account transcript for the year in question. Refunds can also be offset for state taxes, child support, or federal student loans through the Treasury Offset Program (those generate a different notice from the Bureau of the Fiscal Service).",
+      tags: "notice, cp49, refund, offset, federal tax, identify, evidence",
+      // Package AW — harden identify-only; federal-tax offset ≠ TOP.
+      content:
+        "A CP49 tells you that all or part of an expected federal tax refund was applied (offset) to another federal tax debt — often a different tax year. It usually shows which period received the credit and any remaining refund. Confirm the printed periods and amounts on the notice, then compare Account Transcript activity (often including a credit transfer such as TC 826) for both the refund year and the year that received the offset. A CP49 is an IRS federal-tax offset notice identity — not a Treasury Offset Program (TOP) notice for non-IRS debts. This guide identifies the notice — it does not choose a payment or relief path.",
     },
     {
       title: "LT11 / Letter 1058 — Final notice of intent to levy",
@@ -904,6 +906,23 @@ async function seedKnowledge() {
       content:
         "A CP2501 is typically an earlier soft underreporter notice asking you to review a possible payer-information mismatch. A CP2000 is a proposed underreporter adjustment notice with proposed changes — still not a bill by itself. A CP3219A is a Statutory Notice of Deficiency that generally opens a limited Tax Court petition window — calendar any printed petition deadline. Read the CP code and tax period on the copy you hold, then confirm figures on Wage & Income and Account Transcripts. This guide separates CP2501, CP2000, and CP3219A identities — it does not select a response or collection resolution.",
     },
+    // Package AW — TOP refund-offset identify-only. No resolution playbooks.
+    {
+      title: "Treasury Offset Program (TOP) — refund offset identity",
+      sourceType: "rule",
+      reference: "TOP refund offset",
+      tags: "top, treasury offset program, refund, offset, fiscal service, identify, evidence",
+      content:
+        "The Treasury Offset Program (TOP) can apply a federal tax refund to certain non-IRS debts such as past-due child support, state income tax, or federal student loans. TOP offsets are administered through the Bureau of the Fiscal Service and typically use a Fiscal Service notice — not an IRS CP49. Confirm what debt the Fiscal Service notice lists, then confirm IRS Account Transcript activity for the refund year to see whether an IRS federal-tax offset (CP49 / TC 826) also occurred. This guide identifies TOP offset identity — it does not choose a payment or relief path.",
+    },
+    {
+      title: "CP49 vs TOP — identify which offset you have",
+      sourceType: "rule",
+      reference: "CP49 vs TOP",
+      tags: "cp49, top, treasury offset program, refund, offset, identify, notice identity, evidence",
+      content:
+        "A CP49 is an IRS notice that a federal tax refund was applied to another federal tax liability. A TOP offset is a Bureau of the Fiscal Service action applying a refund to certain non-IRS debts (for example state tax, child support, or federal student loans) and uses a different notice. Holding a CP49 is not the same as receiving a TOP Fiscal Service notice, and either can reduce an expected refund. Read the notice issuer and debt description first, then confirm the refund year on an Account Transcript. This guide separates CP49 and TOP identities — it does not select a collection resolution.",
+    },
     {
       title: "Wage and Income transcript — when and why",
       sourceType: "rule",
@@ -916,7 +935,7 @@ async function seedKnowledge() {
       sourceType: "rule",
       reference: "Notice identity",
       tags: "notice, identify, cp, lt, deadline, evidence",
-      content: "Most IRS notices print a CP or LT code near the top, a tax period, amounts, and often a respond-by date. Read the code first (for example CP14, CP501, CP503, CP504, CP90, CP515, CP518, CP2501, CP2000, CP3219A, LT11, Letter 3172), then the period and printed figures. Keep the notice and calendar any deadline shown. An Account Transcript independently confirms assessments, payments, and recent activity for the same periods. Until the notice code, period, and IRS account position are established, do not treat any guide as selecting a specific resolution path.",
+      content: "Most IRS notices print a CP or LT code near the top, a tax period, amounts, and often a respond-by date. Read the code first (for example CP14, CP49, CP501, CP503, CP504, CP90, CP515, CP518, CP2501, CP2000, CP3219A, LT11, Letter 3172), then the period and printed figures. Keep the notice and calendar any deadline shown. An Account Transcript independently confirms assessments, payments, and recent activity for the same periods. Until the notice code, period, and IRS account position are established, do not treat any guide as selecting a specific resolution path.",
     },
     {
       title: "IRS account transcript transaction codes",

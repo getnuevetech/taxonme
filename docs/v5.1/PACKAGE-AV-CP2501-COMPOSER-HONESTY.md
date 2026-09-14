@@ -17,7 +17,8 @@
 - Mass FAQ / Y playbook gate reopen
 - Reopening AU CP2501 seeds or AT CP515/CP518 chrome
 - Changing `canSurfaceResolutionPathways`
-- Next identify-KB hole _(→ Package AW)_
+- Next identify-KB hole _(→ Package AW — CP49/TOP)_
+- Pipeline A composer CP49 / TOP chrome _(→ Package AX)_
 
 ## Check
 

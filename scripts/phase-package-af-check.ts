@@ -32,7 +32,9 @@ async function main() {
     assert.match(seed, new RegExp(title.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
   }
   assert.match(seed, /Package AF — mid-collection identify-only/);
-  assert.match(seed, /CP14, CP501, CP503, CP504/);
+  // Identifying-an-IRS-notice examples may insert CP49 between CP14 and CP501 (Package AW).
+  assert.match(seed, /CP14(?:, CP49)?, CP501, CP503, CP504/);
+  assert.match(seed, /CP14 \(first balance due\) → CP501/);
 
   for (const title of AF_TITLES) {
     const escaped = title.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -72,7 +74,7 @@ async function main() {
       reference: "Notice identity",
       tags: "notice, identify, cp, lt, deadline, evidence",
       content:
-        "Most IRS notices print a CP or LT code near the top, a tax period, amounts, and often a respond-by date. Read the code first (for example CP14, CP501, CP503, CP504, CP90, CP515, CP518, CP2501, CP2000, CP3219A, LT11, Letter 3172), then the period and printed figures. Keep the notice and calendar any deadline shown. An Account Transcript independently confirms assessments, payments, and recent activity for the same periods. Until the notice code, period, and IRS account position are established, do not treat any guide as selecting a specific resolution path.",
+        "Most IRS notices print a CP or LT code near the top, a tax period, amounts, and often a respond-by date. Read the code first (for example CP14, CP49, CP501, CP503, CP504, CP90, CP515, CP518, CP2501, CP2000, CP3219A, LT11, Letter 3172), then the period and printed figures. Keep the notice and calendar any deadline shown. An Account Transcript independently confirms assessments, payments, and recent activity for the same periods. Until the notice code, period, and IRS account position are established, do not treat any guide as selecting a specific resolution path.",
     },
   ];
 
