@@ -32,7 +32,9 @@ async function main() {
     assert.match(seed, new RegExp(title.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
   }
   assert.match(seed, /Package AF — mid-collection identify-only/);
-  assert.match(seed, /CP14, CP501, CP503, CP504/);
+  // Identifying-an-IRS-notice examples may insert CP49 between CP14 and CP501 (Package AW).
+  assert.match(seed, /CP14(?:, CP49)?, CP501, CP503, CP504/);
+  assert.match(seed, /CP14 \(first balance due\) → CP501/);
 
   for (const title of AF_TITLES) {
     const escaped = title.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
