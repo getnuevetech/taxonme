@@ -75,7 +75,17 @@ export function composeAssistantView(
       text: "What you should file or how you should respond still depends on the notice, tax year, and whether a return is already on file.",
     });
   } else if (target === "explain_document_or_notice") {
-    if (/\bcp\s?-?2000\b/i.test(rawMessage)) {
+    if (/\bcp\s?-?2501\b/i.test(rawMessage)) {
+      // Package AV — identify + evidence (mirror AU seed); soft underreporter ≠ CP2000 ≠ CP3219A.
+      sections.push({
+        type: "paragraph",
+        text: "A CP2501 is typically an earlier underreporter contact: the IRS compared third-party payer information to your return and asks you to review a possible mismatch before a formal CP2000 proposed-adjustment notice. It is not a bill by itself, not a field audit, and not a Statutory Notice of Deficiency (CP3219A).",
+      });
+      sections.push({
+        type: "paragraph",
+        text: "Confirm the printed tax period, any proposed figures, and any respond-by language. Compare those figures to a Wage & Income transcript and confirm account activity on an Account Transcript before sizing a response.",
+      });
+    } else if (/\bcp\s?-?2000\b/i.test(rawMessage)) {
       // Package AJ — identify + evidence (mirror AH seed); no bare agree/disagree menu.
       sections.push({
         type: "paragraph",
@@ -182,7 +192,7 @@ export function composeAssistantView(
     });
   } else if (target === "interpret_situation_offer_next_step") {
     const evidenceFirst = intel.strategy.branches.some((b) => b.id === "establish_account_position");
-    const noticeExam = /\bcp\s?-?2000\b|\bcp\s?-?3219a\b/i.test(rawMessage);
+    const noticeExam = /\bcp\s?-?2501\b|\bcp\s?-?2000\b|\bcp\s?-?3219a\b/i.test(rawMessage);
     const collectionLadder = /\bcp\s?-?501\b|\bcp\s?-?504\b/i.test(rawMessage);
     const finalLevyAcs = /\bcp\s?-?90\b/i.test(rawMessage);
     const unfiledReturn = /\bcp\s?-?515\b|\bcp\s?-?518\b/i.test(rawMessage);

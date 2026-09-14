@@ -102,3 +102,4 @@ jobs:
       - run: npm run test:package-as
       - run: npm run test:package-at
       - run: npm run test:package-au
+      - run: npm run test:package-av

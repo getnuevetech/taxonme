@@ -73,6 +73,7 @@ _(none for −1.8 — see Package J)_
 - **Package AS** — Identify-only CP515/CP518 unfiled-return KB: `PACKAGE-AS-IDENTIFY-CP515-KB.md`
 - **Package AT** — CP515/CP518 composer honesty: `PACKAGE-AT-CP515-COMPOSER-HONESTY.md`
 - **Package AU** — Identify-only CP2501 underreporter soft-notice KB: `PACKAGE-AU-IDENTIFY-CP2501-KB.md`
+- **Package AV** — CP2501 composer honesty: `PACKAGE-AV-CP2501-COMPOSER-HONESTY.md`
 
 
 ## Check
