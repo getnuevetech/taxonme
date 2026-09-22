@@ -1099,5 +1099,9 @@ export function overlayPromptIdForStage(stageKey: string): string {
 }
 
 export function schemaPromptIdForStage(stageKey: string): string {
-  return SCHEMA_PROMPTS.find((p) => p.stageKey === stageKey)?.promptId ?? "";
+  // Same rule as overlayPromptIdForStage: a superseded schema stays in the
+  // record for history but must never be the one a stage actually runs.
+  const forStage = SCHEMA_PROMPTS.filter((p) => p.stageKey === stageKey);
+  const live = forStage.find((p) => !PROMPT_SUPERSEDES[p.promptId]);
+  return (live ?? forStage[0])?.promptId ?? "";
 }
