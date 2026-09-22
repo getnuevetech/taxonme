@@ -1,5 +1,5 @@
 import { db } from "@/lib/db";
-import { Card, CardBody, StateMark, ProgressBar, Money, Badge, EvidenceStatusBadge, EvidenceStrengthLine, ItemKindBadge } from "@/components/ui";
+import { Card, CardBody, StateMark, ProgressBar, Money, Badge, EvidenceStatusBadge, EvidenceStrengthLine, ItemKindBadge, ConfidenceBadge } from "@/components/ui";
 import { isVerifiable, VERIFIABLE_ACTIONS } from "@/lib/case-progress";
 import { normalizeActionPurpose } from "@/lib/case-semantics";
 import { completePathStepAction, checkCaseProgressAction } from "@/actions/case";
@@ -222,6 +222,25 @@ export async function CaseAnalysisView({ caseId, viewer }: { caseId: string; vie
   ];
   const customerUnknownGroups = groupCustomerUnknowns(unknownInputs);
 
+  // The presenter already extracts these; show them so a user can check the
+  // analysis against their own notice instead of taking a conclusion on faith.
+  const keyNumbers = listFrom(latestPresentation?.key_numbers).slice(0, 6);
+  const sourceDocuments = listFrom(latestPresentation?.source_documents).slice(0, 6);
+
+  // When evidence is thin, name the specific gap instead of generic filler.
+  const firstUnknown = customerUnknownGroups[0];
+  const findingHeadlineFallback = customerFacing && customerUnknownGroups.length > 0
+    ? `We need ${customerUnknownGroups.length} more thing${customerUnknownGroups.length === 1 ? "" : "s"} to finish your analysis`
+    : "Your case at a glance";
+  const nextStepTitleFallback = thinPresentation && firstUnknown
+    ? firstUnknown.title
+    : thinPresentation ? "Add IRS account records" : "Review the findings below";
+  const nextStepDetailFallback = thinPresentation && firstUnknown
+    ? firstUnknown.summary
+    : thinPresentation
+      ? "Upload an Account Transcript or IRS notice so we can show what the IRS currently reports."
+      : "Use the checklist and open questions to confirm the facts that matter most.";
+
   // Plain-English walkthrough of the latest analysis batch.
   const chronological = [...c.runs].reverse();
   const latestStart = c.runs[0]?.startedAt?.getTime() ?? 0;
@@ -275,7 +294,7 @@ export async function CaseAnalysisView({ caseId, viewer }: { caseId: string; vie
                 <Badge>{String(findingCard.status ?? "review").replace(/_/g, " ")}</Badge>
                 <Badge color="amber">{String(findingCard.priority ?? "medium").replace(/_/g, " ")}</Badge>
               </div>
-              <h2 className="mt-3 text-xl font-semibold text-slate-900">{textFrom(findingCard.headline) || "Your case at a glance"}</h2>
+              <h2 className="mt-3 text-xl font-semibold text-slate-900">{textFrom(findingCard.headline) || findingHeadlineFallback}</h2>
               {textFrom(findingCard.summary) && <p className="mt-2 text-sm leading-relaxed text-slate-700">{textFrom(findingCard.summary)}</p>}
               <div className={`mt-5 grid gap-4 ${whatWeFoundItems.length > 0 ? "md:grid-cols-2" : ""}`}>
                 {whatWeFoundItems.length > 0 && (
@@ -288,10 +307,21 @@ export async function CaseAnalysisView({ caseId, viewer }: { caseId: string; vie
                 )}
                 <div className="rounded-xl bg-indigo-50 p-4">
                   <p className="text-xs font-semibold uppercase tracking-wide text-indigo-500">Your next useful step</p>
-                  <p className="mt-2 text-sm font-semibold text-slate-900">{textFrom(nextStepCard?.title) || (thinPresentation ? "Add IRS account records" : "Review the findings below")}</p>
-                  <p className="mt-1 text-sm leading-relaxed text-slate-700">{textFrom(nextStepCard?.description) || (thinPresentation ? "Upload an Account Transcript or IRS notice so we can show what the IRS currently reports." : "Use the checklist and open questions to confirm the facts that matter most.")}</p>
+                  <p className="mt-2 text-sm font-semibold text-slate-900">{textFrom(nextStepCard?.title) || nextStepTitleFallback}</p>
+                  <p className="mt-1 text-sm leading-relaxed text-slate-700">{textFrom(nextStepCard?.description) || nextStepDetailFallback}</p>
                 </div>
               </div>
+              {keyNumbers.length > 0 && (
+                <div className="mt-4 rounded-xl border border-slate-200 p-4">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Extracted from your documents</p>
+                  <ul className="mt-2 space-y-1 text-sm text-slate-700">
+                    {keyNumbers.map((item, idx) => <li key={idx} className="leading-relaxed">• {item}</li>)}
+                  </ul>
+                  {sourceDocuments.length > 0 && (
+                    <p className="mt-2 text-xs text-slate-400">Source{sourceDocuments.length === 1 ? "" : "s"}: {sourceDocuments.join(" · ")}</p>
+                  )}
+                </div>
+              )}
               {showHowWeReached && howWeReached && (
                 <div className="mt-4 rounded-xl border border-slate-200 p-4">
                   <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">How we reached this</p>
@@ -523,6 +553,7 @@ export async function CaseAnalysisView({ caseId, viewer }: { caseId: string; vie
                     <div className="flex gap-2">
                       <StateMark state={issue.state} />
                       <EvidenceStatusBadge status={issue.evidenceStatus} />
+                      <ConfidenceBadge level={issue.confidence} />
                     </div>
                   </div>
                   {(issue.expectedCents !== null || issue.differenceCents !== null) && (
