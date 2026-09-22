@@ -47,7 +47,10 @@ async function main() {
   assert.match(qaChat, /Working on/);
   assert.match(qaChat, /defaultQuestion/);
   assert.match(qaChat, /Continue with my situation/);
-  assert.match(qaChat, /Track this government case/);
+  // "Track this government case" was removed: it duplicated "Continue with
+  // my situation" for signed-in users (identical href) and, for guests,
+  // pointed at an authenticated route with no session — a dead-end either way.
+  assert.doesNotMatch(qaChat, /Track this government case/);
 
   const userAction = readFileSync(join(root, "src/actions/user.ts"), "utf8");
   assert.match(userAction, /priorContractFromStored/);

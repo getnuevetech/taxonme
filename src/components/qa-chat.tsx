@@ -32,7 +32,6 @@ export function QaChat({
   defaultQuestion = "",
   showPromoteCta = false,
   promoteSituationHref = "/app/cases/new",
-  promoteCaseHref,
 }: {
   threadId: string;
   messages: { id: string; role: string; content: string }[];
@@ -45,8 +44,6 @@ export function QaChat({
   defaultQuestion?: string;
   showPromoteCta?: boolean;
   promoteSituationHref?: string;
-  /** Omit for guests — tracking a government case requires an account, and offering a link that just bounces to sign-in reads as broken. */
-  promoteCaseHref?: string;
 }) {
   const [state, formAction] = useActionState(askQuestionAction, null);
   const [draft, setDraft] = useState(defaultQuestion);
@@ -135,14 +132,6 @@ export function QaChat({
               <Link href={promoteSituationHref} className="font-semibold text-teal-700 underline">
                 Continue with my situation
               </Link>
-              {promoteCaseHref && (
-                <>
-                  {" · "}
-                  <Link href={promoteCaseHref} className="font-semibold text-teal-700 underline">
-                    Track this government case
-                  </Link>
-                </>
-              )}
             </p>
           )}
           {showGuestKeep && (

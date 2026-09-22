@@ -44,7 +44,6 @@ export default async function QaThreadPage({ params }: { params: Promise<{ id: s
         showConsultantCta={planKey === "pro"}
         showPromoteCta
         promoteSituationHref={`/app/cases/new?prefill=${promoteNarrative}`}
-        promoteCaseHref={`/app/cases/new?prefill=${promoteNarrative}`}
       />
     </div>
   );
