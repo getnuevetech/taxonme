@@ -19,6 +19,7 @@
     "irs:updates-check": "tsx scripts/irs-updates-check.ts",
     "test:lightsail-healthz": "tsx scripts/lightsail-healthz-check.ts",
     "test:phase-billing": "tsx scripts/phase-billing-tier-matrix-check.ts",
+    "test:billing-redirect-domain": "tsx scripts/billing-redirect-domain-check.ts",
     "test:guest-continuity": "tsx scripts/guest-continuity-check.ts",
     "test:phase-minus1": "tsx scripts/phase-minus1-conversation-check.ts",
     "test:phase-minus1-9-l0": "tsx scripts/phase-minus1-9-experience-l0-check.ts",

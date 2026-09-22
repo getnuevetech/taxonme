@@ -49,6 +49,7 @@ jobs:
       - run: npm run v32:evidence-check
       - run: npm run test:lightsail-healthz
       - run: npm run test:phase-billing
+      - run: npm run test:billing-redirect-domain
       - run: npm run test:guest-continuity
       - run: npm run test:phase-minus1
       - run: npm run test:phase-s
