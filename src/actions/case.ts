@@ -5,12 +5,13 @@ import { revalidatePath } from "next/cache";
 import { after } from "next/server";
 import { db } from "@/lib/db";
 import { getCurrentUser, requireUser } from "@/lib/auth";
-import { getOrCreateGuestSession } from "@/lib/guest";
-import { runCaseAnalysis } from "@/lib/ai/orchestrator";
+import { getOrCreateGuestSession, getGuestSession } from "@/lib/guest";
+import { runCaseAnalysis, runQaChat } from "@/lib/ai/orchestrator";
 import { fallbackAnalyze } from "@/lib/ai/fallback";
 import { processQueuedReanalysisEvents, queueCaseReanalysis } from "@/lib/reanalysis-events";
 import { verifyCaseProgress, isVerifiable } from "@/lib/case-progress";
 import { saveUpload, validateUploadFile } from "@/lib/uploads";
+import { checkRateLimit, rateLimitKey, clientIp } from "@/lib/rate-limit";
 import type { ActionState } from "./auth";
 
 // Guest-friendly intake: situation + goal + documents, no account required.
@@ -19,6 +20,12 @@ export async function startIntakeAction(_prev: ActionState, formData: FormData):
   const goal = String(formData.get("goal") ?? "").trim();
   if (situation.length < 20) return { error: "Tell us a bit more about what happened (at least a few sentences)." };
   if (goal.length < 5) return { error: "Tell us what you'd like to achieve." };
+
+  // Unauthenticated entry point that triggers paid AI calls — rate-limit by
+  // IP so it can't be scripted to run up provider costs.
+  if (!checkRateLimit(rateLimitKey(["start-intake", await clientIp()]), 8, 60 * 60 * 1000)) {
+    return { error: "You've submitted several requests in a short time. Please wait a bit and try again." };
+  }
 
   // Validate uploaded files before creating any records.
   const files = formData.getAll("documents").filter((f): f is File => f instanceof File && f.size > 0);
@@ -58,10 +65,13 @@ export async function startIntakeAction(_prev: ActionState, formData: FormData):
 
   // Wave 5: Situation / question paths never run V5.1 Case analysis.
   if (!intel.route.invokes_case_engine) {
-    const answer = composeAssistantReply(
-      intel,
-      [situation, goal ? `Goal: ${goal}` : ""].filter(Boolean).join("\n\n"),
-    );
+    const opening = [situation, goal ? `Goal: ${goal}` : ""].filter(Boolean).join("\n\n");
+    const scaffold = composeAssistantReply(intel, opening);
+    // Same scaffold + model-polish pattern already used on QA follow-up turns
+    // (qaAskAction) — without it, first-time intake only ever sees the fixed
+    // per-notice-code paragraph, never anything generated from what they said.
+    const modelAnswer = await runQaChat([{ role: "user", content: opening }], user?.id);
+    const answer = modelAnswer?.trim() ? `${scaffold}\n\n---\n\n${modelAnswer}` : scaffold;
 
     if (intel.route.workspace === "situation" || intel.route.workspace === "filing_plan") {
       const { createSituationFromIntelligence } = await import("@/lib/situation-create");
@@ -75,7 +85,6 @@ export async function startIntakeAction(_prev: ActionState, formData: FormData):
       redirect(created.userId ? `/app/situations/${created.id}` : `/start/situation?id=${created.id}`);
     }
 
-    const opening = [situation, goal ? `Goal: ${goal}` : ""].filter(Boolean).join("\n\n");
     const thread = await db.qaThread.create({
       data: {
         userId: user?.id ?? null,
@@ -224,7 +233,13 @@ export async function createCaseAction(_prev: ActionState, formData: FormData): 
 
   // Wave 5: options / Situation paths create a Situation, not a Case.
   if (!intel.route.invokes_case_engine) {
-    const answer = composeAssistantReply(intel, [situation, goal].filter(Boolean).join("\n\n"));
+    const opening = [situation, goal ? `Goal: ${goal}` : ""].filter(Boolean).join("\n\n");
+    const scaffold = composeAssistantReply(intel, opening);
+    // Same scaffold + model-polish pattern already used on QA follow-up turns
+    // (qaAskAction) — without it, first-time intake only ever sees the fixed
+    // per-notice-code paragraph, never anything generated from what they said.
+    const modelAnswer = await runQaChat([{ role: "user", content: opening }], user.id);
+    const answer = modelAnswer?.trim() ? `${scaffold}\n\n---\n\n${modelAnswer}` : scaffold;
     if (intel.route.workspace === "situation" || intel.route.workspace === "filing_plan") {
       const { createSituationFromIntelligence } = await import("@/lib/situation-create");
       const created = await createSituationFromIntelligence({
@@ -244,7 +259,6 @@ export async function createCaseAction(_prev: ActionState, formData: FormData): 
         intelligenceJson: JSON.stringify(intel),
       },
     });
-    const opening = [situation, goal ? `Goal: ${goal}` : ""].filter(Boolean).join("\n\n");
     await db.qaMessage.create({ data: { threadId: thread.id, role: "user", content: opening } });
     await db.qaMessage.create({ data: { threadId: thread.id, role: "assistant", content: answer } });
     redirect(`/app/qa/${thread.id}`);
@@ -310,12 +324,19 @@ export async function reanalyzeCaseAction(caseId: string) {
 // narrative in extraction-friendly phrasing, and re-run the analysis so the
 // customer immediately sees sharper findings.
 export async function clarifyAnswerAction(_prev: ActionState, formData: FormData): Promise<ActionState> {
-  const user = await requireUser();
+  // Guest-owned cases already run the real analysis engine (startIntakeAction
+  // can promote a guest straight to a Case) — this only used to work once the
+  // guest registered, which walled the adaptive follow-up questions off from
+  // exactly the first-time users intake is meant to hook.
+  const user = await getCurrentUser();
+  const guest = user ? null : await getGuestSession();
   const caseId = String(formData.get("caseId") ?? "");
   const answer = String(formData.get("answer") ?? "").trim();
   const files = formData.getAll("files").filter((f): f is File => f instanceof File && f.size > 0);
   const c = await db.case.findUnique({ where: { id: caseId } });
-  if (!c || c.userId !== user.id) return { error: "Case not found." };
+  if (!c) return { error: "Case not found." };
+  const owns = (user && c.userId === user.id) || (guest && c.guestSessionId === guest.id);
+  if (!owns) return { error: "Case not found." };
   if (!answer && files.length === 0) return { error: "Type an answer (or attach a file) first." };
   for (const f of files) {
     const validationError = validateUploadFile(f);
@@ -333,7 +354,8 @@ export async function clarifyAnswerAction(_prev: ActionState, formData: FormData
     const { filePath, sizeBytes, contentHash } = await saveUpload(file);
     await db.document.create({
       data: {
-        userId: user.id,
+        userId: user?.id ?? null,
+        guestSessionId: user ? null : guest!.id,
         caseId,
         fileName: file.name,
         filePath,
@@ -365,7 +387,7 @@ export async function clarifyAnswerAction(_prev: ActionState, formData: FormData
   await queueCaseReanalysis({
     caseId,
     trigger: files.length > 0 ? "document_added" : "material_user_fact_added",
-    actorType: "user",
+    actorType: user ? "user" : "guest",
     materialKey: `${q.key}:${answerWithFiles}`,
     metadata: { questionKey: q.key, attachments: attachedNames },
   });

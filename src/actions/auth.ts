@@ -1,7 +1,6 @@
 "use server";
 
 import { redirect } from "next/navigation";
-import { headers } from "next/headers";
 import { z } from "zod";
 import { db } from "@/lib/db";
 import { createSession, destroySession, hashPassword, verifyPassword, getCurrentUser } from "@/lib/auth";
@@ -12,7 +11,7 @@ import {
   sanitizeAuthNext,
   setAuthNextCookie,
 } from "@/lib/guest";
-import { checkRateLimit, rateLimitKey } from "@/lib/rate-limit";
+import { checkRateLimit, rateLimitKey, clientIp } from "@/lib/rate-limit";
 import { ROLES } from "@/lib/constants";
 
 export type ActionState = { error?: string; ok?: boolean; info?: string; link?: string } | null;
@@ -26,11 +25,6 @@ const registerSchema = z.object({
   password: z.string().min(8, "Password must be at least 8 characters"),
   agree: z.literal("on", { message: "You must accept the agreement to continue" }),
 });
-
-async function clientIp(): Promise<string> {
-  const h = await headers();
-  return (h.get("x-forwarded-for")?.split(",")[0] ?? h.get("x-real-ip") ?? "unknown").trim();
-}
 
 export async function registerAction(_prev: ActionState, formData: FormData): Promise<ActionState> {
   const parsed = registerSchema.safeParse(Object.fromEntries(formData));
