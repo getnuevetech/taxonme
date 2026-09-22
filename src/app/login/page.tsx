@@ -2,7 +2,7 @@ import Link from "next/link";
 import { SiteHeader } from "@/components/site-nav";
 import { LoginForm } from "@/components/auth-forms";
 import { getSetting } from "@/lib/settings";
-import { sanitizeAuthNext, setAuthNextCookie } from "@/lib/guest";
+import { sanitizeAuthNext } from "@/lib/guest";
 
 export const metadata = { title: "Sign in" };
 
@@ -13,7 +13,12 @@ export default async function LoginPage({
 }) {
   const { next: nextRaw } = await searchParams;
   const next = sanitizeAuthNext(nextRaw) || "";
-  if (next) await setAuthNextCookie(next);
+  // Cookies can only be written in a Server Action or Route Handler, never
+  // during a page's render (that used to crash this page with `next` set).
+  // LoginForm carries `next` as a hidden field for the plain email/password
+  // path; the Google button below carries it as a query param so
+  // /api/auth/google (a Route Handler) can set the cookie there instead —
+  // that's the only path that needs it, to survive the OAuth redirect.
   const googleClientId = await getSetting("auth.google_client_id", "");
   return (
     <div className="min-h-screen">
@@ -30,7 +35,7 @@ export default async function LoginPage({
           {googleClientId && (
             <>
               <a
-                href="/api/auth/google"
+                href={next ? `/api/auth/google?next=${encodeURIComponent(next)}` : "/api/auth/google"}
                 className="flex w-full items-center justify-center gap-2 rounded-lg border border-slate-300 px-4 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-50"
               >
                 Continue with Google

@@ -81,10 +81,31 @@ function read(path: string) {
 
   const qa = read("src/components/qa-chat.tsx");
   assert.ok(qa.includes("register?next="), "register CTA must carry conversation next");
+  // "Track this government case" duplicated "Continue with my situation" for
+  // signed-in users (both pointed at the same /app/cases/new?prefill= href)
+  // and, for guests, pointed at that authenticated route with no session —
+  // just a dead-end sign-in bounce with no context either way. Removed.
+  assert.ok(!qa.includes("Track this government case"), "QaChat must not offer the removed case-tracking link");
+  assert.ok(!qa.includes("promoteCaseHref"), "QaChat must not accept a promoteCaseHref prop anymore");
 
+  // Next.js can only write cookies in a Server Action or Route Handler, never
+  // during a page's render — register/login used to call setAuthNextCookie()
+  // straight in the render body, which threw ("Cookies can only be modified
+  // in a Server Action or Route Handler") any time `next` was set, i.e. on
+  // exactly the guest-continuity links this suite exists to protect. Fixed
+  // by moving the cookie write to /api/auth/google (a Route Handler), reached
+  // via a `next` query param instead.
   const register = read("src/app/register/page.tsx");
-  assert.ok(register.includes("setAuthNextCookie"));
+  assert.ok(!register.includes("setAuthNextCookie"), "register page must not write cookies during render");
+  assert.ok(register.includes("api/auth/google?next="), "register's Google button must carry next as a query param");
   assert.ok(register.includes("start over") || register.includes("back to this conversation"));
+
+  const loginPage = read("src/app/login/page.tsx");
+  assert.ok(!loginPage.includes("setAuthNextCookie"), "login page must not write cookies during render");
+  assert.ok(loginPage.includes("api/auth/google?next="), "login's Google button must carry next as a query param");
+
+  const googleRoute = read("src/app/api/auth/google/route.ts");
+  assert.ok(googleRoute.includes("setAuthNextCookie"), "Google OAuth start route must persist next for the redirect round trip");
 
   const reply = read("src/components/assistant-reply.tsx");
   assert.ok(reply.includes("text-teal-700"), "account/pro offers use teal emphasis");

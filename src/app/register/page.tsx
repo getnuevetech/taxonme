@@ -3,7 +3,7 @@ import { db } from "@/lib/db";
 import { SiteHeader } from "@/components/site-nav";
 import { RegisterForm } from "@/components/auth-forms";
 import { getSetting } from "@/lib/settings";
-import { getGuestSession, sanitizeAuthNext, setAuthNextCookie } from "@/lib/guest";
+import { getGuestSession, sanitizeAuthNext } from "@/lib/guest";
 
 export const metadata = { title: "Create your account" };
 
@@ -18,7 +18,14 @@ export default async function RegisterPage({
     sanitizeAuthNext(nextRaw) ||
     (thread && /^[a-z0-9]+$/i.test(thread) ? `/app/qa/${thread}` : null) ||
     "";
-  if (next) await setAuthNextCookie(next);
+  // Cookies can only be written in a Server Action or Route Handler, never
+  // during a page's render (that used to crash this page with `next` set —
+  // Next.js throws "Cookies can only be modified in a Server Action or
+  // Route Handler"). RegisterForm below carries `next` as a hidden field for
+  // the plain email/password path; the Google button carries it as a query
+  // param so /api/auth/google (a Route Handler) can set the cookie there —
+  // that's the only path that actually needs it, to survive the OAuth
+  // redirect round-trip.
 
   const [googleClientId, guest] = await Promise.all([
     getSetting("auth.google_client_id", ""),
@@ -59,7 +66,7 @@ export default async function RegisterPage({
           {googleClientId && !asConsultant && (
             <>
               <a
-                href="/api/auth/google"
+                href={next ? `/api/auth/google?next=${encodeURIComponent(next)}` : "/api/auth/google"}
                 className="flex w-full items-center justify-center gap-2 rounded-lg border border-slate-300 px-4 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-50"
               >
                 Continue with Google

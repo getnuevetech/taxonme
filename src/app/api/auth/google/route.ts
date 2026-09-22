@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { randomBytes } from "crypto";
 import { getSetting } from "@/lib/settings";
 import { secureCookiesEnabled } from "@/lib/auth";
+import { setAuthNextCookie } from "@/lib/guest";
 
 // Google OAuth start. Client ID/secret and redirect URL are configured by the
 // admin in Settings (auth.google_client_id, auth.google_client_secret, app.url).
@@ -9,6 +10,12 @@ export async function GET(request: Request) {
   const clientId = await getSetting("auth.google_client_id", "");
   const appUrl = (await getSetting("app.url", "")) || new URL(request.url).origin;
   if (!clientId) return NextResponse.redirect(new URL("/login", appUrl));
+
+  // Where to resume after the OAuth round-trip (register/login pass this as
+  // a query param since they can't write cookies during render themselves —
+  // a Route Handler like this one can).
+  const next = new URL(request.url).searchParams.get("next");
+  if (next) await setAuthNextCookie(next);
 
   // Generate a CSRF state nonce to prevent login CSRF attacks.
   const state = randomBytes(16).toString("hex");

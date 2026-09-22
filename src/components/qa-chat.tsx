@@ -32,7 +32,6 @@ export function QaChat({
   defaultQuestion = "",
   showPromoteCta = false,
   promoteSituationHref = "/app/cases/new",
-  promoteCaseHref = "/app/cases/new",
 }: {
   threadId: string;
   messages: { id: string; role: string; content: string }[];
@@ -45,7 +44,6 @@ export function QaChat({
   defaultQuestion?: string;
   showPromoteCta?: boolean;
   promoteSituationHref?: string;
-  promoteCaseHref?: string;
 }) {
   const [state, formAction] = useActionState(askQuestionAction, null);
   const [draft, setDraft] = useState(defaultQuestion);
@@ -133,10 +131,6 @@ export function QaChat({
               Ready to go further?{" "}
               <Link href={promoteSituationHref} className="font-semibold text-teal-700 underline">
                 Continue with my situation
-              </Link>
-              {" · "}
-              <Link href={promoteCaseHref} className="font-semibold text-teal-700 underline">
-                Track this government case
               </Link>
             </p>
           )}
