@@ -16,14 +16,42 @@ export default async function GuestResultPage({
   const { case: caseId } = await searchParams;
   const user = await getCurrentUser();
   if (user && caseId) redirect(`/app/cases/${caseId}`);
+  if (!caseId) redirect("/start");
   const guest = await getGuestSession();
-  if (!caseId || !guest) redirect("/start");
 
-  const c = await db.case.findFirst({
-    where: { id: caseId, guestSessionId: guest.id },
-    include: { issues: { orderBy: { createdAt: "asc" } }, documents: { where: { deletedAt: null } } },
-  });
-  if (!c) redirect("/start");
+  const c = guest
+    ? await db.case.findFirst({
+        where: { id: caseId, guestSessionId: guest.id },
+        include: { issues: { orderBy: { createdAt: "asc" } }, documents: { where: { deletedAt: null } } },
+      })
+    : null;
+  if (!c || !guest) {
+    // Not a dead link — registering claims this Case onto the account and
+    // deletes the guest cookie, so a returning/logged-out visitor hitting
+    // this pre-signup link (bookmark, browser back) would otherwise get
+    // silently bounced to /start looking like their case vanished. Say so
+    // instead, if that's actually what happened.
+    const claimed = await db.case.findUnique({ where: { id: caseId }, select: { userId: true } });
+    if (claimed?.userId) {
+      return (
+        <div className="flex min-h-screen flex-col">
+          <SiteHeader />
+          <main className="mx-auto w-full max-w-2xl flex-1 px-4 py-16 text-center">
+            <h1 className="text-2xl font-extrabold text-slate-900">This case is saved to an account</h1>
+            <p className="mt-2 text-slate-600">Log in to pick up where you left off.</p>
+            <a
+              href={`/login?next=${encodeURIComponent("/app")}`}
+              className="mt-6 inline-block rounded-xl bg-indigo-600 px-6 py-3 text-sm font-semibold text-white hover:bg-indigo-700"
+            >
+              Log in →
+            </a>
+          </main>
+          <SiteFooter />
+        </div>
+      );
+    }
+    redirect("/start");
+  }
   const nowMs = new Date().getTime();
   const teaser = guest.teaserJson
     ? (() => {

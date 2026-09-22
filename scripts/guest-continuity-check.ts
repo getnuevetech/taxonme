@@ -61,6 +61,24 @@ function read(path: string) {
   assert.ok(startQa.includes("/app/qa/"), "signed-in /start/qa must keep thread when owned");
   assert.ok(startQa.includes("owned"), "signed-in /start/qa must look up owned thread");
 
+  // Registering/logging in claims a Situation/PrepPlan/Case onto the account
+  // and deletes the guest cookie — a returning visitor hitting the pre-signup
+  // /start/... link (bookmark, browser back) must be sent to their saved
+  // copy, not silently told (or shown) it's gone. Same pattern as /start/qa
+  // above, for the three guest pages that didn't have it.
+  const startSituation = read("src/app/start/situation/page.tsx");
+  assert.ok(startSituation.includes("getCurrentUser"), "/start/situation must check for a returning owner first");
+  assert.ok(startSituation.includes("/app/situations/"), "/start/situation must resume the account copy when owned");
+  assert.ok(startSituation.includes("saved to an account"), "/start/situation must explain a claimed link, not 404 it");
+
+  const startPrepPlan = read("src/app/start/prep-plan/page.tsx");
+  assert.ok(startPrepPlan.includes("getCurrentUser"), "/start/prep-plan must check for a returning owner first");
+  assert.ok(startPrepPlan.includes("/app/prep-plans/"), "/start/prep-plan must resume the account copy when owned");
+  assert.ok(startPrepPlan.includes("saved to an account"), "/start/prep-plan must explain a claimed link, not 404 it");
+
+  const startResult = read("src/app/start/result/page.tsx");
+  assert.ok(startResult.includes("saved to an account"), "/start/result must explain a claimed case, not silently bounce to /start");
+
   const qa = read("src/components/qa-chat.tsx");
   assert.ok(qa.includes("register?next="), "register CTA must carry conversation next");
 
