@@ -60,6 +60,9 @@ function read(path: string) {
   const startQa = read("src/app/start/qa/page.tsx");
   assert.ok(startQa.includes("/app/qa/"), "signed-in /start/qa must keep thread when owned");
   assert.ok(startQa.includes("owned"), "signed-in /start/qa must look up owned thread");
+  // "Track this government case" used to point guests at /app/cases/new,
+  // which just bounces an anonymous visitor to sign-in with no context.
+  assert.ok(!startQa.includes("promoteCaseHref"), "guest QA page must not offer a case-tracking link that requires sign-in");
 
   // Registering/logging in claims a Situation/PrepPlan/Case onto the account
   // and deletes the guest cookie — a returning visitor hitting the pre-signup
@@ -81,10 +84,29 @@ function read(path: string) {
 
   const qa = read("src/components/qa-chat.tsx");
   assert.ok(qa.includes("register?next="), "register CTA must carry conversation next");
+  // "Track this government case" pointed guests at an /app/cases/new link
+  // that just bounced them to sign-in with no context — QaChat now only
+  // renders it when a promoteCaseHref is actually supplied.
+  assert.match(qa, /promoteCaseHref\s*&&/, "QaChat must not render the case-tracking link without an href");
 
+  // Next.js can only write cookies in a Server Action or Route Handler, never
+  // during a page's render — register/login used to call setAuthNextCookie()
+  // straight in the render body, which threw ("Cookies can only be modified
+  // in a Server Action or Route Handler") any time `next` was set, i.e. on
+  // exactly the guest-continuity links this suite exists to protect. Fixed
+  // by moving the cookie write to /api/auth/google (a Route Handler), reached
+  // via a `next` query param instead.
   const register = read("src/app/register/page.tsx");
-  assert.ok(register.includes("setAuthNextCookie"));
+  assert.ok(!register.includes("setAuthNextCookie"), "register page must not write cookies during render");
+  assert.ok(register.includes("api/auth/google?next="), "register's Google button must carry next as a query param");
   assert.ok(register.includes("start over") || register.includes("back to this conversation"));
+
+  const loginPage = read("src/app/login/page.tsx");
+  assert.ok(!loginPage.includes("setAuthNextCookie"), "login page must not write cookies during render");
+  assert.ok(loginPage.includes("api/auth/google?next="), "login's Google button must carry next as a query param");
+
+  const googleRoute = read("src/app/api/auth/google/route.ts");
+  assert.ok(googleRoute.includes("setAuthNextCookie"), "Google OAuth start route must persist next for the redirect round trip");
 
   const reply = read("src/components/assistant-reply.tsx");
   assert.ok(reply.includes("text-teal-700"), "account/pro offers use teal emphasis");

@@ -53,7 +53,6 @@ export default async function GuestQaPage({
           defaultQuestion={prefillQuestion?.trim() || ""}
           showPromoteCta
           promoteSituationHref="/start"
-          promoteCaseHref={`/app/cases/new${prefillQuestion?.trim() ? `?prefill=${encodeURIComponent(prefillQuestion.trim().slice(0, 500))}` : ""}`}
         />
       </main>
       <SiteFooter />
