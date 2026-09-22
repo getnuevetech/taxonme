@@ -23,7 +23,7 @@ import { amountsEqual, reconcileRefundArithmetic } from "../src/lib/evidence/cal
 import { evaluateAiV3Readiness } from "../src/lib/ai/readiness-core";
 import { redactSensitiveText } from "../src/lib/ai/privacy";
 import { sameOriginRedirect } from "../src/lib/http";
-import { DOMAIN_RULES_PROMPT_ID, PROMPT_SUPERSEDES, RESPONSIBILITY_PROMPTS, V3_PIPELINE_BLUEPRINT, V3_PROMPT_RECORDS, overlayPromptIdForStage } from "../src/lib/ai/v3-prompts";
+import { DOMAIN_RULES_PROMPT_ID, PROMPT_SUPERSEDES, RESPONSIBILITY_PROMPTS, V3_PIPELINE_BLUEPRINT, V3_PROMPT_RECORDS, overlayPromptIdForStage, schemaPromptIdForStage } from "../src/lib/ai/v3-prompts";
 
 function promptBody(promptId: string): string {
   const prompt = RESPONSIBILITY_PROMPTS.find((p) => p.promptId === promptId);
@@ -592,6 +592,16 @@ for (const overlayId of ["QA-OVERLAY-v33", "NOTICE-OVERLAY-v33", "LETTER-OVERLAY
 assert.equal(overlayPromptIdForStage(STAGE_KEYS.LETTER), "LETTER-OVERLAY-v33");
 assert.equal(overlayPromptIdForStage(STAGE_KEYS.QA), "QA-OVERLAY-v33");
 assert.equal(overlayPromptIdForStage(STAGE_KEYS.NOTICE), "NOTICE-OVERLAY-v33");
+// The schema lookup must resolve to the evidence-proportional tip too —
+// SCHEMA_PROMPTS has no protection against declaration order the way
+// PIPELINE_OVERLAYS does, so this regressed silently once before: the stage
+// resolved to the superseded vN schema (array order, not supersession), and
+// the "empty arrays preferred when thin" output contract never reached the
+// model for these four stages.
+assert.equal(schemaPromptIdForStage(STAGE_KEYS.PRESENTER), "SCHEMA-PRES-v31");
+assert.equal(schemaPromptIdForStage(STAGE_KEYS.QA), "SCHEMA-QA-v31");
+assert.equal(schemaPromptIdForStage(STAGE_KEYS.NOTICE), "SCHEMA-NOTICE-v31");
+assert.equal(schemaPromptIdForStage(STAGE_KEYS.LETTER), "SCHEMA-LETTER-v31");
 // The letter overlay carries the reason the rule exists, not just the rule.
 const letterOverlay = V3_PROMPT_RECORDS.find((p) => p.promptId === "LETTER-OVERLAY-v33")!;
 assert.match(letterOverlay.body, /over the customer's name/);
