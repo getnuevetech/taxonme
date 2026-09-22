@@ -123,6 +123,16 @@ export async function subscribeAction(_prev: ActionState, formData: FormData): P
     const { formatTransactionNumber } = await import("@/lib/ticket-number");
     const txnRef = formatTransactionNumber(tx.number);
 
+    // The domain the session cookie is actually scoped to (same setting
+    // secureCookiesEnabled() reads) must win over the gateway's own appUrl
+    // field — a mismatch between the two (www vs non-www, http vs https, a
+    // stale value from initial setup) sends the browser back to a different
+    // origin than the one holding the session cookie, so Stripe's redirect
+    // lands the user "logged out" with everything looking gone even though
+    // nothing was deleted.
+    const { getSetting } = await import("@/lib/settings");
+    const appUrl = (((await getSetting("app.url", "")) || cfg.appUrl || "") as string).replace(/\/$/, "");
+
     const params = new URLSearchParams({
       mode: "subscription",
       "line_items[0][quantity]": "1",
@@ -130,8 +140,8 @@ export async function subscribeAction(_prev: ActionState, formData: FormData): P
       "line_items[0][price_data][unit_amount]": String(amountCents),
       "line_items[0][price_data][recurring][interval]": interval === "yearly" ? "year" : "month",
       "line_items[0][price_data][product_data][name]": discount ? `${plan.name} (${discount.name})` : plan.name,
-      success_url: `${cfg.appUrl || ""}${billingPath}?pending=1`,
-      cancel_url: `${cfg.appUrl || ""}${billingPath}?canceled=1`,
+      success_url: `${appUrl}${billingPath}?pending=1`,
+      cancel_url: `${appUrl}${billingPath}?canceled=1`,
       client_reference_id: user.id,
       customer_email: user.email,
       // The webhook uses this metadata to activate the right plan after payment;
@@ -263,7 +273,9 @@ export async function purchaseCaseReportExtraAction(_prev: ActionState, formData
     });
     const { formatTransactionNumber } = await import("@/lib/ticket-number");
     const txnRef = formatTransactionNumber(tx.number);
-    const appUrl = String(cfg.appUrl || (await import("@/lib/settings").then((m) => m.getSetting("app.url", "")))).replace(/\/$/, "");
+    // The session-cookie domain must win over the gateway's own appUrl field —
+    // see the matching comment in subscribeAction above for why.
+    const appUrl = String((await import("@/lib/settings").then((m) => m.getSetting("app.url", ""))) || cfg.appUrl || "").replace(/\/$/, "");
 
     const params = new URLSearchParams({
       mode: "payment",
