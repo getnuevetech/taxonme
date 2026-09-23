@@ -15,6 +15,7 @@ export async function uploadDocumentAction(_prev: ActionState, formData: FormDat
   const user = await getCurrentUser();
   const docKind = String(formData.get("docKind") ?? "other");
   const submittedCaseId = String(formData.get("caseId") ?? "") || null;
+  const submittedSituationId = String(formData.get("situationId") ?? "") || null;
   const files = formData.getAll("files").filter((f): f is File => f instanceof File && f.size > 0);
   if (files.length === 0) return { error: "Choose at least one file." };
 
@@ -30,6 +31,17 @@ export async function uploadDocumentAction(_prev: ActionState, formData: FormDat
     if (!c) return { error: "Case not found." };
     caseId = c.id;
   }
+  let situationId: string | null = null;
+  if (submittedSituationId) {
+    const s = await db.situation.findFirst({
+      where: user
+        ? { id: submittedSituationId, userId: user.id }
+        : { id: submittedSituationId, guestSessionId: guest!.id },
+      select: { id: true },
+    });
+    if (!s) return { error: "Situation not found." };
+    situationId = s.id;
+  }
 
   for (const file of files.slice(0, 10)) {
     const validationError = validateUploadFile(file);
@@ -40,6 +52,7 @@ export async function uploadDocumentAction(_prev: ActionState, formData: FormDat
         userId: user?.id ?? null,
         guestSessionId: guest?.id ?? null,
         caseId,
+        situationId,
         fileName: file.name,
         filePath,
         mimeType: file.type || "application/octet-stream",
@@ -80,6 +93,7 @@ export async function uploadDocumentAction(_prev: ActionState, formData: FormDat
   }
   revalidatePath("/app/documents");
   if (caseId) revalidatePath(`/app/cases/${caseId}`);
+  if (situationId) revalidatePath(`/app/situations/${situationId}`);
   return { ok: true };
 }
 

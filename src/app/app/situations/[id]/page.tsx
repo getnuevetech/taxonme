@@ -9,7 +9,10 @@ export default async function SituationDetailPage({ params }: { params: Promise<
   const user = await requireUser();
   const row = await db.situation.findFirst({
     where: { id, userId: user.id },
-    include: { prepPlans: { orderBy: { createdAt: "desc" }, take: 1 } },
+    include: {
+      prepPlans: { orderBy: { createdAt: "desc" }, take: 1 },
+      documents: { where: { deletedAt: null }, select: { id: true, fileName: true }, orderBy: { uploadedAt: "desc" } },
+    },
   });
   if (!row) notFound();
 
@@ -34,6 +37,7 @@ export default async function SituationDetailPage({ params }: { params: Promise<
       existingPrepPlanId={row.prepPlans[0]?.id ?? null}
       canBuildPrepPlan={!prepPlanBlockedReason}
       prepPlanBlockedReason={prepPlanBlockedReason}
+      documents={row.documents}
     />
   );
 }

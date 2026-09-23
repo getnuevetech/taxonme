@@ -26,7 +26,10 @@ export default async function GuestSituationPage({
   const guest = await getOrCreateGuestSession();
   const row = await db.situation.findFirst({
     where: { id, guestSessionId: guest.id },
-    include: { prepPlans: { orderBy: { createdAt: "desc" }, take: 1 } },
+    include: {
+      prepPlans: { orderBy: { createdAt: "desc" }, take: 1 },
+      documents: { where: { deletedAt: null }, select: { id: true, fileName: true }, orderBy: { uploadedAt: "desc" } },
+    },
   });
   if (!row) {
     // Not a dead link — it was already claimed by an account (a different
@@ -66,6 +69,7 @@ export default async function GuestSituationPage({
         isGuest
         canBuildPrepPlan={false}
         prepPlanBlockedReason="guest"
+        documents={row.documents}
       />
       <p className="mt-8 text-center text-sm text-slate-500">
         <a href={`/register?next=${encodeURIComponent(`/app/situations/${row.id}`)}`} className="font-medium text-indigo-700 hover:underline">
