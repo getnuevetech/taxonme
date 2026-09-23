@@ -11,11 +11,13 @@ import { IconUpload } from "@/components/icons";
 // vault — there is nothing case-specific to re-analyze.
 export function InlineUpload({
   caseId,
+  situationId,
   docKind = "other",
   label = "Upload documents",
   iconOnly = false,
 }: {
   caseId?: string;
+  situationId?: string;
   docKind?: string;
   label?: string;
   /** Compact square icon button instead of the labeled pill — for tight spaces like a chat input row. */
@@ -35,6 +37,7 @@ export function InlineUpload({
   return (
     <form ref={formRef} action={formAction} className="inline-block">
       {caseId && <input type="hidden" name="caseId" value={caseId} />}
+      {situationId && <input type="hidden" name="situationId" value={situationId} />}
       <input type="hidden" name="docKind" value={docKind} />
       <label
         title={label}

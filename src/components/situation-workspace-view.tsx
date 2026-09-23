@@ -3,6 +3,8 @@ import { ActionForm, SubmitButton } from "@/components/action-form";
 import { createPrepPlanAction } from "@/actions/prep-plan";
 import { composeAssistantView, parseStoredIntelligence } from "@/lib/conversation";
 import { AssistantReplyBlocks } from "@/components/assistant-reply";
+import { InlineUpload } from "@/components/inline-upload";
+import { IconDocument } from "@/components/icons";
 import { situationRefLabel } from "@/lib/situation";
 import { parsePathwaysJson } from "@/lib/prep-plan";
 
@@ -20,6 +22,7 @@ export function SituationWorkspaceView(props: {
   isGuest?: boolean;
   canBuildPrepPlan?: boolean;
   prepPlanBlockedReason?: "upgrade" | "limit" | "guest" | null;
+  documents?: { id: string; fileName: string }[];
 }) {
   const intel = parseStoredIntelligence(props.intelligenceJson);
   const sections =
@@ -56,6 +59,28 @@ export function SituationWorkspaceView(props: {
       <section className="space-y-4">
         <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">What this may mean</h2>
         <AssistantReplyBlocks sections={sections} />
+      </section>
+
+      <section className="rounded-2xl border border-indigo-200 bg-indigo-50/60 px-4 py-4">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h2 className="text-sm font-semibold text-slate-900">Have a notice, letter, or transcript?</h2>
+            <p className="mt-0.5 text-sm text-slate-600">
+              Upload it here — the notice code, amount, and deadline printed on it usually settle exactly what the answer above is asking about.
+            </p>
+          </div>
+          <InlineUpload situationId={props.id} docKind="notice" label="Upload a document" />
+        </div>
+        {props.documents && props.documents.length > 0 && (
+          <ul className="mt-3 space-y-1.5 border-t border-indigo-200/70 pt-3">
+            {props.documents.map((doc) => (
+              <li key={doc.id} className="flex items-center gap-2 text-sm text-slate-700">
+                <IconDocument className="h-4 w-4 shrink-0 text-indigo-500" />
+                {doc.fileName}
+              </li>
+            ))}
+          </ul>
+        )}
       </section>
 
       <section className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4">
