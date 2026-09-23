@@ -3,17 +3,23 @@
 import { useActionState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { uploadDocumentAction } from "@/actions/documents";
+import { IconUpload } from "@/components/icons";
 
 // One-click in-place upload: the file picker opens right where the finding
-// asks for it, submits automatically, and the analysis re-runs.
+// asks for it, submits automatically, and the analysis re-runs. Without a
+// caseId (e.g. from a general Q&A thread) it just lands in the document
+// vault — there is nothing case-specific to re-analyze.
 export function InlineUpload({
   caseId,
   docKind = "other",
   label = "Upload documents",
+  iconOnly = false,
 }: {
-  caseId: string;
+  caseId?: string;
   docKind?: string;
   label?: string;
+  /** Compact square icon button instead of the labeled pill — for tight spaces like a chat input row. */
+  iconOnly?: boolean;
 }) {
   const [state, formAction, pending] = useActionState(uploadDocumentAction, null);
   const router = useRouter();
@@ -28,14 +34,21 @@ export function InlineUpload({
 
   return (
     <form ref={formRef} action={formAction} className="inline-block">
-      <input type="hidden" name="caseId" value={caseId} />
+      {caseId && <input type="hidden" name="caseId" value={caseId} />}
       <input type="hidden" name="docKind" value={docKind} />
       <label
-        className={`inline-flex cursor-pointer items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition ${
-          pending ? "bg-slate-300 text-slate-500" : "bg-indigo-600 text-white hover:bg-indigo-700"
-        }`}
+        title={label}
+        className={
+          iconOnly
+            ? `inline-flex h-[42px] w-[42px] shrink-0 cursor-pointer items-center justify-center rounded-xl border transition ${
+                pending ? "border-slate-200 bg-slate-100 text-slate-400" : "border-slate-300 text-slate-500 hover:border-indigo-400 hover:text-indigo-600"
+              }`
+            : `inline-flex cursor-pointer items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition ${
+                pending ? "bg-slate-300 text-slate-500" : "bg-indigo-600 text-white hover:bg-indigo-700"
+              }`
+        }
       >
-        {pending ? "Uploading & re-analyzing…" : `${label} →`}
+        {iconOnly ? <IconUpload className="h-5 w-5" /> : pending ? `Uploading${caseId ? " & re-analyzing" : ""}…` : `${label} →`}
         <input
           type="file"
           name="files"

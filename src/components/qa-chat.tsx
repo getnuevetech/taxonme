@@ -5,6 +5,7 @@ import { useFormStatus } from "react-dom";
 import Link from "next/link";
 import { askQuestionAction } from "@/actions/user";
 import { AssistantMessageText } from "@/components/assistant-reply";
+import { InlineUpload } from "@/components/inline-upload";
 import { STARTER_PROMPTS } from "@/lib/conversation/starter-prompts";
 
 function Submit() {
@@ -176,23 +177,29 @@ export function QaChat({
         </div>
       )}
 
-      <form ref={formRef} action={formAction} className="border-t border-slate-200 p-4">
+      <div className="border-t border-slate-200 p-4">
         {state?.error && (
           <p className="mb-2 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{state.error}</p>
         )}
-        <input type="hidden" name="threadId" value={threadId} />
         <div className="flex gap-2">
-          <input
-            name="question"
-            value={draft}
-            onChange={(e) => setDraft(e.target.value)}
-            placeholder="Ask about your notice, deadline, payment options, or documents…"
-            autoComplete="off"
-            className="flex-1 rounded-xl border border-slate-300 px-4 py-2.5 text-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-100"
-          />
-          <Submit />
+          <InlineUpload iconOnly label="Attach a document" />
+          <form ref={formRef} action={formAction} className="flex flex-1 gap-2">
+            <input type="hidden" name="threadId" value={threadId} />
+            <input
+              name="question"
+              value={draft}
+              onChange={(e) => setDraft(e.target.value)}
+              placeholder="Ask about your notice, deadline, payment options, or documents…"
+              autoComplete="off"
+              className="flex-1 rounded-xl border border-slate-300 px-4 py-2.5 text-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-100"
+            />
+            <Submit />
+          </form>
         </div>
-      </form>
+        <p className="mt-2 text-xs text-slate-400">
+          Attach a notice, transcript, or return any time — it lands in your document vault.
+        </p>
+      </div>
     </div>
   );
 }
